@@ -1,5 +1,35 @@
 @import "tailwindcss";
 
+@theme {
+  --color-ink: #101827;
+  --color-mist: #f5f7fb;
+  --color-brand: #5b5cf0;
+}
+
+* { box-sizing: border-box; }
+
 body {
   font-family: Tahoma, Arial, sans-serif;
+  background: #f5f7fb;
+  color: #101827;
+}
+
+button, input { font: inherit; }
+
+::selection { background: #deddff; color: #27216f; }
+
+.app-shell {
+  background:
+    radial-gradient(circle at 4% 5%, rgba(138, 92, 246, .15), transparent 27rem),
+    radial-gradient(circle at 95% 100%, rgba(44, 202, 164, .13), transparent 27rem),
+    #f6f7fb;
+}
+
+.soft-scroll::-webkit-scrollbar { width: 5px; }
+.soft-scroll::-webkit-scrollbar-thumb { background: #d9ddea; border-radius: 99px; }
+
+.message-pattern {
+  background-color: #f9faff;
+  background-image: radial-gradient(#e4e7f1 1px, transparent 1px);
+  background-size: 19px 19px;
 }

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "شات",
-  description: "تطبيق محادثات Django + Next.js",
+  title: "وَصل | محادثاتك بمكان واحد",
+  description: "تطبيق محادثات سريع وآمن",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
