@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>دليل دراسة الشات</title>
+<style>
+  :root{
+    --bg:#f4f7fb; --card:#ffffff; --text:#172033; --muted:#5b6475; --border:#e3e9f2;
+    --primary:#0d47a1; --primary-2:#1976d2; --accent:#047857; --accent-bg:#e7f7ef;
+    --code-bg:#eef3f8; --flow-bg:#0f172a; --flow-text:#e2e8f0;
+    --warn-bg:#fff8e7; --warn-border:#f0d48a; --ok:#15803d; --bad:#b91c1c;
+    --ok-bg:#e8f7ee; --bad-bg:#fdecec; --badge-bg:#e3f2fd;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0b1120; --card:#131c2e; --text:#e5e9f0; --muted:#9aa4b5; --border:#24304a;
+      --primary:#7fb2ff; --primary-2:#4f8fe8; --accent:#4ade80; --accent-bg:#11271d;
+      --code-bg:#1d2840; --flow-bg:#050a15; --flow-text:#dbe4f0;
+      --warn-bg:#2a2210; --warn-border:#6b5520; --ok:#4ade80; --bad:#f87171;
+      --ok-bg:#12281b; --bad-bg:#2e1414; --badge-bg:#1a2a48;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0b1120; --card:#131c2e; --text:#e5e9f0; --muted:#9aa4b5; --border:#24304a;
+    --primary:#7fb2ff; --primary-2:#4f8fe8; --accent:#4ade80; --accent-bg:#11271d;
+    --code-bg:#1d2840; --flow-bg:#050a15; --flow-text:#dbe4f0;
+    --warn-bg:#2a2210; --warn-border:#6b5520; --ok:#4ade80; --bad:#f87171;
+    --ok-bg:#12281b; --bad-bg:#2e1414; --badge-bg:#1a2a48;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:Tahoma,Arial,sans-serif;line-height:1.9;font-size:16px}
+  .wrap{max-width:900px;margin:auto;padding:24px 16px 60px}
+  .hero{background:linear-gradient(135deg,#0d47a1,#1976d2);color:#fff;padding:26px;border-radius:20px;margin-bottom:18px}
+  .hero h1{margin:0 0 6px;font-size:28px}
+  .hero p{margin:0;opacity:.95}
+  .progress{margin-top:14px;background:rgba(255,255,255,.25);border-radius:99px;height:10px;overflow:hidden}
+  .progress > div{height:100%;width:0;background:#a7f3d0;transition:width .3s}
+  .progress-label{font-size:13px;margin-top:6px;opacity:.95}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;margin:16px 0;box-shadow:0 6px 20px rgba(0,0,0,.05)}
+  .card h2{margin:0 0 10px;color:var(--primary);font-size:22px}
+  h3{color:var(--primary);margin:18px 0 6px;font-size:18px}
+  .badge{display:inline-block;background:var(--badge-bg);color:var(--primary);padding:2px 10px;border-radius:99px;font-weight:bold;font-size:13px;margin-bottom:6px}
+  .toc{columns:2;column-gap:24px;padding-right:20px;margin:0}
+  .toc a{color:var(--primary);text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+  .toc .done::after{content:" ✅"}
+  code{direction:ltr;unicode-bidi:embed;background:var(--code-bg);padding:1px 6px;border-radius:6px;font-family:Consolas,monospace;font-size:.92em}
+  pre{direction:ltr;text-align:left;background:var(--flow-bg);color:var(--flow-text);padding:14px;border-radius:12px;overflow-x:auto;font-family:Consolas,monospace;font-size:14px;line-height:1.6;margin:10px 0}
+  pre code{background:none;padding:0;color:inherit}
+  .flow{direction:ltr;text-align:center;background:var(--flow-bg);color:var(--flow-text);padding:14px;border-radius:12px;font-family:Consolas,monospace;overflow-x:auto;font-size:14px}
+  .table-wrap{overflow-x:auto;margin:10px 0}
+  table{border-collapse:collapse;width:100%;min-width:320px;font-size:15px}
+  th,td{border:1px solid var(--border);padding:7px 10px;text-align:right;vertical-align:top}
+  th{background:var(--code-bg)}
+  .analogy{background:var(--accent-bg);border-right:4px solid var(--accent);padding:10px 14px;border-radius:10px;margin:10px 0}
+  .interview{background:var(--warn-bg);border:1px solid var(--warn-border);padding:10px 14px;border-radius:10px;margin:10px 0}
+  .interview::before{content:"🎯 بالمقابلة گول:";display:block;font-weight:bold;margin-bottom:2px}
+  .quiz{border-top:2px dashed var(--border);margin-top:18px;padding-top:12px}
+  .quiz > h3{margin-top:0}
+  details{background:var(--code-bg);border-radius:10px;padding:8px 12px;margin:8px 0}
+  summary{cursor:pointer;font-weight:bold}
+  details .ans{margin-top:6px;color:var(--text)}
+  details .ans::before{content:"✅ الجواب: ";font-weight:bold;color:var(--ok)}
+  .mcq{background:var(--code-bg);border-radius:10px;padding:10px 12px;margin:10px 0}
+  .mcq p{margin:0 0 8px;font-weight:bold}
+  .mcq .opts{display:flex;flex-wrap:wrap;gap:8px}
+  .mcq button{font:inherit;font-size:15px;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:10px;padding:6px 12px;cursor:pointer}
+  .mcq button:hover:not(:disabled){border-color:var(--primary-2)}
+  .mcq button:disabled{cursor:default}
+  .mcq button.right{background:var(--ok-bg);border-color:var(--ok);color:var(--ok);font-weight:bold}
+  .mcq button.wrong{background:var(--bad-bg);border-color:var(--bad);color:var(--bad)}
+  .mcq .why{display:none;margin-top:8px;font-size:15px}
+  .mcq.answered .why{display:block}
+  .done-row{margin-top:14px;display:flex;align-items:center;gap:8px;font-weight:bold;color:var(--accent)}
+  .done-row input{width:20px;height:20px;accent-color:var(--accent)}
+  .score{position:sticky;bottom:12px;background:var(--primary);color:#fff;padding:10px 16px;border-radius:12px;text-align:center;font-weight:bold;margin-top:12px}
+  .btn{font:inherit;background:var(--primary-2);color:#fff;border:0;border-radius:10px;padding:8px 14px;cursor:pointer}
+  .top-actions{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .theme-btn{background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:10px;padding:4px 10px;font:inherit;font-size:14px;cursor:pointer}
+  .footer{text-align:center;color:var(--muted);font-size:14px;margin-top:24px}
+  @media (max-width:600px){
+    .hero h1{font-size:22px}
+    .toc{columns:1}
+    .card{padding:16px}
+    body{font-size:15px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="top-actions">
+    <h1>دليل دراسة تطبيق الشات</h1>
+    <button class="theme-btn" id="themeBtn" type="button">🌓 الوضع</button>
+  </div>
+  <p>كل اللي تعلمناه وكل اللي بقى، مشروح بالعراقي، وبعد كل قسم أسئلة. اقرا القسم، جاوب الأسئلة بنفسك أول، وبعدين افتح الجواب.</p>
+  <div class="progress"><div id="bar"></div></div>
+  <div class="progress-label" id="barLabel">خلصت 0 من 0 أقسام</div>
+</header>
+
+<section class="card">
+  <h2>📑 الفهرس</h2>
+  <ol class="toc" id="toc">
+    <li><a href="#s1">الصورة الكبيرة</a></li>
+    <li><a href="#s2">التقنيات اللي استخدمناها</a></li>
+    <li><a href="#s3">JSON</a></li>
+    <li><a href="#s4">HTTP و Request / Response</a></li>
+    <li><a href="#s5">أرقام الحالة</a></li>
+    <li><a href="#s6">Methods و CRUD</a></li>
+    <li><a href="#s7">API و Token</a></li>
+    <li><a href="#s8">Database</a></li>
+    <li><a href="#s9">SQL</a></li>
+    <li><a href="#s10">Primary Key و Foreign Key</a></li>
+    <li><a href="#s11">WebSocket</a></li>
+    <li><a href="#s12">Channels</a></li>
+    <li><a href="#s13">Git و Branch</a></li>
+    <li><a href="#s14">وين كل شي بالكود</a></li>
+    <li><a href="#final">الاختبار النهائي</a></li>
+  </ol>
+</section>
+
+<!-- ============ 1 ============ -->
+<section class="card lesson" id="s1">
+  <span class="badge">القسم 1</span>
+  <h2>الصورة الكبيرة: شنو يصير لما تدز رسالة؟</h2>
+  <p>أي تطبيق مثل تطبيقنا يتكون من 3 أجزاء:</p>
+  <div class="table-wrap"><table>
+    <tr><th>الجزء</th><th>شنو هو</th><th>🍽️ بالمطعم</th></tr>
+    <tr><td><b>Frontend</b> (فرونت اند)</td><td>اللي تشوفه وتضغط عليه: الصفحات والأزرار</td><td>الصالة والمنيو</td></tr>
+    <tr><td><b>Backend</b> (باك اند)</td><td>السيرفر اللي يشتغل ورا الكواليس ويعالج الطلبات</td><td>المطبخ</td></tr>
+    <tr><td><b>Database</b> (داتابيس)</td><td>المكان اللي تنحفظ بيه البيانات بشكل دائم</td><td>الثلاجة</td></tr>
+  </table></div>
+  <p>ورحلة أي طلب تمشي هيچ:</p>
+  <div class="flow">Frontend → Request → API → Backend → Database → Response → Frontend</div>
+  <h3>مثال: علي يدز "هلو" لسارة</h3>
+  <ol>
+    <li>علي يكتب "هلو" ويضغط إرسال (<b>Frontend</b>).</li>
+    <li>الفرونت اند يدز <b>Request</b> للسيرفر، والرسالة بداخله بصيغة <b>JSON</b>.</li>
+    <li>الـ <b>API</b> يستلم الطلب، والـ <b>Backend</b> يتأكد أن علي مسجل دخول.</li>
+    <li>الباك اند يحفظ الرسالة بالـ <b>Database</b> باستخدام <b>SQL</b>.</li>
+    <li>الباك اند يرجع <b>Response</b> يگول "انحفظت".</li>
+    <li>بنفس اللحظة، الرسالة توصل لسارة عن طريق <b>WebSocket</b> بدون ما تسوي Refresh.</li>
+  </ol>
+  <div class="quiz">
+    <h3>✍️ أسئلة</h3>
+    <details><summary>1. شنو الأجزاء الثلاثة لأي تطبيق مثل تطبيقنا؟</summary><div class="ans">Frontend (الواجهة) و Backend (السيرفر) و Database (مكان حفظ البيانات).</div></details>
+    <details><summary>2. وين تنحفظ الرسالة حتى تبقى بعد الـ Refresh؟</summary><div class="ans">بالـ Database.</div></details>
+    <div class="mcq" data-correct="1"><p>3. أي جزء "يشوفه" المستخدم ويضغط عليه؟</p><div class="opts"><button>Backend</button><button>Frontend</button><button>Database</button></div><div class="why">الـ Frontend هو الواجهة. الباك اند والداتابيس يشتغلون ورا الكواليس.</div></div>
+  </div>
+</section>
+
+<!-- ============ 2 ============ -->
+<section class="card lesson" id="s2">
+  <span class="badge">القسم 2</span>
+  <h2>التقنيات اللي استخدمناها</h2>
+  <p>أول شي نفرق بين 3 كلمات تتكرر هواية:</p>
+  <ul>
+    <li><b>لغة البرمجة:</b> الكلمات والقواعد اللي نكتب بيها الكود. مثل Python و JavaScript.</li>
+    <li><b>الإطار (Framework):</b> أدوات جاهزة مكتوبة بلغة معينة، تسهّل عليك الشغل بدل ما تكتب كلشي من الصفر. مثل Django و Next.js.</li>
+    <li><b>المكتبة (Library):</b> أداة أصغر تسوي شغلة وحدة معينة.</li>
+  </ul>
+  <div class="table-wrap"><table>
+    <tr><th>الجزء</th><th>اللغة</th><th>الإطار / المكتبة</th><th>شغلته</th></tr>
+    <tr><td rowspan="3">Backend</td><td rowspan="3">Python</td><td><b>Django</b></td><td>السيرفر: المستخدمين، الداتابيس، الأمان</td></tr>
+    <tr><td><b>Django REST Framework</b></td><td>يسهّل صناعة الـ API اللي ترجع JSON</td></tr>
+    <tr><td><b>Django Channels</b></td><td>يخلي Django يفهم WebSocket</td></tr>
+    <tr><td rowspan="2">Frontend</td><td rowspan="2">TypeScript (JavaScript مع تدقيق)</td><td><b>Next.js</b></td><td>بناء الصفحات والواجهة</td></tr>
+    <tr><td><b>Tailwind CSS</b></td><td>التصميم: الألوان والأحجام والمسافات</td></tr>
+  </table></div>
+  <h3>Node.js و npm</h3>
+  <p><b>JavaScript</b> بالأصل تشتغل داخل المتصفح بس. <b>Node.js</b> مو لغة، هو برنامج يخلي JavaScript تشتغل على جهازك برة المتصفح. نحتاجه حتى نشغّل Next.js.</p>
+  <p><b>npm</b> يجي ويا Node.js، وهو مثل متجر تنزل منه المكتبات. من نكتب <code>npm install</code> ينزل كل اللي يحتاجه الفرونت اند.</p>
+  <h3>Tailwind و Responsive</h3>
+  <p><b>Tailwind CSS</b> طريقة سريعة تكتب بيها التصميم. تحط كلمات جاهزة على العنصر، مثلاً <code>bg-emerald-600</code> = خلفية خضرة، و <code>rounded-full</code> = زوايا مدورة.</p>
+  <p><b>Responsive Design</b> (تصميم متجاوب) معناها الصفحة تتغير حسب حجم الشاشة. بتطبيقنا: على الكمبيوتر القائمة والمحادثة جنب بعض، وعلى الموبايل كل وحدة بشاشة.</p>
+  <div class="interview">"الباك اند بـ Python و Django، والـ API بـ Django REST Framework، والرسائل الفورية بـ Django Channels. الفرونت اند بـ Next.js و TypeScript، والتصميم بـ Tailwind."</div>
+  <div class="quiz">
+    <h3>✍️ أسئلة</h3>
+    <div class="mcq" data-correct="0"><p>1. Django شنو هو؟</p><div class="opts"><button>إطار عمل مكتوب بـ Python</button><button>لغة برمجة</button><button>داتابيس</button></div><div class="why">Python هي اللغة، و Django إطار (أدوات جاهزة) مكتوب بيها.</div></div>
+    <div class="mcq" data-correct="2"><p>2. ليش نحتاج Node.js بمشروعنا؟</p><div class="opts"><button>حتى نشغّل Django</button><button>حتى نحفظ الرسائل</button><button>حتى نشغّل Next.js (الفرونت اند)</button></div><div class="why">Next.js مكتوب بـ JavaScript، و Node.js هو اللي يشغّل JavaScript على الجهاز.</div></div>
+    <details><summary>3. شنو يعني Responsive؟ وشلون تبين بتطبيقنا؟</summary><div class="ans">الصفحة تتغير حسب حجم الشاشة. على الكمبيوتر القائمة والمحادثة جنب بعض، وعلى الموبايل كل وحدة تاخذ الشاشة كلها ويطلع زر رجوع.</div></details>
+    <details><summary>4. شنو فايدة Django Channels؟</summary><div class="ans">يخلي Django يدعم WebSocket، حتى الرسائل توصل فوراً بدون Refresh.</div></details>
+  </div>
+</section>
+
+<!-- ============ 3 ============ -->
+<section class="card lesson" id="s3">
+  <span class="badge">القسم 3</span>
+  <h2>JSON</h2>
+  <p>المشكلة: الباك اند مكتوب بـ Python، والفرونت اند بـ JavaScript. شلون يتفاهمون؟ يستخدمون صيغة مشتركة يفهمها الاثنين، وهي <b>JSON</b>.</p>
+  <p><b>JSON مو لغة برمجة.</b> هو <b>صيغة بيانات</b>، يعني طريقة متفق عليها حتى نكتب البيانات. شكله بسيط: <b>اسم ← قيمة</b>.</p>
+<pre><code>{
+  "id": 7,
+  "sender": "ali",
+  "content": "هلو سارة",
+  "is_read": false
+}</code></pre>
+  <div class="analogy">🍽️ JSON هو <b>ورقة الطلب</b> بالمطعم. الصالة تكتب الطلب بشكل معروف، والمطبخ يقراه ويرجع الجواب بنفس نوع الورقة.</div>
+  <h3>أنواع القيم بـ JSON</h3>
+  <div class="table-wrap"><table>
+    <tr><th>النوع</th><th>مثال</th></tr>
+    <tr><td>نص (string)</td><td><code>"ali"</code></td></tr>
+    <tr><td>رقم (number)</td><td><code>7</code></td></tr>
+    <tr><td>صح/غلط (boolean)</td><td><code>true</code> / <code>false</code></td></tr>
+    <tr><td>قائمة (array)</td><td><code>[1, 2, 3]</code></td></tr>
+    <tr><td>كائن (object)</td><td><code>{"id": 1}</code></td></tr>
+    <tr><td>فارغ</td><td><code>null</code></td></tr>
+  </table></div>
+  <div class="interview">"JSON صيغة بيانات يتفاهم بيها الفرونت اند والباك اند، حتى لو كل واحد مكتوب بلغة مختلفة."</div>
+  <div class="quiz">
+    <h3>✍️ أسئلة</h3>
+    <div class="mcq" data-correct="1"><p>1. JSON شنو هو؟</p><div class="opts"><button>لغة برمجة</button><button>صيغة بيانات</button><button>داتابيس</button></div><div class="why">JSON صيغة (شكل) لكتابة البيانات، مو لغة برمجة.</div></div>
+    <details><summary>2. ليش ما يدز الباك اند البيانات بشكل Python مباشرة؟</summary><div class="ans">لأن الفرونت اند مكتوب بـ JavaScript وما يفهم Python. JSON صيغة مشتركة يفهمها الاثنين.</div></details>
+    <details><summary>3. بالمثال فوك، شنو نوع قيمة <code>is_read</code>؟</summary><div class="ans">boolean (صح/غلط)، وقيمتها false يعني الرسالة بعدها ما انقرت.</div></details>
+    <details><summary>4. اكتب JSON لمستخدم اسمه sara ورقمه 2 وهو متصل.</summary><div class="ans"><code>{"id": 2, "username": "sara", "is_online": true}</code></div></details>
+  </div>
+</section>
+
+<!-- ============ 4 ============ -->
+<section class="card lesson" id="s4">
+  <span class="badge">القسم 4</span>
+  <h2>HTTP و Request / Response</h2>
+  <p><b>HTTP</b> هو الطريق اللي يتراسل بيه المتصفح ويا السيرفر. وكل مرة يصير تواصل، يصير شغلتين:</p>
+  <ol>
+    <li><b>Request (طلب):</b> الفرونت اند يدز للباك اند.</li>
+    <li><b>Response (رد):</b> الباك اند يرجع الجواب.</li>
+  </ol>
+  <div class="analogy">🍽️ الزبون يگول للنادل "أريد تكة" = <b>Request</b>. النادل يرجع ومعاه الصحن = <b>Response</b>.</div>
+  <h3>الـ Request يتكون من 4 أجزاء</h3>
+<pre><code>POST /api/conversations/5/messages/
+Authorization: Token abc123
+{"content": "هلو"}</code></pre>
+  <div class="table-wrap"><table>
+    <tr><th>الجزء</th><th>بالمثال</th><th>معناه</th></tr>
+    <tr><td><b>Method</b></td><td><code>POST</code></td><td>شنو تريد تسوي (هنا: تضيف)</td></tr>
+    <tr><td><b>URL</b></td><td><code>/api/conversations/5/messages/</code></td><td>وين (رسائل المحادثة رقم 5)</td></tr>
+    <tr><td><b>Header</b></td><td><code>Authorization: Token abc123</code></td><td>معلومات إضافية، مثل هويتك</td></tr>
+    <tr><td><b>Body</b></td><td><code>{"content": "هلو"}</code></td><td>البيانات نفسها بصيغة JSON</td></tr>
+  </table></div>
+  <h3>الـ Response يتكون من</h3>
+<pre><code>201 Created
+{"id": 7, "content": "هلو", "sender": "ali"}</code></pre>
+  <ul>
+    <li><b>رقم الحالة (Status code):</b> هنا 201 يعني "انخلق بنجاح".</li>
+    <li><b>Body:</b> الجواب بصيغة JSON.</li>
+  </ul>
+  <div class="interview">"الفرونت اند يدز Request بـ HTTP. الطلب بيه Method يحدد شنو نسوي، و URL يحدد وين، و Header بيه الـ Token، و Body بيه البيانات بصيغة JSON. الباك اند يرجع Response بيه رقم حالة وبيانات JSON."</div>
+  <div class="quiz">
+    <h3>✍️ أسئلة</h3>
+    <details><summary>1. شنو الأجزاء الأربعة للـ Request؟</summary><div class="ans">Method و URL و Header و Body.</div></details>
+    <div class="mcq" data-correct="1"><p>2. وين تنحط البيانات (مثل نص الرسالة) بالـ Request؟</p><div class="opts"><button>بالـ Header</button><button>بالـ Body</button><button>بالـ Method</button></div><div class="why">البيانات نفسها تروح بالـ Body بصيغة JSON. الـ Header لمعلومات إضافية مثل الـ Token.</div></div>
+    <div class="mcq" data-correct="0"><p>3. وين ينحط الـ Token مال تسجيل الدخول؟</p><div class="opts"><button>بالـ Header</button><button>بالـ Body</button><button>بالـ Response</button></div><div class="why">ينحط بالـ Header: <code>Authorization: Token ...</code></div></div>
+    <details><summary>4. شنو الفرق بين Request و Response؟</summary><div class="ans">Request هو الطلب اللي يطلع من الفرونت اند للباك اند. Response هو الرد اللي يرجع من الباك اند للفرونت اند.</div></details>
+  </div>
+</section>
+
+<!-- ============ 5 ============ -->
+<section class="card lesson" id="s5">
+  <span class="badge">القسم 5</span>
+  <h2>أرقام الحالة (Status Codes)</h2>
+  <p>كل Response يجي وياه رقم يگول شنو صار. ما تحتاج تحفظهن كلهن، بس هذني المهمات:</p>
+  <div class="table-wrap"><table>
+    <tr><th>الرقم</th><th>المعنى</th><th>مثال من تطبيقنا</th></tr>
+    <tr><td><b>200</b></td><td>تمام</td><td>جبت قائمة المستخدمين</td></tr>
+    <tr><td><b>201</b></td><td>انخلق شي جديد</td><td>انحفظت رسالة جديدة أو حساب جديد</td></tr>
+    <tr><td><b>400</b></td><td>إنت دازز بيانات غلط</td><td>دزيت رسالة فارغة</td></tr>
+    <tr><td><b>401</b></td><td>ما مسجل دخول</td><td>طلبت المستخدمين بدون Token</td></tr>
+    <tr><td><b>404</b></td><td>مو موجود</td><td>حاولت تقرا محادثة مو إلك</td></tr>
+    <tr><td><b>500</b></td><td>خطأ بالسيرفر نفسه</td><td>بق (bug) بالكود</td></tr>
+  </table></div>
+  <p>📌 <b>حيلة:</b> اللي يبدي بـ <b>2</b> نجاح. بـ <b>4</b> الغلط منك (الطلب). بـ <b>5</b> الغلط من السيرفر.</p>
+  <div class="quiz">
+    <h3>✍️ أسئلة</h3>
+    <div class="mcq" data-correct="2"><p>1. علي مو مسجل دخول وطلب قائمة المستخدمين. شنو الرقم؟</p><div class="opts"><button>200</button><button>404</button><button>401</button></div><div class="why">401 = ما مسجل دخول.</div></div>
+    <div class="mcq" data-correct="0"><p>2. علي دز رسالة وانحفظت. شنو الرقم؟</p><div class="opts"><button>201</button><button>200</button><button>400</button></div><div class="why">201 لأن انخلق شي جديد (رسالة جديدة).</div></div>
+    <div class="mcq" data-correct="1"><p>3. عمر حاول يقرا محادثة علي وسارة. شنو يرجعله تطبيقنا؟</p><div class="opts"><button>200</button><button>404</button><button>500</button></div><div class="why">تطبيقنا يرجع 404 حتى ما يكشف حتى وجود المحادثة لشخص مو مشارك بيها.</div></div>
+    <details><summary>4. الأرقام اللي تبدي بـ 5، الغلط من منو؟</summary><div class="ans">من السيرفر (الباك اند)، مو من المستخدم.</div></details>
+  </div>
+</section>
+
+<!-- ============ 6 ============ -->
+<section class="card lesson" id="s6">
+  <span class="badge">القسم 6</span>
+  <h2>Methods و CRUD</h2>
+  <p>الـ Method يگول للباك اند <b>شنو تريد تسوي</b>. وهي 4 رئيسية:</p>
+  <div class="table-wrap"><table>
+    <tr><th>Method</th><th>معناه</th><th>🍽️ بالمطعم</th></tr>
+    <tr><td><b>GET</b></td><td>جيب بيانات</td><td>"جيبلي المنيو"</td></tr>
+    <tr><td><b>POST</b></td><td>ضيف شي جديد</td><td>"أريد أطلب طلب جديد"</td></tr>
+    <tr><td><b>PATCH</b> / PUT</td><td>عدّل شي موجود</td><td>"غيّر الطلب، بلا بصل"</td></tr>
+    <tr><td><b>DELETE</b></td><td>احذف</td><td>"ألغِ الطلب"</td></tr>
+  </table></div>
+  <h3>CRUD: حيلة الحفظ</h3>
+  <ul>
+    <li><b>C</b>reate (إضافة) ← POST</li>
+    <li><b>R</b>ead (قراءة) ← GET</li>
+    <li><b>U</b>pdate (تعديل) ← PATCH</li>
+    <li><b>D</b>elete (حذف) ← DELETE</li>
+  </ul>
+  <p><b>الفرق بين PATCH و PUT:</b> الـ PATCH يعدّل جزء (مثلاً بس <code>is_read</code>). الـ PUT يبدل الشي كله.</p>
+  <h3>بتطبيقنا</h3>
+  <div class="table-wrap"><table>
+    <tr><th>لما إنت...</th><th>الـ Request</th></tr>
+    <tr><td>تشوف قائمة المستخدمين</td><td><code>GET /api/users/</code></td></tr>
+    <tr><td>تشوف الرسائل القديمة</td><td><code>GET /api/conversations/5/messages/</code></td></tr>
+    <tr><td>تسجّل حساب جديد</td><td><code>POST /api/auth/register/</code></td></tr>
+    <tr><td>تفتح محادثة ويا شخص</td><td><code>POST /api/conversations/</code></td></tr>
+    <tr><td>تقرا الرسائل فتصير ✓✓ زرقة</td><td><code>PATCH /api/conversations/5/read/</code></td></tr>
+  </table></div>
+  <p>⚠️ تطبيقنا هسه ما بيه <b>DELETE</b>. هذا ممكن يكون أول شي تكتبه إنت بإيدك.</p>
+  <div class="quiz">
+    <h3>✍️ أسئلة</h3>
+    <div class="mcq" data-correct="0"><p>1. سارة تريد تشوف محادثاتها. أي Method؟</p><div class="opts"><button>GET</button><button>POST</button><button>PATCH</button></div><div class="why">تشوف بس = قراءة = GET.</div></div>
+    <div class="mcq" data-correct="2"><p>2. علي يريد يصحح غلطة إملائية برسالة دازها. أي Method؟</p><div class="opts"><button>POST</button><button>DELETE</button><button>PATCH</button></div><div class="why">تعديل شي موجود = PATCH.</div></div>
+    <div class="mcq" data-correct="1"><p>3. مستخدم جديد يسجّل حساب. أي Method؟</p><div class="opts"><button>GET</button><button>POST</button><button>DELETE</button></div><div class="why">إضافة شي جديد (حساب) = POST.</div></div>
+    <details><summary>4. شنو الفرق بين PATCH و PUT؟</summary><div class="ans">PATCH يعدّل جزء من الشي. PUT يبدل الشي كله.</div></details>
+    <details><summary>5. شنو يعني CRUD؟</summary><div class="ans">Create و Read و Update و Delete، يعني إضافة وقراءة وتعديل وحذف. وتقابلها POST و GET و PATCH و DELETE.</div></details>
+  </div>
+</section>
+
+<!-- ============ 7 ============ -->
+<section class="card lesson" id="s7">
+  <span class="badge">القسم 7</span>
+  <h2>API و Token</h2>
+  <p><b>API</b> هي مجموعة "أبواب" (روابط) يفتحها الباك اند حتى الفرونت اند يطلب منها. كل باب اله رابط ووظيفة. مثلاً <code>/api/users/</code> باب لقائمة المستخدمين.</p>
+  <div class="analogy">🍽️ الـ API هو <b>المنيو</b>. يگولك شنو تكدر تطلب وشلون تطلبه. ما تحتاج تعرف شلون المطبخ يطبخ.</div>
+  <h3>كل روابط تطبيقنا</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Method</th><th>الرابط</th><th>الوظيفة</th></tr>
+    <tr><td>POST</td><td><code>/api/auth/register/</code></td><td>تسجيل، يرجع Token</td></tr>
+    <tr><td>POST</td><td><code>/api/auth/login/</code></td><td>دخول، يرجع Token</td></tr>
+    <tr><td>GET</td><td><code>/api/auth/me/</code></td><td>معلوماتي</td></tr>
+    <tr><td>GET</td><td><code>/api/users/</code></td><td>قائمة المستخدمين</td></tr>
+    <tr><td>GET</td><td><code>/api/conversations/</code></td><td>محادثاتي</td></tr>
+    <tr><td>POST</td><td><code>/api/conversations/</code></td><td>فتح محادثة</td></tr>
+    <tr><td>GET</td><td><code>/api/conversations/5/messages/</code></td><td>الرسائل السابقة</td></tr>
+    <tr><td>POST</td><td><code>/api/conversations/5/messages/</code></td><td>إرسال رسالة</td></tr>
+    <tr><td>PATCH</td><td><code>/api/conversations/5/read/</code></td><td>تعليم كمقروء</td></tr>
+  </table></div>
+  <h3>الـ Token: شلون السيرفر يعرف منو إنت؟</h3>
+  <ol>
+    <li>تسجّل دخول بالاسم والباسورد.</li>
+    <li>السيرفر يتأكد ويرجعلك <b>Token</b>، وهو نص سري طويل مثل <code>abc123...</code>.</li>
+    <li>الفرونت اند يحفظه بالمتصفح (<code>localStorage</code>).</li>
+    <li>بكل Request بعدين، يحطه بالـ Header: <code>Authorization: Token abc123</code>.</li>
+    <li>السيرفر يشوف الـ Token ويعرف إنت منو.</li>
+  </ol>
+  <div class="analogy">🎫 الـ Token مثل <b>باج الدخول</b> بالشركة. تاخذه مرة وحدة بالاستقبال، وبعدين كل باب تفتحه بيه بدون ما تعرّف نفسك من جديد.</div>
+  <h3>الباسورد</h3>
+  <p>ما نحفظ الباسورد نص عادي أبداً. Django <b>يشفّره (hash)</b>، يعني يحوله لنص مخربط ما يرجع. إذا أحد سرق الداتابيس، ما يكدر يعرف الباسوردات.</p>
+  <div class="quiz">
+    <h3>✍️ أسئلة</h3>
+    <details><summary>1. شنو هو الـ API؟</summary><div class="ans">مجموعة روابط (أبواب) يفتحها الباك اند حتى الفرونت اند يطلب منها بيانات أو يسوي عمليات.</div></details>
+    <details><summary>2. شنو يصير لو نسينا نحط الـ Token بالـ Header؟</summary><div class="ans">السيرفر ما يعرف منو إنت، ويرجع 401.</div></details>
+    <details><summary>3. ليش ما نحفظ الباسورد نص عادي؟</summary><div class="ans">حتى لو أحد سرق الداتابيس ما يعرف الباسوردات. نحفظه مشفّر (hash).</div></details>
+    <div class="mcq" data-correct="1"><p>4. وين يحفظ الفرونت اند الـ Token بتطبيقنا؟</p><div class="opts"><button>بالداتابيس</button><button>localStorage بالمتصفح</button><button>بالـ URL</button></div><div class="why">يحفظه بـ localStorage حتى يبقى بعد الـ Refresh.</div></div>
+  </div>
+</section>
+
+<!-- ============ 8 ============ -->
+<section class="card lesson" id="s8">
+  <span class="badge">القسم 8</span>
+  <h2>Database (الداتابيس)</h2>
+  <p>الداتابيس هي <b>المكان اللي تنحفظ بيه البيانات بشكل دائم</b>. إذا السيرفر انطفى أو سويت Refresh، الرسائل تبقى.</p>
+  <div class="analogy">🍽️ الداتابيس هي <b>الثلاجة</b>. الأغراض تبقى بيها حتى لو المطبخ سكّر وفتح.</div>
+  <h3>شكلها من جوة: جداول</h3>
+  <div class="table-wrap"><table>
+    <tr><th>id</th><th>sender</th><th>content</th><th>is_read</th></tr>
+    <tr><td>1</td><td>ali</td><td>هلو سارة</td><td>✅</td></tr>
+    <tr><td>2</td><td>sara</td><td>هلا علي</td><td>❌</td></tr>
+  </table></div>
+  <ul>
+    <li><b>Table (جدول):</b> مجموعة بيانات من نفس النوع. هذا جدول الرسائل.</li>
+    <li><b>Column (عمود) ⬇️:</b> نوع المعلومة. مثلاً عمود <code>content</code> بيه نصوص كل الرسائل.</li>
+    <li><b>Row (صف) ➡️:</b> سجل واحد كامل. مثلاً الصف 2 = رسالة سارة "هلا علي".</li>
+  </ul>
+  <h3>جداول تطبيقنا</h3>
+  <div class="table-wrap"><table>
+    <tr><th>الجدول</th><th>شنو يحفظ</th><th>أهم الأعمدة</th></tr>
+    <tr><td><b>users</b></td><td>المستخدمين</td><td>id, username, password (مشفّر)</td></tr>
+    <tr><td><b>profile</b></td><td>الحالة</td><td>user_id, is_online, last_seen</td></tr>
+    <tr><td><b>conversations</b></td><td>المحادثات</td><td>id, created_at</td></tr>
+    <tr><td><b>messages</b></td><td>الرسائل</td><td>id, conversation_id, sender_id, content, created_at, is_read</td></tr>
+  </table></div>
+  <p>نستخدم هسه <b>SQLite</b> (داتابيس بملف واحد، ممتازة للتجربة). بالإنتاج نحولها لـ <b>PostgreSQL</b>.</p>
+  <div class="interview">"كل رسالة هي صف، وكل معلومة عن الرسالة (المرسل، النص، مقروءة لو لا) هي عمود."</div>
+  <div class="quiz">
+    <h3>✍️ أسئلة</h3>
+    <details><summary>1. ليش نحتاج داتابيس؟</summary><div class="ans">حتى البيانات (الرسائل، المستخدمين) تبقى محفوظة بشكل دائم، حتى لو السيرفر انطفى أو سويت Refresh.</div></details>
+    <details><summary>2. بجدول الرسائل فوك، شكد عدد الصفوف وشكد عدد الأعمدة؟</summary><div class="ans">صفّين (رسالتين) و 4 أعمدة (id, sender, content, is_read).</div></details>
+    <div class="mcq" data-correct="0"><p>3. رسالة وحدة كاملة بالجدول، شنو تسمى؟</p><div class="opts"><button>Row (صف)</button><button>Column (عمود)</button><button>Table (جدول)</button></div><div class="why">كل رسالة = صف. العمود هو نوع المعلومة.</div></div>
+    <details><summary>4. شنو الداتابيس اللي نستخدمها هسه، وشنو نستخدم بالإنتاج؟</summary><div class="ans">هسه SQLite، وبالإنتاج PostgreSQL.</div></details>
+  </div>
+</section>
+
+<!-- ============ 9 ============ -->
+<section class="card lesson" id="s9">
+  <span class="badge">القسم 9</span>
+  <h2>SQL</h2>
+  <p><b>SQL</b> هي <b>اللغة اللي نحچي بيها ويا الداتابيس</b>: نجيب ونضيف ونعدل ونحذف.</p>
+  <div class="analogy">🍽️ الثلاجة ما تفتح وحدها. <b>SQL هي الإيد</b> اللي تفتحها وتاخذ منها أو تحط بيها.</div>
+  <h3>الأوامر الأربعة (نفس CRUD)</h3>
+  <div class="table-wrap"><table>
+    <tr><th>الـ Method (API)</th><th>أمر SQL</th><th>الشغل</th></tr>
+    <tr><td>GET</td><td><code>SELECT</code></td><td>جيب</td></tr>
+    <tr><td>POST</td><td><code>INSERT</code></td><td>ضيف</td></tr>
+    <tr><td>PATCH</td><td><code>UPDATE</code></td><td>عدّل</td></tr>
+    <tr><td>DELETE</td><td><code>DELETE</code></td><td>احذف</td></tr>
+  </table></div>
+  <h3>أمثلة من تطبيقنا</h3>
+  <p><b>سارة تفتح المحادثة وتشوف الرسائل:</b></p>
+<pre><code>SELECT * FROM messages WHERE conversation_id = 5 ORDER BY created_at;</code></pre>
+  <p>📖 تنقرا: "جيب <b>كل</b> (<code>*</code>) الرسائل <b>من</b> جدول messages <b>وين</b> المحادثة رقم 5، <b>مرتبة</b> حسب الوقت".</p>
+  <p><b>علي يدز رسالة:</b></p>
+<pre><code>INSERT INTO messages (conversation_id, sender_id, content) VALUES (5, 1, 'hello');</code></pre>
+  <p><b>سارة قرت الرسائل:</b></p>
+<pre><code>UPDATE messages SET is_read = true WHERE conversation_id = 5 AND sender_id = 1;</code></pre>
+  <p><b>حذف رسالة:</b></p>
+<pre><code>DELETE FROM messages WHERE id = 7;</code></pre>
+  <p>⚠️ <b>انتبه:</b> <code>UPDATE</code> و <code>DELETE</code> بدون <code>WHERE</code> يأثرن على <b>كل</b> الصفوف! يعني <code>DELETE FROM messages;</code> يمسح كل الرسائل.</p>
+  <h3>📌 حيلة SELECT لو INSERT؟</h3>
+  <p>اسأل نفسك: "هل انضاف شي جديد للداتابيس؟" <b>لا، بس أشوف</b> ← <code>SELECT</code>. <b>إي، انضاف</b> ← <code>INSERT</code>.</p>
+  <h3>ORM: Django يكتب SQL بدالنا</h3>
+  <p>بالكود مالتنا ما كتبنا SQL بإيدنا. Django عنده <b>ORM</b> يحول كود Python لـ SQL تلقائياً:</p>
+  <div class="table-wrap"><table>
+    <tr><th>Python (Django ORM)</th><th>SQL اللي يتنفذ</th></tr>
+    <tr><td><code>Message.objects.create(...)</code></td><td><code>INSERT</code></td></tr>
+    <tr><td><code>conv.messages.all()</code></td><td><code>SELECT</code></td></tr>
+    <tr><td><code>.update(is_read=True)</code></td><td><code>UPDATE</code></td></tr>
+    <tr><td><code>message.delete()</code></td><td><code>DELETE</code></td></tr>
+  </table></div>
+  <div class="interview">"استخدمت Django ORM، وهو يحول كود Python لـ SQL. مثلاً Message.objects.create يتحول لـ INSERT. بس أفهم الـ SQL اللي يصير ورا الكواليس."</div>
+  <div class="quiz">
+    <h3>✍️ أسئلة</h3>
+    <div class="mcq" data-correct="0"><p>1. سارة فتحت المحادثة تشوف الرسائل القديمة. أي أمر؟</p><div class="opts"><button>SELECT</button><button>INSERT</button><button>UPDATE</button></div><div class="why">تشوف بس، ما انضاف شي = SELECT.</div></div>
+    <div class="mcq" data-correct="3"><p>2. سارة حذفت رسالة. أي أمر؟</p><div class="opts"><button>SELECT</button><button>INSERT</button><button>UPDATE</button><button>DELETE</button></div><div class="why">حذف = DELETE.</div></div>
+    <div class="mcq" data-correct="2"><p>3. الرسالة صارت مقروءة ✓✓. أي أمر؟</p><div class="opts"><button>INSERT</button><button>SELECT</button><button>UPDATE</button></div><div class="why">عدلنا قيمة <code>is_read</code> برسالة موجودة = UPDATE.</div></div>
+    <details><summary>4. شنو يسوي هذا الأمر؟ <code>SELECT * FROM users;</code></summary><div class="ans">يجيب كل الأعمدة لكل المستخدمين من جدول users.</div></details>
+    <details><summary>5. اكتب أمر SQL يجيب رسائل علي بس (sender_id = 1).</summary><div class="ans"><code>SELECT * FROM messages WHERE sender_id = 1;</code></div></details>
+    <details><summary>6. ليش DELETE بدون WHERE خطر؟</summary><div class="ans">لأن يحذف كل الصفوف بالجدول، مو صف واحد.</div></details>
+    <details><summary>7. شنو هو الـ ORM؟</summary><div class="ans">أداة بـ Django تحول كود Python لأوامر SQL، حتى ما نكتب SQL بإيدنا.</div></details>
+  </div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section class="card lesson" id="s10">
+  <span class="badge">القسم 10</span>
+  <h2>Primary Key و Foreign Key</h2>
+  <h3>🔑 Primary Key (المفتاح الأساسي)</h3>
+  <p>رقم مميز لكل صف، <b>ما يتكرر أبداً</b>. بتطبيقنا هو عمود <code>id</code>.</p>
+  <div class="table-wrap"><table>
+    <tr><th>id 🔑</th><th>sender</th><th>content</th></tr>
+    <tr><td><b>1</b></td><td>ali</td><td>هلو</td></tr>
+    <tr><td><b>2</b></td><td>sara</td><td>هلو</td></tr>
+  </table></div>
+  <p>نفس النص "هلو"، بس كل رسالة إلها رقم خاص بيها.</p>
+  <div class="analogy">🪪 مثل <b>الرقم الوطني</b>: اسمين ممكن يتشابهون، بس الرقم ما يتكرر.</div>
+  <h3>🔗 Foreign Key (المفتاح الأجنبي)</h3>
+  <p>عمود بجدول <b>يأشر على Primary Key بجدول ثاني</b>. وظيفته <b>يربط</b> الجداول.</p>
+  <p><b>جدول users:</b></p>
+  <div class="table-wrap"><table>
+    <tr><th>id 🔑</th><th>username</th></tr>
+    <tr><td><b>1</b></td><td>ali</td></tr>
+    <tr><td><b>2</b></td><td>sara</td></tr>
+  </table></div>
+  <p><b>جدول messages:</b></p>
+  <div class="table-wrap"><table>
+    <tr><th>id 🔑</th><th>sender_id 🔗</th><th>conversation_id 🔗</th><th>content</th></tr>
+    <tr><td>1</td><td><b>1</b></td><td>5</td><td>هلو سارة</td></tr>
+    <tr><td>2</td><td><b>2</b></td><td>5</td><td>هلا علي</td></tr>
+  </table></div>
+  <p><code>sender_id = 1</code> معناه "روح لجدول users وشوف منو رقمه 1" ← <b>ali</b>.</p>
+  <p><b>ليش ما نكتب الاسم مباشرة؟</b> لأن إذا علي غيّر اسمه، نغيره بمكان واحد بس، وكل رسائله تبقى مربوطة بيه صح.</p>
+  <h3>أنواع العلاقات</h3>
+  <div class="table-wrap"><table>
+    <tr><th>العلاقة</th><th>معناها</th><th>بتطبيقنا</th></tr>
+    <tr><td><b>One-to-One</b></td><td>واحد ← واحد</td><td>كل مستخدم إله Profile واحد</td></tr>
+    <tr><td><b>One-to-Many</b> (ForeignKey)</td><td>واحد ← هواية</td><td>المحادثة الوحدة بيها هواية رسائل</td></tr>
+    <tr><td><b>Many-to-Many</b></td><td>هواية ← هواية</td><td>المستخدم بهواية محادثات، والمحادثة بيها أكثر من مستخدم</td></tr>
+  </table></div>
+  <p><b>CASCADE:</b> إذا انحذفت محادثة، رسائلها تنحذف وياها تلقائياً (<code>on_delete=CASCADE</code>).</p>
+  <div class="interview">"Primary Key رقم مميز لكل صف. Foreign Key عمود يربط جدول بجدول ثاني، مثل sender_id بجدول الرسائل يأشر على المستخدم اللي دزها."</div>
+  <div class="quiz">
+    <h3>✍️ أسئلة</h3>
+    <div class="mcq" data-correct="1"><p>1. عمود <code>conversation_id</code> بجدول الرسائل شنو هو؟</p><div class="opts"><button>Primary Key</button><button>Foreign Key</button><button>ولا واحد</button></div><div class="why">Foreign Key، لأنه يأشر على الـ id (Primary Key) بجدول المحادثات، يعني يربط الرسالة بمحادثتها.</div></div>
+    <div class="mcq" data-correct="0"><p>2. عمود <code>id</code> بجدول الرسائل شنو هو؟</p><div class="opts"><button>Primary Key</button><button>Foreign Key</button></div><div class="why">Primary Key، رقم مميز لكل رسالة.</div></div>
+    <details><summary>3. ليش نخزن sender_id بدل اسم المرسل؟</summary><div class="ans">حتى إذا المستخدم غيّر اسمه نغيره بمكان واحد، والربط يبقى صحيح. وأيضاً الرقم ما يتكرر بس الاسم ممكن يتشابه.</div></details>
+    <details><summary>4. العلاقة بين المحادثة والرسائل شنو نوعها؟</summary><div class="ans">One-to-Many: محادثة وحدة بيها هواية رسائل.</div></details>
+    <details><summary>5. شنو يصير لرسائل محادثة إذا انحذفت المحادثة؟</summary><div class="ans">تنحذف وياها، بسبب on_delete=CASCADE.</div></details>
+  </div>
+</section>
+
+<!-- ============ 11 ============ -->
+<section class="card lesson" id="s11">
+  <span class="badge">القسم 11</span>
+  <h2>WebSocket: ليش الرسالة توصل فوراً؟</h2>
+  <h3>المشكلة ويا HTTP</h3>
+  <p>بـ HTTP، <b>الفرونت اند لازم يطلب أول</b> حتى ياخذ جواب. السيرفر ما يكدر يبدي يحچي وحده.</p>
+  <p>يعني علي دز رسالة، بس سارة ما تعرف إلا إذا سوت Refresh. الحل الغبي: سارة تسأل السيرفر كل ثانية "اكو رسالة جديدة؟" وهذا اسمه <b>Polling</b>، وهو هدر لأن أغلب الأجوبة "لا".</p>
+  <div class="analogy">📬 <b>HTTP</b> مثل تروح لصندوق البريد كل شوية تشوف إذا اكو رسالة.<br>📞 <b>WebSocket</b> مثل مكالمة تلفون مفتوحة: أي واحد يحچي بأي وقت والثاني يسمع فوراً.</div>
+  <h3>شنو هو WebSocket؟</h3>
+  <p><b>اتصال يبقى مفتوح</b> بين المتصفح والسيرفر، <b>وبالاتجاهين</b>. السيرفر يكدر يدز رسالة لسارة لحظة ما توصل من علي، بدون ما سارة تطلب.</p>
+  <div class="table-wrap"><table>
+    <tr><th></th><th>HTTP</th><th>WebSocket</th></tr>
+    <tr><td>الاتصال</td><td>ينفتح وينسد بكل طلب</td><td>يبقى مفتوح</td></tr>
+    <tr><td>منو يبدي؟</td><td>الفرونت اند بس</td><td>الاثنين</td></tr>
+    <tr><td>بتطبيقنا نستخدمه لـ</td><td>البيانات القديمة: القوائم والرسائل السابقة والتسجيل</td><td>الأحداث الحية: رسالة جديدة، يكتب...، متصل، مقروء</td></tr>
+    <tr><td>الرابط يبدي بـ</td><td><code>http://</code></td><td><code>ws://</code></td></tr>
+  </table></div>
+  <h3>بتطبيقنا</h3>
+<pre><code>ws://localhost:8000/ws/chat/5/?token=abc123</code></pre>
+  <p>ليش الـ Token بالرابط مو بالـ Header؟ لأن المتصفح <b>ما يسمح</b> تضيف Header لاتصال WebSocket.</p>
+  <p>الرسائل اللي تنتقل بالـ WebSocket هم هم <b>JSON</b>:</p>
+<p>الفرونت اند يدز:</p>
+<pre><code>{"type": "message", "content": "hello"}</code></pre>
+  <p>السيرفر يدز لكل اللي بالمحادثة:</p>
+<pre><code>{"type": "message", "message": {"id": 7, "content": "hello", ...}}</code></pre>
+  <p>وأحداث ثانية (يكتب، متصل، مقروء):</p>
+<pre><code>{"type": "typing", "user_id": 1}
+{"type": "presence", "user_id": 1, "is_online": true}
+{"type": "read", "reader_id": 2}</code></pre>
+  <div class="interview">"استخدمت WebSocket لأن الشات يحتاج السيرفر يدز الرسالة للطرف الثاني لحظة وصولها. بـ HTTP لازم الطرف الثاني يسأل كل شوية (Polling) وهذا هدر. الـ WebSocket اتصال يبقى مفتوح وبالاتجاهين."</div>
+  <div class="quiz">
+    <h3>✍️ أسئلة</h3>
+    <details><summary>1. ليش ما نكتفي بـ HTTP للشات؟</summary><div class="ans">لأن بـ HTTP السيرفر ما يكدر يدز شي إلا إذا الفرونت اند طلب. فسارة ما تعرف بالرسالة الجديدة إلا بـ Refresh أو Polling.</div></details>
+    <details><summary>2. شنو هو Polling وليش سيء؟</summary><div class="ans">الفرونت اند يسأل السيرفر كل شوية "اكو جديد؟". سيء لأن أغلب الطلبات جوابها "لا"، فهو هدر للسيرفر والإنترنت والبطارية.</div></details>
+    <div class="mcq" data-correct="1"><p>3. عرض الرسائل القديمة لما تفتح محادثة، يصير بـ؟</p><div class="opts"><button>WebSocket</button><button>HTTP (GET)</button></div><div class="why">البيانات القديمة نجيبها بـ HTTP GET. الـ WebSocket للأحداث الجديدة الحية.</div></div>
+    <div class="mcq" data-correct="0"><p>4. "سارة يكتب..." توصل لعلي بـ؟</p><div class="opts"><button>WebSocket</button><button>HTTP</button></div><div class="why">حدث حي ولحظي = WebSocket.</div></div>
+    <details><summary>5. ليش نحط الـ Token بالرابط بالـ WebSocket؟</summary><div class="ans">لأن المتصفح ما يسمح نضيف Header لاتصال WebSocket.</div></details>
+  </div>
+</section>
+
+<!-- ============ 12 ============ -->
+<section class="card lesson" id="s12">
+  <span class="badge">القسم 12</span>
+  <h2>Channels: شلون الرسالة توصل للشخص الصح؟</h2>
+  <p><b>Django Channels</b> هي المكتبة اللي تخلي Django يفهم WebSocket. بيها 3 أفكار مهمة:</p>
+  <h3>1. Consumer</h3>
+  <p>مثل الـ View بس للـ WebSocket. الـ View يستلم Request واحد ويرجع Response وينتهي. الـ <b>Consumer</b> يبقى شغال طول ما الاتصال مفتوح. بيه 3 دوال:</p>
+  <ul>
+    <li><code>connect()</code>: لما أحد يفتح اتصال. نتأكد من الـ Token وأنه مشارك بالمحادثة.</li>
+    <li><code>receive_json()</code>: لما توصل رسالة. نحفظها بالداتابيس ونبثها.</li>
+    <li><code>disconnect()</code>: لما الاتصال ينسد.</li>
+  </ul>
+  <h3>2. Group (غرفة)</h3>
+  <p>مجموعة اتصالات نكدر ندزلها كلها سوه. كل من فاتح المحادثة 5 ينضم لغرفة <code>chat_5</code>. من علي يدز رسالة، نبثها لكل الغرفة، فتوصل لسارة.</p>
+  <div class="analogy">🏠 الـ Group مثل <b>كروب واتساب</b>: تدز بيه مرة وحدة ويوصل لكل الأعضاء.</div>
+  <p>بتطبيقنا 3 أنواع غرف:</p>
+  <div class="table-wrap"><table>
+    <tr><th>الغرفة</th><th>منو بيها</th><th>شنو ينبث بيها</th></tr>
+    <tr><td><code>chat_5</code></td><td>كل من فاتح المحادثة 5</td><td>الرسائل، يكتب...، مقروء</td></tr>
+    <tr><td><code>presence</code></td><td>كل المستخدمين المتصلين</td><td>فلان صار متصل / غير متصل</td></tr>
+    <tr><td><code>user_2</code></td><td>سارة بس</td><td>تنبيه "وصلتك رسالة" حتى لو المحادثة مو مفتوحة، حتى تتحدث قائمتها</td></tr>
+  </table></div>
+  <h3>3. Channel Layer (البريد)</h3>
+  <p>النظام اللي يوصل الرسائل بين الاتصالات والغرف. هسه نستخدم <b>InMemory</b> (بذاكرة السيرفر، يكفي للتجربة). بالإنتاج ويا أكثر من سيرفر نستخدم <b>Redis</b>.</p>
+  <h3>الرحلة الكاملة لرسالة بالـ WebSocket</h3>
+  <div class="flow">Ali browser → WebSocket → ChatConsumer.receive_json → INSERT (Database) → group_send("chat_5") → Sara browser</div>
+  <div class="interview">"استخدمت Django Channels. كل محادثة إلها Group، ومن توصل رسالة الـ Consumer يحفظها بالداتابيس ويبثها للـ Group فتوصل لكل المشاركين. الـ Channel layer هسه InMemory، وبالإنتاج Redis."</div>
+  <div class="quiz">
+    <h3>✍️ أسئلة</h3>
+    <details><summary>1. شنو الفرق بين View و Consumer؟</summary><div class="ans">الـ View يستلم Request واحد ويرجع Response وينتهي (HTTP). الـ Consumer يبقى شغال طول ما اتصال الـ WebSocket مفتوح ويكدر يستلم ويدز بأي وقت.</div></details>
+    <details><summary>2. شنو هو الـ Group؟</summary><div class="ans">غرفة بيها مجموعة اتصالات، ندز لها مرة وحدة ويوصل للكل. مثل كروب واتساب.</div></details>
+    <div class="mcq" data-correct="2"><p>3. إذا صار عدنا 3 سيرفرات، شنو نغير؟</p><div class="opts"><button>نشيل الـ WebSocket</button><button>نرجع لـ Polling</button><button>Channel layer من InMemory لـ Redis</button></div><div class="why">InMemory يعيش بذاكرة سيرفر واحد. ويا أكثر من سيرفر نحتاج Redis حتى يتشاركون. ونحول الداتابيس لـ PostgreSQL.</div></div>
+    <details><summary>4. ليش سوينا غرفة <code>user_2</code> لسارة؟</summary><div class="ans">حتى توصلها تنبيهات الرسائل الجديدة حتى لو المحادثة مو مفتوحة عندها، فتتحدث قائمة المحادثات وعدد غير المقروء بدون Refresh.</div></details>
+    <details><summary>5. بأي دالة بالـ Consumer نتأكد من الـ Token؟</summary><div class="ans">بـ connect().</div></details>
+  </div>
+</section>
+
+<!-- ============ 13 ============ -->
+<section class="card lesson" id="s13">
+  <span class="badge">القسم 13</span>
+  <h2>Git و Branch</h2>
+  <ul>
+    <li><b>Git:</b> برنامج يحفظ تاريخ كل تغيير بالكود. تكدر ترجع لأي نسخة قديمة.</li>
+    <li><b>GitHub:</b> موقع نرفع عليه الكود حتى الفريق يشتغل سوه. مستودعنا: <code>saffi277/chat</code>.</li>
+    <li><b>Commit:</b> "حفظة" لمجموعة تغييرات ويا رسالة توضح شنو تغير.</li>
+    <li><b>Branch (برانچ):</b> نسخة موازية من الكود. تشتغل بيها بدون ما تخرب الأصل.</li>
+    <li><b>Pull Request:</b> طلب دمج برانچ ويا برانچ ثاني، حتى الفريق يراجع قبل الدمج.</li>
+  </ul>
+  <div class="analogy">🌳 الـ Branch مثل <b>نسخة من الدفتر</b>. المصمم ياخذ نسخة ويرسم بيها، ومن يخلص نراجع شغله وندمجه ويا الدفتر الأصلي.</div>
+  <p>برانچنا: <code>claude/great-franklin-cegs7b</code></p>
+<pre><code>git clone -b claude/great-franklin-cegs7b https://github.com/saffi277/chat.git
+cd chat
+git checkout -b design
+git add . && git commit -m "Improve chat page design"
+git push -u origin design</code></pre>
+  <p>السطر الثالث يسوي برانچ خاص للمصمم اسمه <code>design</code>. الرابع يحفظ التغييرات (commit). والخامس يرفعها لـ GitHub، وبعدها يفتح Pull Request.</p>
+  <div class="quiz">
+    <h3>✍️ أسئلة</h3>
+    <details><summary>1. ليش المصمم يشتغل ببرانچ خاص بيه؟</summary><div class="ans">حتى شغله ما يختلط بشغلنا ولا يخرب الكود الأصلي، ونراجعه قبل ما ندمجه.</div></details>
+    <details><summary>2. شنو هو الـ Pull Request؟</summary><div class="ans">طلب دمج برانچ ويا برانچ ثاني، حتى الفريق يراجع التغييرات قبل الدمج.</div></details>
+    <div class="mcq" data-correct="0"><p>3. شنو يسوي <code>git commit</code>؟</p><div class="opts"><button>يحفظ التغييرات بتاريخ Git</button><button>يرفع الكود لـ GitHub</button><button>يسوي برانچ</button></div><div class="why">commit يحفظ محلياً. الرفع لـ GitHub يصير بـ <code>git push</code>.</div></div>
+  </div>
+</section>
+
+<!-- ============ 14 ============ -->
+<section class="card lesson" id="s14">
+  <span class="badge">القسم 14</span>
+  <h2>🗺️ وين كل شي بالكود (للجلسة الجاية)</h2>
+  <p>بالجلسة الجاية نفتح هذني الملفات سوه ونطبق عليها كل اللي تعلمناه.</p>
+  <div class="table-wrap"><table>
+    <tr><th>المفهوم</th><th>الملف</th></tr>
+    <tr><td>Request و JSON من الفرونت اند</td><td><code>frontend/lib/api.ts</code></td></tr>
+    <tr><td>فتح WebSocket من الفرونت اند</td><td><code>frontend/lib/socket.ts</code></td></tr>
+    <tr><td>صفحة الدخول (POST login)</td><td><code>frontend/app/AuthForm.tsx</code></td></tr>
+    <tr><td>صفحة الشات والتصميم</td><td><code>frontend/app/chat/page.tsx</code></td></tr>
+    <tr><td>روابط الـ API (URLs)</td><td><code>backend/accounts/urls.py</code> و <code>backend/chat/urls.py</code></td></tr>
+    <tr><td>معالجة الطلبات (Views) وأرقام الحالة</td><td><code>backend/accounts/views.py</code> و <code>backend/chat/views.py</code></td></tr>
+    <tr><td>تحويل Python ↔ JSON (Serializers)</td><td><code>backend/chat/serializers.py</code></td></tr>
+    <tr><td>الجداول، Primary Key و Foreign Key</td><td><code>backend/chat/models.py</code> و <code>backend/accounts/models.py</code></td></tr>
+    <tr><td>WebSocket و Groups (Consumer)</td><td><code>backend/chat/consumers.py</code></td></tr>
+    <tr><td>توزيع HTTP و WebSocket</td><td><code>backend/config/asgi.py</code></td></tr>
+    <tr><td>الـ Token والإعدادات</td><td><code>backend/config/settings.py</code></td></tr>
+  </table></div>
+  <p>💡 <b>تمرين بعد الجلسة:</b> تكتب بإيدك ميزة <b>حذف رسالة</b> (DELETE). تمر على كل المفاهيم: Method، URL، View، SQL، رقم حالة، وتبثها بالـ WebSocket.</p>
+</section>
+
+<!-- ============ FINAL ============ -->
+<section class="card" id="final">
+  <span class="badge">🏁 النهائي</span>
+  <h2>الاختبار النهائي (بأسلوب المقابلة)</h2>
+  <p>20 سؤال على كل الأقسام. جاوب بدون ما ترجع للشرح.</p>
+  <div id="finalQs">
+    <div class="mcq" data-correct="1"><p>1. شنو الـ JSON؟</p><div class="opts"><button>لغة برمجة</button><button>صيغة بيانات للتواصل بين الفرونت والباك</button><button>نوع داتابيس</button></div><div class="why">صيغة بيانات مشتركة.</div></div>
+    <div class="mcq" data-correct="2"><p>2. أي Method لجلب قائمة المستخدمين؟</p><div class="opts"><button>POST</button><button>PATCH</button><button>GET</button></div><div class="why">جلب = GET.</div></div>
+    <div class="mcq" data-correct="0"><p>3. أي Method لإرسال رسالة جديدة؟</p><div class="opts"><button>POST</button><button>GET</button><button>DELETE</button></div><div class="why">إضافة = POST.</div></div>
+    <div class="mcq" data-correct="1"><p>4. رقم الحالة لما البيانات غلط (مثلاً رسالة فارغة)؟</p><div class="opts"><button>200</button><button>400</button><button>500</button></div><div class="why">400 = الطلب غلط.</div></div>
+    <div class="mcq" data-correct="2"><p>5. رقم الحالة لما المستخدم مو مسجل دخول؟</p><div class="opts"><button>404</button><button>201</button><button>401</button></div><div class="why">401.</div></div>
+    <div class="mcq" data-correct="1"><p>6. وين ينحط الـ Token بـ HTTP؟</p><div class="opts"><button>Body</button><button>Header</button><button>URL</button></div><div class="why">بالـ Header: Authorization.</div></div>
+    <div class="mcq" data-correct="0"><p>7. أمر SQL لعرض الرسائل؟</p><div class="opts"><button>SELECT</button><button>INSERT</button><button>UPDATE</button></div><div class="why">عرض = SELECT.</div></div>
+    <div class="mcq" data-correct="1"><p>8. أمر SQL لحفظ رسالة جديدة؟</p><div class="opts"><button>SELECT</button><button>INSERT</button><button>DELETE</button></div><div class="why">إضافة = INSERT.</div></div>
+    <div class="mcq" data-correct="2"><p>9. أمر SQL لتعليم رسالة كمقروءة؟</p><div class="opts"><button>INSERT</button><button>SELECT</button><button>UPDATE</button></div><div class="why">تعديل = UPDATE.</div></div>
+    <div class="mcq" data-correct="0"><p>10. <code>sender_id</code> بجدول الرسائل؟</p><div class="opts"><button>Foreign Key</button><button>Primary Key</button></div><div class="why">يأشر على جدول المستخدمين = Foreign Key.</div></div>
+    <div class="mcq" data-correct="1"><p>11. رسالة وحدة كاملة بالجدول تسمى؟</p><div class="opts"><button>Column</button><button>Row</button></div><div class="why">صف = Row.</div></div>
+    <div class="mcq" data-correct="2"><p>12. ليش استخدمنا WebSocket؟</p><div class="opts"><button>حتى نحفظ الرسائل</button><button>حتى نشفّر الباسورد</button><button>حتى الرسائل توصل فوراً بدون Refresh</button></div><div class="why">اتصال مفتوح بالاتجاهين.</div></div>
+    <div class="mcq" data-correct="0"><p>13. الـ Polling شنو هو؟</p><div class="opts"><button>سؤال السيرفر كل شوية "اكو جديد؟"</button><button>نوع داتابيس</button><button>تشفير</button></div><div class="why">وهو هدر، لهذا نستخدم WebSocket.</div></div>
+    <div class="mcq" data-correct="1"><p>14. بالـ Channels، الـ Group شنو؟</p><div class="opts"><button>جدول بالداتابيس</button><button>غرفة ندز لها مرة وحدة وتوصل للكل</button><button>نوع Request</button></div><div class="why">مثل كروب واتساب.</div></div>
+    <div class="mcq" data-correct="2"><p>15. شنو نستخدم للـ Channel layer بالإنتاج؟</p><div class="opts"><button>SQLite</button><button>InMemory</button><button>Redis</button></div><div class="why">Redis يخلي أكثر من سيرفر يتشاركون.</div></div>
+    <div class="mcq" data-correct="0"><p>16. شنو يسوي Django ORM؟</p><div class="opts"><button>يحول كود Python لـ SQL</button><button>يشغل الفرونت اند</button><button>يصمم الصفحات</button></div><div class="why">حتى ما نكتب SQL بإيدنا.</div></div>
+    <div class="mcq" data-correct="1"><p>17. شلون ينحفظ الباسورد؟</p><div class="opts"><button>نص عادي</button><button>مشفّر (hash)</button><button>ما ينحفظ</button></div><div class="why">مشفّر حتى لو انسرقت الداتابيس.</div></div>
+    <div class="mcq" data-correct="2"><p>18. Node.js شنو هو؟</p><div class="opts"><button>لغة برمجة</button><button>داتابيس</button><button>برنامج يشغل JavaScript برة المتصفح</button></div><div class="why">نحتاجه حتى نشغل Next.js.</div></div>
+    <div class="mcq" data-correct="0"><p>19. شخص مو مشارك حاول يقرا محادثة. تطبيقنا يرجع؟</p><div class="opts"><button>404</button><button>200</button><button>201</button></div><div class="why">404 حتى ما نكشف وجودها.</div></div>
+    <div class="mcq" data-correct="1"><p>20. المصمم يشتغل وين حتى ما يخرب الكود الأصلي؟</p><div class="opts"><button>على نفس البرانچ مباشرة</button><button>ببرانچ خاص بيه ويفتح Pull Request</button></div><div class="why">برانچ خاص + مراجعة قبل الدمج.</div></div>
+  </div>
+  <div class="score" id="score">النتيجة: 0 / 20</div>
+  <p style="text-align:center;margin-top:12px"><button class="btn" id="resetFinal" type="button">🔁 أعد الاختبار</button></p>
+</section>
+
+<div class="footer">دليل دراسة تطبيق الشات — Django + Next.js. من تخلص، ارجع حتى نطبق كلشي على الكود 💪</div>
+</div>
+
+<script>
+(function(){
+  function store(k,v){ try{ if(v===undefined) return localStorage.getItem(k); localStorage.setItem(k,v); }catch(e){ return null; } }
+
+  // Theme toggle
+  var root=document.documentElement;
+  var saved=store('sg-theme'); if(saved) root.setAttribute('data-theme',saved);
+  document.getElementById('themeBtn').addEventListener('click',function(){
+    var dark = root.getAttribute('data-theme') ? root.getAttribute('data-theme')==='dark'
+      : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    root.setAttribute('data-theme',next); store('sg-theme',next);
+  });
+
+  // Multiple choice questions
+  var finalBox=document.getElementById('finalQs');
+  function updateScore(){
+    var qs=finalBox.querySelectorAll('.mcq');
+    var right=finalBox.querySelectorAll('.mcq.got-right').length;
+    var done=finalBox.querySelectorAll('.mcq.answered').length;
+    var el=document.getElementById('score');
+    el.textContent='النتيجة: '+right+' / '+qs.length+(done===qs.length?(right>=16?' 🔥 ممتاز، جاهز للمقابلة!':right>=12?' 👍 زين، راجع الغلطات':' 📖 ارجع راجع الأقسام'):'');
+  }
+  document.querySelectorAll('.mcq').forEach(function(q){
+    var correct=parseInt(q.getAttribute('data-correct'),10);
+    var btns=q.querySelectorAll('button');
+    btns.forEach(function(b,i){
+      b.type='button';
+      b.addEventListener('click',function(){
+        if(q.classList.contains('answered')) return;
+        q.classList.add('answered');
+        btns.forEach(function(x){x.disabled=true});
+        btns[correct].classList.add('right');
+        if(i===correct){ q.classList.add('got-right'); }
+        else { b.classList.add('wrong'); }
+        var why=q.querySelector('.why');
+        if(why) why.textContent=(i===correct?'✅ صح! ':'❌ مو صح. ')+why.textContent;
+        if(finalBox.contains(q)) updateScore();
+      });
+    });
+    var why=q.querySelector('.why'); if(why) why.setAttribute('data-orig',why.textContent);
+  });
+  document.getElementById('resetFinal').addEventListener('click',function(){
+    finalBox.querySelectorAll('.mcq').forEach(function(q){
+      q.classList.remove('answered','got-right');
+      q.querySelectorAll('button').forEach(function(b){b.disabled=false;b.classList.remove('right','wrong')});
+      var why=q.querySelector('.why'); if(why) why.textContent=why.getAttribute('data-orig');
+    });
+    updateScore();
+  });
+
+  // Section progress
+  var lessons=document.querySelectorAll('.lesson');
+  var doneMap={}; try{ doneMap=JSON.parse(store('sg-done')||'{}')||{}; }catch(e){ doneMap={}; }
+  function refresh(){
+    var n=0;
+    lessons.forEach(function(s){
+      var d=!!doneMap[s.id]; if(d) n++;
+      var a=document.querySelector('#toc a[href="#'+s.id+'"]'); if(a) a.classList.toggle('done',d);
+    });
+    document.getElementById('bar').style.width=(n/lessons.length*100)+'%';
+    document.getElementById('barLabel').textContent='خلصت '+n+' من '+lessons.length+' أقسام';
+  }
+  lessons.forEach(function(s){
+    var row=document.createElement('label'); row.className='done-row';
+    var cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!doneMap[s.id];
+    cb.addEventListener('change',function(){ doneMap[s.id]=cb.checked; store('sg-done',JSON.stringify(doneMap)); refresh(); });
+    row.appendChild(cb); row.appendChild(document.createTextNode('فهمت هذا القسم وجاوبت الأسئلة'));
+    s.appendChild(row);
+  });
+  refresh();
+})();
+</script>
+</body>
+</html>
