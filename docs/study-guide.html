@@ -56,6 +56,7 @@
   th{background:var(--code-bg)}
   .analogy{background:var(--accent-bg);border-right:4px solid var(--accent);padding:10px 14px;border-radius:10px;margin:10px 0}
   .interview{background:var(--warn-bg);border:1px solid var(--warn-border);padding:10px 14px;border-radius:10px;margin:10px 0}
+  .bug{background:var(--bad-bg);border:1px solid var(--bad);padding:10px 14px;border-radius:10px;margin:10px 0}
   .interview::before{content:"🎯 بالمقابلة گول:";display:block;font-weight:bold;margin-bottom:2px}
   .quiz{border-top:2px dashed var(--border);margin-top:18px;padding-top:12px}
   .quiz > h3{margin-top:0}
@@ -117,9 +118,21 @@
     <li><a href="#s11">WebSocket</a></li>
     <li><a href="#s12">Channels</a></li>
     <li><a href="#s13">Git و Branch</a></li>
-    <li><a href="#s14">وين كل شي بالكود</a></li>
+    <li><a href="#s14">تشغيل التطبيق وتصليح الأخطاء 🛠️</a></li>
+    <li><a href="#s15">وين كل شي بالكود</a></li>
     <li><a href="#final">الاختبار النهائي</a></li>
   </ol>
+</section>
+
+<section class="card" style="border-right:5px solid var(--accent)">
+  <h2>🗓️ خطة الدراسة</h2>
+  <div class="table-wrap"><table>
+    <tr><th>اليوم</th><th>شنو تسوي</th></tr>
+    <tr><td><b>اليوم 1</b></td><td>الأقسام 1 إلى 7: الصورة الكبيرة، التقنيات، JSON، HTTP، أرقام الحالة، Methods، API و Token. جاوب أسئلة كل قسم.</td></tr>
+    <tr><td><b>اليوم 2</b></td><td>الأقسام 8 إلى 14: Database، SQL، المفاتيح، WebSocket، Channels، Git، وتصليح الأخطاء. بآخر اليوم سوّي <b>الاختبار النهائي</b>.</td></tr>
+    <tr><td><b>اليوم 3</b></td><td>نفتح الكود سوه (القسم 15) ونطبق كل مفهوم على ملفه، ونكمل تشغيل التطبيق على جهازك.</td></tr>
+  </table></div>
+  <p>📌 لا تستعجل. قسم ينفهم زين أحسن من ثلاثة تنقرا بسرعة.</p>
 </section>
 
 <!-- ============ 1 ============ -->
@@ -600,6 +613,122 @@ git push -u origin design</code></pre>
 <!-- ============ 14 ============ -->
 <section class="card lesson" id="s14">
   <span class="badge">القسم 14</span>
+  <h2>🛠️ تشغيل التطبيق على جهازك وتصليح الأخطاء</h2>
+  <p>هذا القسم هو اللي عشناه سوه لما حاولت تشغل التطبيق على جهازك (Ubuntu). كل خطأ طلع علمنا شي جديد. <b>تصليح الأخطاء (Debugging)</b> نص شغل المبرمج، ويسألون عليه بالمقابلات.</p>
+
+  <h3>🧩 أولاً: البورت (Port) = رقم الباب</h3>
+  <p>التطبيق يحتاج <b>برنامجين</b> شغالين بنفس الوقت:</p>
+  <div class="table-wrap"><table>
+    <tr><th>البرنامج</th><th>الأمر</th><th>البورت</th></tr>
+    <tr><td><b>الباك اند</b> (المطبخ)</td><td><code>daphne -p 8000 config.asgi:application</code></td><td><b>8000</b></td></tr>
+    <tr><td><b>الفرونت اند</b> (الصالة)</td><td><code>npm run dev</code></td><td><b>3000</b></td></tr>
+  </table></div>
+  <div class="analogy">🏢 جهازك مثل <b>عمارة</b>، وكل برنامج ساكن بـ<b>شقة</b> إلها رقم (البورت). الفرونت اند يطرق باب <b>8000</b> حتى يوصل للباك اند. و<b>كل شقة يسكنها برنامج واحد بس</b>.</div>
+  <p>لهذا نفتح <b>Terminal لكل برنامج</b>، وما نسد الـ Terminal ما دام نريد البرنامج يبقى شغال.</p>
+
+  <h3>👣 خطوات التشغيل الصحيحة على Ubuntu</h3>
+  <p><b>Terminal 1: الباك اند</b> (كل سطر وحده):</p>
+<pre><code>cd ~/chat
+sudo apt install python3-venv python3-full
+python3 -m venv .venv
+source .venv/bin/activate
+cd backend
+pip install -r requirements.txt
+python manage.py migrate
+daphne -p 8000 config.asgi:application</code></pre>
+  <p>✅ لازم تشوف <code>(.venv)</code> بأول السطر بعد <code>source</code>، وبالأخير <code>Listening on TCP address 127.0.0.1:8000</code>.</p>
+  <p><b>Terminal 2: الفرونت اند:</b></p>
+<pre><code>node -v
+cd ~/chat/frontend
+npm install
+npm run dev</code></pre>
+  <p>✅ لازم <code>node -v</code> يطلع v20 أو أكثر. وبعدين افتح <code>http://localhost:3000</code>.</p>
+
+  <h3>🐞 الأخطاء اللي طلعتلنا، وشنو تعلمنا من كل واحد</h3>
+
+  <div class="bug">
+    <b>الخطأ 1:</b> <code>Command 'python' not found</code><br>
+    <b>السبب:</b> بـ Ubuntu الأمر اسمه <code>python3</code> مو <code>python</code>.<br>
+    <b>الحل:</b> نكتب <code>python3</code>. وبعد ما نفعّل البيئة (<code>.venv</code>) يصير <code>python</code> يشتغل عادي.
+  </div>
+
+  <div class="bug">
+    <b>الخطأ 2:</b> <code>error: externally-managed-environment</code><br>
+    <b>السبب:</b> لأن الأمر الأول فشل، البيئة ما انسوت. فـ <code>pip</code> حاول ينصب المكتبات على <b>النظام كله</b>، والنظام رفض حتى ما يخرب.<br>
+    <b>الحل:</b> نسوي <b>بيئة افتراضية</b> (<code>python3 -m venv .venv</code>) ونفعّلها (<code>source .venv/bin/activate</code>).<br>
+    <b>شنو تعلمنا:</b> <b>البيئة الافتراضية (venv)</b> = صندوق خاص بمشروعنا، ننصب بيه المكتبات بدون ما نلمس النظام. كل مشروع إله صندوقه.
+  </div>
+
+  <div class="bug">
+    <b>الخطأ 3:</b> <code>Failed to fetch</code> لما نضغط "إنشاء الحساب"<br>
+    <b>معناه:</b> الفرونت اند دز <b>Request</b> بس ما رجعله <b>Response</b>. هاي الرسالة وحدها ما تگول السبب.<br>
+    <b>شلون لكينا السبب:</b> فتحنا <b>F12 ← Console</b>، ولكينا سطر أحمر:<br>
+    <code>from origin 'http://localhost:3001' has been blocked by CORS policy</code><br>
+    <b>السبب الحقيقي:</b> باب 3000 جان محجوز بنسخة ثانية من الفرونت اند، فـ Next.js سكن بباب <b>3001</b>. والباك اند جان يقبل طلبات بس من 3000، فرفض.<br>
+    <b>الحل:</b> عدلنا <code>backend/config/settings.py</code> حتى بوضع التطوير يقبل أي بورت على جهازنا:
+<pre><code>if DEBUG:
+    CORS_ALLOWED_ORIGIN_REGEXES = [r'^http://(localhost|127\.0\.0\.1):\d+$']</code></pre>
+  </div>
+
+  <div class="bug">
+    <b>الخطأ 4:</b> <code>ModuleNotFoundError: No module named 'config'</code><br>
+    <b>السبب:</b> شغلنا <code>daphne</code> من الفولدر الغلط (<code>~/chat</code>). ملف <code>config</code> موجود داخل <code>~/chat/backend</code>.<br>
+    <b>الحل:</b> <code>cd backend</code> قبل <code>daphne</code>.<br>
+    <b>شنو تعلمنا:</b> دائماً انتبه <b>إنت بأي فولدر</b>. مكتوب بالـ Terminal قبل علامة <code>$</code>، مثلاً <code>~/chat/backend$</code>.
+  </div>
+
+  <div class="bug">
+    <b>الخطأ 5:</b> <code>Listen failure: [Errno 98] Address already in use</code><br>
+    <b>السبب:</b> باب 8000 <b>محجوز</b>، لأن اكو <b>daphne قديم بعده شغال</b>. والقديم ما بيه تصليح CORS، فحتى لو سحبنا التصليح، الطلبات تروح للقديم.<br>
+    <b>الحل:</b> نسحب التصليح، ونطفي القديم، ونشغل الجديد:
+<pre><code>cd ~/chat
+git pull
+fuser -k 8000/tcp
+cd backend
+daphne -p 8000 config.asgi:application</code></pre>
+    <code>fuser -k 8000/tcp</code> = "اطفي أي برنامج ساكن بباب 8000".
+  </div>
+
+  <h3>🌐 شنو هو CORS؟</h3>
+  <p><b>CORS</b> قاعدة أمان بالمتصفح: الموقع ما يكدر يحچي ويا سيرفر ثاني <b>إلا إذا السيرفر وافق</b>. السيرفر عنده قائمة بالمواقع المسموحة.</p>
+  <p>المتصفح قبل الطلب الحقيقي يدز طلب استئذان اسمه <b>preflight</b> (نوعه <code>OPTIONS</code>). إذا السيرفر ما رد بـ "مسموح" (Header اسمه <code>Access-Control-Allow-Origin</code>)، المتصفح يوكف الطلب ويطلع "Failed to fetch".</p>
+  <div class="analogy">🍽️ المطعم يستقبل طلبات <b>بس من صالته</b>. إذا أحد دز طلب من صالة ثانية، النادل يرفضه. CORS يحمي المستخدم: موقع غريب ما يكدر يستخدم حسابك بموقع ثاني.</div>
+  <div class="interview">"CORS قاعدة أمان بالمتصفح. السيرفر لازم يوافق على الموقع اللي يطلب منه. بمشروعي بالتطوير سمحت لأي بورت على localhost، وبالإنتاج أحدد الموقع الحقيقي بس."</div>
+
+  <h3>🧠 شلون يفكر المبرمج (أهم درس)</h3>
+  <ol>
+    <li><b>شوف الخطأ:</b> مثل "Failed to fetch". هذا وحده ما يگول السبب.</li>
+    <li><b>اجمع معلومات أكثر:</b> الـ Console (F12)، الـ Terminal، الأوامر اللي تفحص.</li>
+    <li><b>افهم السبب:</b> مثلاً "الباب غلط" أو "البرنامج القديم بعده شغال".</li>
+    <li><b>صلّح شي واحد بس</b>، وجرب مرة ثانية.</li>
+  </ol>
+  <p>📌 <b>القاعدة الذهبية: لا تخمّن، اجمع معلومات أول.</b> واكتب الأوامر <b>كل سطر وحده</b> حتى تعرف أي واحد فشل.</p>
+
+  <h3>🔍 أمر الفحص (نكمل منه باجر)</h3>
+<pre><code>cd ~/chat && git log --oneline -1 && grep -c ORIGIN_REGEXES backend/config/settings.py; ss -ltnp | grep -E ':(3000|3001|8000) '</code></pre>
+  <div class="table-wrap"><table>
+    <tr><th>الجزء</th><th>شنو يفحص</th><th>النتيجة الصحيحة</th></tr>
+    <tr><td><code>git log --oneline -1</code></td><td>آخر commit عندك</td><td><code>bf6f835</code> أو أحدث</td></tr>
+    <tr><td><code>grep -c ORIGIN_REGEXES ...</code></td><td>هل تصليح CORS موجود بالملف؟</td><td><code>1</code></td></tr>
+    <tr><td><code>ss -ltnp | grep ...</code></td><td>منو ساكن بالأبواب 3000 و 3001 و 8000</td><td>daphne على 8000، و node على 3000</td></tr>
+  </table></div>
+
+  <div class="quiz">
+    <h3>✍️ أسئلة</h3>
+    <div class="mcq" data-correct="1"><p>1. "Address already in use" معناها؟</p><div class="opts"><button>الإنترنت مقطوع</button><button>البورت محجوز ببرنامج ثاني</button><button>الباسورد غلط</button></div><div class="why">كل بورت يسكنه برنامج واحد. اكو برنامج قديم شاغل نفس البورت.</div></div>
+    <div class="mcq" data-correct="2"><p>2. شافوا "Failed to fetch". شنو أول خطوة؟</p><div class="opts"><button>نعيد تنصيب كلشي</button><button>نغير الكود عشوائياً</button><button>نفتح Console (F12) ونقرا السبب</button></div><div class="why">لا تخمّن، اجمع معلومات أول.</div></div>
+    <div class="mcq" data-correct="0"><p>3. ليش نستخدم venv (بيئة افتراضية)؟</p><div class="opts"><button>حتى ننصب مكتبات المشروع بصندوق خاص بدون ما نلمس النظام</button><button>حتى يصير الإنترنت أسرع</button><button>حتى نشغل الفرونت اند</button></div><div class="why">كل مشروع إله صندوقه، والنظام يبقى سليم.</div></div>
+    <details><summary>4. ليش صار الفرونت اند على 3001 بدل 3000؟</summary><div class="ans">لأن 3000 جان محجوز ببرنامج ثاني (نسخة ثانية من الفرونت اند)، فـ Next.js ينتقل للبورت اللي بعده.</div></details>
+    <details><summary>5. شنو هو CORS بجملة وحدة؟</summary><div class="ans">قاعدة أمان بالمتصفح: الموقع ما يكدر يطلب من سيرفر ثاني إلا إذا السيرفر وافق على هذا الموقع.</div></details>
+    <details><summary>6. طلعلك "No module named 'config'". شنو أول شي تشيك عليه؟</summary><div class="ans">إنت بأي فولدر. لازم تكون داخل <code>~/chat/backend</code> لما تشغل daphne.</div></details>
+    <details><summary>7. شنو يسوي <code>fuser -k 8000/tcp</code>؟</summary><div class="ans">يطفي أي برنامج شاغل البورت 8000.</div></details>
+    <details><summary>8. ليش سحب التصليح (git pull) ما كفى وحده؟</summary><div class="ans">لأن الـ daphne القديم بعده شغال بالكود القديم. لازم نطفيه ونشغله من جديد حتى ياخذ التصليح.</div></details>
+  </div>
+</section>
+
+<!-- ============ 15 ============ -->
+<section class="card lesson" id="s15">
+  <span class="badge">القسم 15</span>
   <h2>🗺️ وين كل شي بالكود (للجلسة الجاية)</h2>
   <p>بالجلسة الجاية نفتح هذني الملفات سوه ونطبق عليها كل اللي تعلمناه.</p>
   <div class="table-wrap"><table>
