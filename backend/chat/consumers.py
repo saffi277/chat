@@ -10,7 +10,7 @@ from django.utils import timezone
 from accounts.models import Profile
 
 from .models import Conversation
-from .services import create_message, group_name
+from .services import create_message, group_name, user_group
 
 PRESENCE_GROUP = 'presence'
 
@@ -58,7 +58,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
 
 class PresenceConsumer(AsyncJsonWebsocketConsumer):
-    """اتصال عام يبقى مفتوح طول ما التطبيق مفتوح → نعرف منه Online/Offline."""
+    """اتصال عام يبقى مفتوح طول ما التطبيق مفتوح → Online/Offline + تنبيهات الرسائل الجديدة."""
 
     async def connect(self):
         self.user = self.scope['user']
@@ -66,6 +66,7 @@ class PresenceConsumer(AsyncJsonWebsocketConsumer):
             await self.close(code=4401)
             return
         await self.channel_layer.group_add(PRESENCE_GROUP, self.channel_name)
+        await self.channel_layer.group_add(user_group(self.user.id), self.channel_name)
         await self.accept()
         await self.set_online(True)
 
@@ -73,6 +74,7 @@ class PresenceConsumer(AsyncJsonWebsocketConsumer):
         if getattr(self.user, 'is_authenticated', False):
             await self.set_online(False)
             await self.channel_layer.group_discard(PRESENCE_GROUP, self.channel_name)
+            await self.channel_layer.group_discard(user_group(self.user.id), self.channel_name)
 
     async def set_online(self, online):
         await self.save_status(online)

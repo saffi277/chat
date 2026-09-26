@@ -10,10 +10,20 @@ def group_name(conversation_id):
     return f'chat_{conversation_id}'
 
 
+def user_group(user_id):
+    return f'user_{user_id}'
+
+
 def create_message(conversation, sender, content):
-    """1) نخزن الرسالة بالـ Database  2) نرجعها JSON."""
+    """1) نخزن الرسالة بالـ Database  2) ننبّه المشاركين  3) نرجعها JSON."""
     msg = Message.objects.create(conversation=conversation, sender=sender, content=content)
-    return MessageSerializer(msg).data
+    data = MessageSerializer(msg).data
+    # تنبيه شخصي لكل مشارك (حتى لو المحادثة مو مفتوحة عنده) حتى تتحدث قائمته
+    layer = get_channel_layer()
+    for user_id in conversation.participants.values_list('id', flat=True):
+        async_to_sync(layer.group_send)(
+            user_group(user_id), {'type': 'chat.event', 'payload': {'type': 'inbox', 'message': data}})
+    return data
 
 
 def broadcast(conversation_id, payload):
