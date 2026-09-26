@@ -144,5 +144,8 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
 }
 
-# نسمح لواجهة Next.js (على بورت 3000) تحچي ويا الـ API
+# نسمح لواجهة Next.js تحچي ويا الـ API.
+# بالتطوير نقبل أي بورت على جهازنا، لأن Next.js ينتقل لـ 3001 إذا 3000 محجوز.
 CORS_ALLOWED_ORIGINS = ['http://localhost:3000', 'http://127.0.0.1:3000']
+if DEBUG:
+    CORS_ALLOWED_ORIGIN_REGEXES = [r'^http://(localhost|127\.0\.0\.1):\d+$']
