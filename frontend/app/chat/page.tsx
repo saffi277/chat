@@ -184,8 +184,8 @@ export default function ChatPage() {
 
   return (
     <main className={`app-shell ${dark ? "dark-theme" : "glass-theme"} h-dvh p-0 md:p-4 lg:p-6`}>
-      <div className="flex h-full overflow-hidden bg-white md:mx-auto md:max-w-[1600px] md:rounded-[28px] md:border md:border-white/80 md:shadow-[0_18px_60px_rgba(31,34,70,.12)]">
-      <aside className={`${active ? "hidden md:flex" : "flex"} w-full flex-col border-l border-slate-100 bg-white md:w-[350px]`}>
+      <div className="phone-stage flex h-full overflow-hidden bg-white md:mx-auto md:max-w-[1280px] md:rounded-[36px] md:border md:border-white/80 md:shadow-[0_18px_60px_rgba(31,34,70,.12)]">
+      <aside className={`${active ? "hidden md:flex" : "flex"} w-full flex-col border-l border-slate-100 bg-white md:w-[390px]`}>
         <header className="border-b border-slate-100 px-5 pb-5 pt-[max(1.5rem,env(safe-area-inset-top))]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-2xl bg-[#5b5cf0] font-black text-white">و</span><div><h1 className="font-black text-[#222242]">وَصل</h1><p className="text-xs text-slate-400">مساحتك للتواصل</p></div></div>
@@ -198,6 +198,10 @@ export default function ChatPage() {
             <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ابحث في محادثاتك" aria-label="بحث"
               className="h-11 w-full bg-transparent text-base text-[#292942] outline-none placeholder:text-slate-400 md:text-sm" />
           </label>
+          <div className="story-strip mt-5 flex gap-3 overflow-x-auto pb-1">
+            <button className="story-add"><span>＋</span><small>قصتك</small></button>
+            {shownUsers.slice(0, 5).map((u) => <button key={u.id} onClick={() => openWith(u)} className="story"><Avatar user={u} size={46} online={u.is_online} /><small>{nameOf(u)}</small></button>)}
+          </div>
         </header>
         <div className="soft-scroll flex-1 overflow-y-auto px-3 py-4">
           <PushBanner />
@@ -205,18 +209,19 @@ export default function ChatPage() {
           <div className="space-y-1">
           {shownConversations.map((c) => {
             const person = other(c); const selected = active?.id === c.id;
-            return <button key={c.id} onClick={() => setActive(c)} className={`group flex w-full items-center gap-3 rounded-2xl p-3 text-right transition ${selected ? "bg-[#efefff]" : "hover:bg-slate-50"}`}>
+            return <button key={c.id} onClick={() => setActive(c)} className={`chat-card group flex w-full items-center gap-3 rounded-2xl p-3 text-right transition ${selected ? "bg-[#efefff]" : "hover:bg-slate-50"}`}>
               <Avatar user={person} online={person.is_online} />
               <div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2"><strong className="truncate text-sm text-[#292942]">{nameOf(person)}</strong>{c.last_message && <time className="shrink-0 text-[10px] text-slate-400">{new Date(c.last_message.created_at).toLocaleTimeString("ar", { hour: "2-digit", minute: "2-digit" })}</time>}</div><div className="mt-1 flex items-center justify-between gap-2"><span className={`truncate text-xs ${c.unread_count ? "font-bold text-[#31314d]" : "text-slate-400"}`}>{c.last_message?.content ?? "ابدأ محادثة جديدة"}</span>{c.unread_count > 0 && <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#5b5cf0] px-1 text-[10px] font-bold text-white">{c.unread_count}</span>}</div></div>
             </button>;
           })}
           {q && shownConversations.length === 0 && <p className="px-3 py-2 text-xs text-slate-400">ماكو محادثات بهذا الاسم</p>}
           </div>
-          <div className="my-6 h-px bg-slate-100" />
+          <div className="my-5 h-px bg-slate-100" />
+          <div className="quick-actions grid grid-cols-3 gap-2 px-1 pb-5"><button><b>☎</b><span>مكالمة</span></button><button><b>◉</b><span>فيديو</span></button><button><b>⌘</b><span>كروب جديد</span></button></div>
           <div className="mb-3 flex items-center justify-between px-2"><h2 className="text-xs font-black tracking-wider text-slate-400">ابدأ محادثة</h2><span className="h-2 w-2 rounded-full bg-emerald-400" /></div>
           <div className="space-y-1">
           {shownUsers.map((u) => (
-            <button key={u.id} onClick={() => openWith(u)} className="flex w-full items-center gap-3 rounded-2xl p-3 text-right transition hover:bg-slate-50"><Avatar user={u} size={40} online={u.is_online} /><div className="min-w-0"><strong className="block truncate text-sm text-[#35354d]">{nameOf(u)}</strong><span className={`text-xs ${u.is_online ? "text-emerald-500" : "text-slate-400"}`}>{lastSeenText(u)}</span></div></button>
+            <button key={u.id} onClick={() => openWith(u)} className="contact-card flex w-full items-center gap-3 rounded-2xl p-3 text-right transition hover:bg-slate-50"><Avatar user={u} size={40} online={u.is_online} /><div className="min-w-0"><strong className="block truncate text-sm text-[#35354d]">{nameOf(u)}</strong><span className={`text-xs ${u.is_online ? "text-emerald-500" : "text-slate-400"}`}>{lastSeenText(u)}</span></div><i>＋</i></button>
           ))}
           {q && shownUsers.length === 0 && <p className="px-3 py-2 text-xs text-slate-400">ماكو أحد بهذا الاسم</p>}
           </div>
@@ -235,20 +240,20 @@ export default function ChatPage() {
           <div className="m-auto max-w-sm px-8 text-center"><div className="mx-auto grid h-20 w-20 place-items-center rounded-[28px] bg-white shadow-xl shadow-indigo-100"><svg viewBox="0 0 24 24" className="h-9 w-9 fill-none stroke-[#5b5cf0]" strokeWidth="1.7"><path d="M20 15a3 3 0 01-3 3H9l-5 3V7a3 3 0 013-3h10a3 3 0 013 3z"/><path d="M8 10h8M8 14h5"/></svg></div><h2 className="mt-6 text-xl font-black text-[#292942]">مكانك للحكايات الجميلة</h2><p className="mt-2 text-sm leading-7 text-slate-500">اختار شخص من القائمة وابدأ محادثة جديدة الآن.</p></div>
         ) : (
           <>
-            <header className="flex items-center gap-3 border-b border-slate-100 bg-white/90 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur sm:px-5">
+            <header className="conversation-head flex items-center gap-3 border-b border-slate-100 bg-white/90 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur sm:px-5">
               <button aria-label="رجوع" className="grid h-11 w-11 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 md:hidden" onClick={() => setActive(null)}>→</button>
               <button onClick={() => setPanel("info")} className="flex min-w-0 flex-1 items-center gap-3 text-right" aria-label="معلومات المحادثة">
                 <Avatar user={activeOther} online={activeOther.is_online} />
                 <div className="min-w-0"><div className="truncate font-black text-[#292942]">{nameOf(activeOther)}</div><div className={`mt-0.5 truncate text-xs ${conn !== "open" ? "text-amber-500" : typing || activeOther.is_online ? "text-emerald-500" : "text-slate-400"}`}>{conn !== "open" ? "جاري الاتصال..." : typing ? "يكتب الآن..." : lastSeenText(activeOther)}</div></div>
               </button>
-              <button onClick={() => setPanel("info")} aria-label="معلومات المحادثة" className="grid h-11 w-11 place-items-center rounded-xl text-slate-400 hover:bg-slate-100"><svg viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current" strokeWidth="2"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></button>
+              <button aria-label="مكالمة صوتية" className="call-action">☎</button><button aria-label="مكالمة فيديو" className="call-action">◉</button><button onClick={() => setPanel("info")} aria-label="معلومات المحادثة" className="call-action">⋮</button>
             </header>
             <div className="soft-scroll flex-1 space-y-3 overflow-y-auto p-4 sm:p-7">
               {messages.map((m) => {
                 const mine = m.sender.id === me?.id;
                 return (
                   <div key={m.id} className={`flex ${mine ? "justify-start" : "justify-end"}`}>
-                    <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 shadow-sm sm:max-w-[78%] ${mine ? "rounded-tr-sm bg-[#5b5cf0] text-white shadow-indigo-200" : "rounded-tl-sm bg-white text-[#303047] shadow-slate-200/70"}`}>
+                    <div className={`message-bubble max-w-[85%] rounded-2xl px-4 py-2.5 shadow-sm sm:max-w-[78%] ${mine ? "rounded-tr-sm bg-[#5b5cf0] text-white shadow-indigo-200" : "rounded-tl-sm bg-white text-[#303047] shadow-slate-200/70"}`}>
                       <p className="whitespace-pre-wrap break-words">{m.content}</p>
                       <p className={`mt-1 text-left text-[10px] ${mine ? "text-violet-200" : "text-slate-400"}`}>
                         {new Date(m.created_at).toLocaleTimeString("ar", { hour: "2-digit", minute: "2-digit" })}
@@ -261,9 +266,9 @@ export default function ChatPage() {
               })}
               <div ref={bottomRef} />
             </div>
-            <form onSubmit={send} className="flex items-center gap-2 border-t border-slate-100 bg-white/90 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:px-5">
+            <form onSubmit={send} className="composer flex items-center gap-2 border-t border-slate-100 bg-white/90 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur sm:px-5">
               {/* 16px (text-base) بالموبايل حتى الآيفون ما يسوي zoom لما تضغط على الخانة */}
-              <input className="h-11 min-w-0 flex-1 rounded-2xl bg-[#f5f6fa] px-4 text-base outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-violet-100 md:text-sm" placeholder="اكتب رسالتك هنا..." value={text}
+              <button type="button" className="attach-action" aria-label="إرفاق">＋</button><input className="h-11 min-w-0 flex-1 rounded-2xl bg-[#f5f6fa] px-4 text-base outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-violet-100 md:text-sm" placeholder="اكتب رسالتك هنا..." value={text}
                 enterKeyHint="send" onChange={(e) => onType(e.target.value)} />
               <button aria-label="إرسال الرسالة" disabled={!text.trim()} className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[#5b5cf0] text-white shadow-lg shadow-violet-200 transition hover:-translate-y-0.5 hover:bg-[#4949dc] active:translate-y-0 disabled:opacity-50 disabled:hover:translate-y-0"><svg viewBox="0 0 24 24" className="h-5 w-5 rotate-180 fill-current"><path d="M3.4 2.8 21 11.1a1 1 0 010 1.8L3.4 21.2a1 1 0 01-1.4-1.1l1.7-6.2a1 1 0 01.96-.73H13a1 1 0 000-2H4.66a1 1 0 01-.96-.73L2 3.9a1 1 0 011.4-1.1Z"/></svg></button>
             </form>
