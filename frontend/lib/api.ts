@@ -6,25 +6,98 @@ export type User = {
   id: number;
   username: string;
   display_name: string;
-  avatar: string | null; // مسار مثل /media/avatars/x.png
+  avatar: string | null; // مسار مثل /media/avatars/x.png (استخدم mediaUrl)
+  bio: string;
+  phone: string;
+  city: string;
   is_online: boolean;
   last_seen: string | null;
   date_joined: string;
 };
+
+export type Theme = "glass" | "dark" | "system";
+/** أنا: نفس User + إعداداتي الخاصة */
+export type Me = User & { theme: Theme };
+
+export type MessageKind = "text" | "image" | "video" | "voice" | "file" | "location" | "system" | "call";
+/** sent = ✓ ، delivered = ✓✓ رمادي ، read = ✓✓ أزرق */
+export type MessageStatus = "sent" | "delivered" | "read";
+
+export type ReplyPreview = { id: number; kind: MessageKind; sender_id: number; sender_name: string; preview: string };
+
 export type Message = {
   id: number;
   conversation: number;
   sender: User;
-  content: string;
+  kind: MessageKind;
+  content: string; // النص، أو تعليق على الصورة/الملف
+  file_url: string | null;
+  file_name: string;
+  file_size: number | null;
+  duration: number | null; // ثواني (صوت/فيديو)
+  latitude: number | null;
+  longitude: number | null;
+  live_until: string | null;
+  is_live: boolean;
+  reply_to: ReplyPreview | null;
   created_at: string;
+  edited_at: string | null;
+  is_deleted: boolean;
+  status: MessageStatus;
   is_read: boolean;
 };
+
+export type ConversationKind = "direct" | "group" | "saved";
+
 export type Conversation = {
   id: number;
+  kind: ConversationKind;
+  title: string; // للمجموعة و"الرسائل المحفوظة". للثنائية فارغ: اعرض اسم الطرف الثاني
+  description: string;
+  avatar: string | null;
   participants: User[];
-  created_at: string;
+  member_count: number;
+  my_role: "admin" | "member" | null;
+  is_favorite: boolean;
+  is_muted: boolean;
+  is_archived: boolean;
   last_message: Message | null;
   unread_count: number;
+  created_at: string;
+};
+
+export type Member = { user: User; role: "admin" | "member"; joined_at: string };
+
+export type StoryItem = {
+  id: number;
+  kind: "image" | "video" | "text";
+  file_url: string | null;
+  text: string;
+  background: string;
+  duration: number | null;
+  created_at: string;
+  expires_at: string;
+  views_count: number;
+  seen: boolean;
+};
+export type StoryGroup = { user: User; is_me: boolean; all_seen: boolean; stories: StoryItem[] };
+
+export type CallKind = "audio" | "video";
+export type Call = {
+  id: number;
+  conversation: number;
+  conversation_kind: ConversationKind;
+  title: string;
+  caller: User;
+  peer: User | null;
+  kind: CallKind;
+  status: "ringing" | "ongoing" | "ended" | "missed" | "declined";
+  direction: "outgoing" | "incoming" | "missed";
+  created_at: string;
+  answered_at: string | null;
+  ended_at: string | null;
+  duration: number | null;
+  ice_servers?: RTCIceServer[];
 };
 
 export function getToken() {

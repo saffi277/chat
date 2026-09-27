@@ -1,13 +1,29 @@
 // WebSocket: اتصال يبقى مفتوح، السيرفر يكدر يدزلنا رسائل بدون ما نطلب (بدون Refresh)
-import { getToken, WS_URL, type Message } from "./api";
+import { getToken, WS_URL, type Call, type Message } from "./api";
 
 // كل الأحداث اللي ممكن السيرفر يدزها
+// (بالتفصيل بـ docs/API.md)
 export type ChatEvent =
-  | { type: "message"; message: Message }
-  | { type: "inbox"; message: Message }
-  | { type: "read"; reader_id: number }
+  // على اتصال المحادثة /ws/chat/<id>/
+  | { type: "message"; message: Message } // رسالة جديدة
+  | { type: "message_updated"; message: Message } // تعدلت، انحذفت، أو الموقع المباشر تحرك
+  | { type: "read"; reader_id: number; message_id: number } // ✓✓ أزرق
+  | { type: "delivered"; user_id: number; message_id: number } // ✓✓ رمادي
   | { type: "typing"; user_id: number }
-  | { type: "presence"; user_id: number; is_online: boolean };
+  // على الاتصال العام /ws/presence/
+  | { type: "inbox"; message: Message } // أي رسالة بأي محادثة (حدّث القائمة)
+  | { type: "presence"; user_id: number; is_online: boolean }
+  | { type: "conversation_updated"; conversation_id: number } // اسم/صورة/أعضاء المجموعة
+  | { type: "story"; user_id: number } // حالة جديدة
+  | { type: "story_viewed"; story_id: number; viewer_id: number }
+  | { type: "call_incoming"; call: Call }
+  | { type: "call_answered"; call_id: number; user_id: number }
+  | { type: "call_ended"; call_id: number; status: Call["status"] }
+  | { type: "call.signal"; call_id: number; from: number; data: CallSignal };
+
+export type CallSignal =
+  | { description: RTCSessionDescriptionInit }
+  | { candidate: RTCIceCandidateInit };
 
 export type SocketStatus = "connecting" | "open" | "closed";
 
