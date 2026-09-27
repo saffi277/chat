@@ -194,3 +194,4 @@
 .portal[data-theme="dark"] .p-link { color: var(--p-gold); text-decoration-color: color-mix(in srgb, var(--p-gold) 45%, transparent); }
 .portal[data-theme="dark"] .p-title-accent { color: var(--p-gold); }
 .p-checkbox { accent-color: var(--p-green); }
+.portal[data-theme="dark"] .portal-logo { filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 .5px #fff); }

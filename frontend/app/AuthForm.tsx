@@ -50,8 +50,18 @@ function subscribeLogo(cb: () => void) {
 function Logo({ size }: { size: number }) {
   const state = useSyncExternalStore(subscribeLogo, () => logoState, () => "loading" as LogoState);
   if (state === "ok") {
-    // eslint-disable-next-line @next/next/no-img-element -- شعار الكلية من public/brand
-    return <img src="/brand/logo.png" alt="كلية الأسباط الجامعة" style={{ height: size }} className="mx-auto w-auto object-contain" />;
+    // الشعار (خلفيته شفافة) + الشريط الذهبي تحته مرسوم بالكود حتى يطلع حاد بكل المقاسات.
+    // بالليلي نضيف حافة بيضاء خفيفة حتى الأخضر يبين على الخلفية الغامقة
+    return (
+      <div className="mx-auto flex w-fit flex-col items-stretch" style={{ height: size }}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- شعار الكلية من public/brand */}
+        <img src="/brand/logo.png" alt="كلية الأسباط الجامعة" className="portal-logo w-auto" style={{ height: size * 0.9 }} />
+        <span className="mt-auto grid place-items-center whitespace-nowrap font-extrabold uppercase leading-none text-white"
+          style={{ background: "#a8802f", height: size * 0.075, fontSize: size * 0.05, letterSpacing: "0.06em" }} dir="ltr">
+          Asbat University College
+        </span>
+      </div>
+    );
   }
   if (state === "loading") return <div style={{ height: size }} />;
   // شعار مؤقت: قوس + كتاب + اسم الكلية (يتبدل تلقائياً لما ينحط logo.png)
@@ -87,7 +97,7 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
         {/* البطاقة (يمين باللابتوب) */}
         <section className="relative z-10 order-2 -mt-6 px-4 pb-8 lg:order-1 lg:mt-0 lg:px-0 lg:pb-0">
           <div className="p-card mx-auto w-full max-w-[560px] rounded-[28px] px-5 py-6 sm:px-9 sm:py-7">
-            <Logo size={isLogin ? 118 : 84} />
+            <Logo size={isLogin ? 136 : 92} />
             <h1 className={`text-center font-extrabold ${isLogin ? "mt-3 text-[30px]" : "mt-2 text-[26px]"} p-green`}>
               <span className="p-title-accent" style={night ? { color: "var(--p-text)" } : undefined}>{isLogin ? "تسجيل الدخول" : "إنشاء حساب"}</span>
             </h1>
