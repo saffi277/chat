@@ -47,15 +47,15 @@ function subscribeLogo(cb: () => void) {
   return () => {};
 }
 
-function Logo({ size }: { size: number }) {
+function Logo({ size, night }: { size: number; night: boolean }) {
   const state = useSyncExternalStore(subscribeLogo, () => logoState, () => "loading" as LogoState);
   if (state === "ok") {
     // الشعار (خلفيته شفافة) + الشريط الذهبي تحته مرسوم بالكود حتى يطلع حاد بكل المقاسات.
-    // بالليلي نضيف حافة بيضاء خفيفة حتى الأخضر يبين على الخلفية الغامقة
+    // بالليلي نستخدم logo-dark.png: داخل القوس أبيض والخط العربي فاتح (مثل التصميم)
     return (
       <div className="mx-auto flex w-fit flex-col items-stretch" style={{ height: size }}>
         {/* eslint-disable-next-line @next/next/no-img-element -- شعار الكلية من public/brand */}
-        <img src="/brand/logo.png" alt="كلية الأسباط الجامعة" className="portal-logo w-auto" style={{ height: size * 0.9 }} />
+        <img src={night ? "/brand/logo-dark.png" : "/brand/logo.png"} alt="كلية الأسباط الجامعة" className="w-auto" style={{ height: size * 0.9 }} />
         <span className="mt-auto grid place-items-center whitespace-nowrap font-extrabold uppercase leading-none text-white"
           style={{ background: "#a8802f", height: size * 0.075, fontSize: size * 0.05, letterSpacing: "0.06em" }} dir="ltr">
           Asbat University College
@@ -87,17 +87,19 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
   const night = theme === "dark";
 
   return (
-    <main className="portal relative min-h-dvh overflow-x-hidden" data-theme={theme}>
+    <main className="portal relative min-h-dvh overflow-x-hidden lg:h-dvh lg:overflow-hidden" data-theme={theme}>
+      <Backdrop />
       <button onClick={() => setMode(night ? "light" : "dark")} aria-label={night ? "الوضع النهاري" : "الوضع الليلي"}
         className="p-card absolute left-4 top-4 z-20 grid h-10 w-10 place-items-center rounded-full lg:left-6 lg:top-6">
         <Icon name={night ? "sun" : "moon"} size={18} />
       </button>
 
-      <div className="mx-auto grid min-h-dvh max-w-[1240px] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.02fr)] lg:items-center lg:gap-6 lg:px-8 lg:py-8">
+      {/* لابتوب: نصين يملون الشاشة كلها (البطاقة يمين والصورة يسار) بدون فراغات حول. موبايل: عمود واحد */}
+      <div className="relative grid min-h-dvh lg:h-full lg:grid-cols-2">
         {/* البطاقة (يمين باللابتوب) */}
-        <section className="relative z-10 order-2 -mt-6 px-4 pb-8 lg:order-1 lg:mt-0 lg:px-0 lg:pb-0">
-          <div className="p-card mx-auto w-full max-w-[560px] rounded-[28px] px-5 py-6 sm:px-9 sm:py-7">
-            <Logo size={isLogin ? 136 : 92} />
+        <section className="relative z-10 order-2 -mt-6 px-4 pb-8 lg:order-1 lg:mt-0 lg:flex lg:overflow-y-auto lg:px-10 lg:py-4 xl:px-16">
+          <div className="p-card p-fit m-auto w-full max-w-[560px] rounded-[28px] px-5 py-6 sm:px-9 sm:py-7">
+            <Logo size={isLogin ? 132 : 92} night={night} />
             <h1 className={`text-center font-extrabold ${isLogin ? "mt-3 text-[30px]" : "mt-2 text-[26px]"} p-green`}>
               <span className="p-title-accent" style={night ? { color: "var(--p-text)" } : undefined}>{isLogin ? "تسجيل الدخول" : "إنشاء حساب"}</span>
             </h1>
@@ -137,43 +139,67 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
   );
 }
 
+// شكل إطار الصورة (بإحداثيات 0..100 وتتمدد ويا المساحة): منحنى فوك ومنحنى جوه، مثل التصميم
+const TOP = "M0,43 C26,36 60,34 100,35";
+const BOTTOM_START = "M100,76";
+const BOTTOM = `${BOTTOM_START} C62,74 30,78 0,86`;
+const frame = `url("data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="${TOP} L100,76 ${BOTTOM.replace(BOTTOM_START, "")} Z"/></svg>`,
+)}")`;
+
+/** أقواس كبيرة خفيفة بخلفية الصفحة (مثل التصميم) */
+function Backdrop() {
+  return (
+    <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M1000,0 V330 C860,250 760,110 780,0 Z" fill="var(--p-arc)" />
+      <path d="M1000,0 V200 C900,150 850,70 870,0 Z" fill="var(--p-arc)" />
+      <path d="M0,1000 V720 C150,760 300,880 330,1000 Z" fill="var(--p-arc)" />
+    </svg>
+  );
+}
+
 function Visual({ night }: { night: boolean }) {
   const img = `url(/brand/campus-${night ? "night" : "day"}.jpg)`;
   const heading = (
     <>
-      <h2 className="text-[26px] font-extrabold leading-[1.45] lg:text-[40px]">
+      <h2 className="text-[26px] font-extrabold leading-[1.45] lg:text-[clamp(30px,2.9vw,46px)]">
         <span className="p-green" style={night ? { color: "var(--p-text)" } : undefined}>معاً نحو</span><br />
         <span className="p-green" style={night ? { color: "var(--p-gold)" } : undefined}>مستقبل معرفيٍّ أكثر إشراقاً</span>
       </h2>
       <span className="mx-auto mt-3 block h-[3px] w-16 rounded-full lg:mt-5 lg:w-24" style={{ background: "var(--p-gold)" }} />
-      <p className="p-muted mx-auto mt-3 max-w-xs text-[14px] leading-7 lg:mt-5 lg:text-[18px] lg:leading-8">
+      <p className="p-muted mx-auto mt-3 max-w-xs text-[14px] leading-7 lg:mt-5 lg:max-w-md lg:text-[clamp(16px,1.3vw,20px)] lg:leading-8">
         بيئة جامعية ملهمة .. وخدمات رقمية<br />تدعم رحلتك الأكاديمية
       </p>
     </>
   );
-  // الصورة تتلاشى عند الحواف (mask) فتندمج ويا خلفية الصفحة بدون حافة حادة
-  const fade = (v: string, h: string) => ({
+  // الصورة بألوانها الأصلية، بس حوافها تتلاشى (mask) فتندمج ويا خلفية الصفحة
+  const masked = (...masks: string[]) => ({
     backgroundImage: img, backgroundSize: "cover",
-    maskImage: `${v}, ${h}`, WebkitMaskImage: `${v}, ${h}`,
+    maskImage: masks.join(", "), WebkitMaskImage: masks.join(", "),
+    maskSize: "100% 100%", WebkitMaskSize: "100% 100%",
+    maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
     maskComposite: "intersect", WebkitMaskComposite: "source-in",
   }) as React.CSSProperties;
   return (
-    <section className="relative order-1 lg:order-2 lg:h-[calc(100dvh-4rem)] lg:max-h-[860px] lg:min-h-[620px]">
+    <section className="relative order-1 lg:order-2 lg:h-full">
       {/* موبايل: العبارة فوك، وتحتها شريط الصورة */}
       <div className="lg:hidden">
         <div className="px-6 pt-16 text-center">{heading}</div>
-        <div className="-mt-2 h-[190px]" style={{ ...fade("linear-gradient(180deg, transparent, #000 30%, #000 70%, transparent)", "linear-gradient(90deg, #000, #000)"), backgroundPosition: "center 62%" }} />
+        <div className="-mt-2 h-[210px]" style={{ ...masked("linear-gradient(180deg, transparent, #000 28%, #000 72%, transparent)"), backgroundPosition: "center 62%" }} />
       </div>
 
-      {/* لابتوب: العبارة فوك، الصورة بالنص، والمميزات تحت */}
+      {/* لابتوب: يملي النص الأيسر كله. العبارة فوك، الصورة بإطار منحني، والمميزات تحت */}
       <div className="absolute inset-0 hidden lg:block">
-        <div className="absolute inset-0" style={{ ...fade("linear-gradient(180deg, transparent 18%, #000 45%, #000 74%, transparent 96%)", "linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent)"), backgroundPosition: "center 75%" }} />
-        <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 600 860" preserveAspectRatio="none" aria-hidden="true">
-          <path d="M-20 300 Q 180 180 620 120" fill="none" stroke="var(--p-gold)" strokeWidth="2" opacity=".55" />
-          <path d="M-20 770 Q 260 640 620 700" fill="none" stroke="var(--p-gold)" strokeWidth="2" opacity=".55" />
+        <div className="absolute inset-0" style={{
+          ...masked(frame, "linear-gradient(180deg, transparent 22%, #000 46%)", "linear-gradient(90deg, #000 78%, transparent 100%)"),
+          backgroundPosition: "center 62%",
+        }} />
+        <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <path d={TOP} fill="none" stroke="var(--p-gold)" strokeWidth="2" vectorEffect="non-scaling-stroke" opacity=".75" />
+          <path d={BOTTOM} fill="none" stroke="var(--p-gold)" strokeWidth="2" vectorEffect="non-scaling-stroke" opacity=".75" />
         </svg>
-        <div className="relative px-10 pt-14 text-center">{heading}</div>
-        <div className="absolute inset-x-0 bottom-6 flex justify-center">
+        <div className="relative px-10 pt-[6vh] text-center">{heading}</div>
+        <div className="absolute inset-x-0 bottom-[2.5vh] flex justify-center">
           <Feature icon="users" label="لجميع منسوبي الجامعة" />
           <Feature icon="book" label="بيئة تعليمية داعمة" divider />
           <Feature icon="cap" label="خدمات أكاديمية متكاملة" divider />

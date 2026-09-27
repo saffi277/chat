@@ -155,6 +155,7 @@
   --p-soft: #f6f4ee;
   --p-feature: #efe7d6;
   --p-feature-icon: #9a7534;
+  --p-arc: rgba(255, 255, 255, .7);
 }
 .portal[data-theme="dark"] {
   --p-bg: radial-gradient(900px 600px at 100% 0%, rgba(38, 92, 72, .35), transparent), radial-gradient(900px 700px at 0% 100%, rgba(20, 60, 48, .5), transparent), #0a1c17;
@@ -175,6 +176,7 @@
   --p-soft: rgba(255, 255, 255, .04);
   --p-feature: rgba(216, 181, 107, .14);
   --p-feature-icon: #d8b56b;
+  --p-arc: rgba(120, 190, 160, .05);
 }
 .p-card { background: var(--p-card); border: 1px solid var(--p-card-border); box-shadow: var(--p-card-shadow); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
 .p-muted { color: var(--p-muted); }
@@ -194,4 +196,9 @@
 .portal[data-theme="dark"] .p-link { color: var(--p-gold); text-decoration-color: color-mix(in srgb, var(--p-gold) 45%, transparent); }
 .portal[data-theme="dark"] .p-title-accent { color: var(--p-gold); }
 .p-checkbox { accent-color: var(--p-green); }
-.portal[data-theme="dark"] .portal-logo { filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 0 .5px #fff); }
+/* البطاقة تتكبر/تتصغر حسب طول شاشة اللابتوب، حتى تملي الشاشة بدون فراغات وبدون سكرول */
+@media (min-width: 1024px) and (max-height: 860px) { .p-fit { zoom: .94; } }
+@media (min-width: 1024px) and (max-height: 780px) { .p-fit { zoom: .86; } }
+@media (min-width: 1024px) and (max-height: 700px) { .p-fit { zoom: .78; } }
+@media (min-width: 1500px) and (min-height: 940px) { .p-fit { zoom: 1.12; } }
+@media (min-width: 1800px) and (min-height: 1040px) { .p-fit { zoom: 1.2; } }
