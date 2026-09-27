@@ -6,7 +6,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from .models import Profile
-from .serializers import RegisterSerializer, UserSerializer
+from .serializers import ProfileUpdateSerializer, RegisterSerializer, UserSerializer
 
 User = get_user_model()
 
@@ -18,7 +18,6 @@ def register(request):
     serializer = RegisterSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)  # إذا غلط يرجع 400 تلقائياً
     user = serializer.save()
-    Profile.objects.create(user=user)
     token = Token.objects.create(user=user)
     return Response({'token': token.key, 'user': UserSerializer(user).data}, status=status.HTTP_201_CREATED)
 
@@ -34,9 +33,20 @@ def login(request):
     return Response({'token': token.key, 'user': UserSerializer(user).data})
 
 
-@api_view(['GET'])
+@api_view(['GET', 'PATCH'])
 def me(request):
     # request.user انعرف من الـ Token اللي بالـ Header
+    if request.method == 'PATCH':
+        profile, _ = Profile.objects.get_or_create(user=request.user)
+        old_avatar = profile.avatar.name if profile.avatar else None
+        # partial=True: نعدل بس الحقول اللي انرسلت
+        serializer = ProfileUpdateSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        # إذا تبدلت الصورة أو انمسحت، نمسح الملف القديم حتى ما يتكدس
+        if old_avatar and old_avatar != (profile.avatar.name if profile.avatar else None):
+            profile.avatar.storage.delete(old_avatar)
+        request.user.refresh_from_db()
     return Response(UserSerializer(request.user).data)
 
 

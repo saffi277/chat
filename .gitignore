@@ -5,3 +5,5 @@ backend/db.sqlite3
 node_modules/
 .next/
 frontend/.env.local
+backend/media/
+backend/vapid_keys.json

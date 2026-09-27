@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "channels",
     "accounts",
     "chat",
+    "notifications",
 ]
 
 MIDDLEWARE = [
@@ -149,3 +150,10 @@ REST_FRAMEWORK = {
 CORS_ALLOWED_ORIGINS = ['http://localhost:3000', 'http://127.0.0.1:3000']
 if DEBUG:
     CORS_ALLOWED_ORIGIN_REGEXES = [r'^http://(localhost|127\.0\.0\.1):\d+$']
+
+# الملفات اللي يرفعها المستخدمين (الصور الشخصية)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# إشعارات Push: وسيلة تواصل وياك تنطيها لخدمات الإشعارات (Google/Apple) إذا صار مشكلة
+VAPID_CONTACT = 'mailto:admin@wasl.local'

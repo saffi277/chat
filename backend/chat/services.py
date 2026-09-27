@@ -2,6 +2,8 @@
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
+from notifications.push import notify_new_message
+
 from .models import Message
 from .serializers import MessageSerializer
 
@@ -23,6 +25,8 @@ def create_message(conversation, sender, content):
     for user_id in conversation.participants.values_list('id', flat=True):
         async_to_sync(layer.group_send)(
             user_group(user_id), {'type': 'chat.event', 'payload': {'type': 'inbox', 'message': data}})
+    # إشعار Push للي التطبيق مسدود عندهم
+    notify_new_message(msg)
     return data
 
 
