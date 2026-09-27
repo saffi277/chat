@@ -1,7 +1,7 @@
 "use client";
 // قطع صغيرة تتكرر بصفحة الشات: الصورة الشخصية، آخر ظهور، الملف الشخصي، لوحة المعلومات، زر الإشعارات
 import { useEffect, useRef, useState } from "react";
-import { api, mediaUrl, saveMe, type User } from "@/lib/api";
+import { api, mediaUrl, saveMe, type Me, type Theme, type User } from "@/lib/api";
 import { disablePush, enablePush, getPushState, type PushState } from "@/lib/push";
 
 export const nameOf = (u: User) => u.display_name || u.username;
@@ -94,9 +94,9 @@ export function InfoPanel({ user, onClose }: { user: User; onClose: () => void }
 }
 
 export function ProfileSheet({ me, onClose, onSaved, onLogout }: {
-  me: User;
+  me: Me;
   onClose: () => void;
-  onSaved: (u: User) => void;
+  onSaved: (u: Me) => void;
   onLogout: () => void;
 }) {
   const [name, setName] = useState(me.display_name);
@@ -109,7 +109,7 @@ export function ProfileSheet({ me, onClose, onSaved, onLogout }: {
     setError("");
     try {
       // PATCH /api/auth/me/ — نعدل جزء من البيانات بس
-      const u = await api<User>("/auth/me/", "PATCH", body);
+      const u = await api<Me>("/auth/me/", "PATCH", body);
       saveMe(u);
       onSaved(u);
       return u;
@@ -176,6 +176,27 @@ export function ProfileSheet({ me, onClose, onSaved, onLogout }: {
       </form>
 
       <div className="mt-8 border-t border-slate-100 pt-6">
+        <p className="text-sm font-black text-[#31314d]">🎨 شكل التطبيق</p>
+        <div className="mt-3 grid grid-cols-3 gap-2" role="radiogroup" aria-label="شكل التطبيق">
+          {themes.map((t) => (
+            <button
+              key={t.value}
+              role="radio"
+              aria-checked={me.theme === t.value}
+              disabled={busy}
+              onClick={() => save({ theme: t.value })}
+              className={`rounded-2xl border p-2 text-xs font-bold transition ${
+                me.theme === t.value ? "border-[#5b5cf0] ring-2 ring-violet-200" : "border-slate-200"
+              }`}
+            >
+              <span className="mb-2 block h-10 rounded-xl" style={{ background: t.preview }} />
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-8 border-t border-slate-100 pt-6">
         <PushToggle />
       </div>
 
@@ -185,6 +206,12 @@ export function ProfileSheet({ me, onClose, onSaved, onLogout }: {
     </Sheet>
   );
 }
+
+const themes: { value: Theme; label: string; preview: string }[] = [
+  { value: "glass", label: "الزجاجي", preview: "linear-gradient(135deg,#eef1ff,#ffffff 55%,#dff7f0)" },
+  { value: "dark", label: "الداكن", preview: "linear-gradient(135deg,#08051b,#3b137a 60%,#d332e4)" },
+  { value: "system", label: "حسب الجهاز", preview: "linear-gradient(90deg,#f2f3fb 50%,#120d36 50%)" },
+];
 
 const pushLabels: Record<PushState, string> = {
   unsupported: "متصفحك ما يدعم الإشعارات. على الآيفون: أضف التطبيق للشاشة الرئيسية أول.",

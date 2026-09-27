@@ -1,17 +1,26 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { api, ApiError, getMe, getToken, logout, saveMe, type Conversation, type Message, type User } from "@/lib/api";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { api, ApiError, getMe, getToken, logout, saveMe, type Conversation, type Me, type Message, type User } from "@/lib/api";
 import { syncPushSubscription } from "@/lib/push";
 import { openSocket, type LiveSocket, type SocketStatus } from "@/lib/socket";
 import { Avatar, InfoPanel, lastSeenText, nameOf, ProfileSheet, PushBanner } from "./ui";
 
 // نضيف رسالة للقائمة إذا ما موجودة (ممكن توصل مرتين: من الـ WebSocket ومن رد الـ HTTP)
+// هل الجهاز على الوضع الداكن؟ (لخيار "حسب الجهاز")
+const darkQuery = "(prefers-color-scheme: dark)";
+const subscribeDark = (cb: () => void) => {
+  const mq = window.matchMedia(darkQuery);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+};
+const systemIsDark = () => window.matchMedia(darkQuery).matches;
+
 const addMessage = (list: Message[], m: Message) => (list.some((x) => x.id === m.id) ? list : [...list, m]);
 
 export default function ChatPage() {
   const router = useRouter();
-  const [me, setMe] = useState<User | null>(null);
+  const [me, setMe] = useState<Me | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [active, setActive] = useState<Conversation | null>(null);
@@ -47,7 +56,7 @@ export default function ChatPage() {
     // رابط مثل /chat?c=5 (من الإشعار) يفتح المحادثة مباشرة.
     // نقراه هسه، قبل ما التأثير اللي يحدّث الرابط يمسحه
     const wanted = Number(new URLSearchParams(window.location.search).get("c"));
-    Promise.all([api<User>("/auth/me/"), api<User[]>("/users/"), api<Conversation[]>("/conversations/")])
+    Promise.all([api<Me>("/auth/me/"), api<User[]>("/users/"), api<Conversation[]>("/conversations/")])
       .then(([meData, u, c]) => {
         saveMe(meData);
         setMe(meData);
@@ -168,8 +177,13 @@ export default function ChatPage() {
   );
   const shownUsers = users.filter(matches);
 
+  // النموذجين: الزجاجي (الفاتح) والداكن البنفسجي (تصميم صديقنا بـ .dark-theme بـ globals.css).
+  // الاختيار ينحفظ بحساب المستخدم (me.theme) فيتبعه على كل أجهزته
+  const deviceDark = useSyncExternalStore(subscribeDark, systemIsDark, () => false);
+  const dark = me?.theme === "dark" || (me?.theme === "system" && deviceDark);
+
   return (
-    <main className="app-shell dark-theme h-dvh p-0 md:p-4 lg:p-6">
+    <main className={`app-shell ${dark ? "dark-theme" : ""} h-dvh p-0 md:p-4 lg:p-6`}>
       <div className="flex h-full overflow-hidden bg-white md:mx-auto md:max-w-[1600px] md:rounded-[28px] md:border md:border-white/80 md:shadow-[0_18px_60px_rgba(31,34,70,.12)]">
       <aside className={`${active ? "hidden md:flex" : "flex"} w-full flex-col border-l border-slate-100 bg-white md:w-[350px]`}>
         <header className="border-b border-slate-100 px-5 pb-5 pt-[max(1.5rem,env(safe-area-inset-top))]">
