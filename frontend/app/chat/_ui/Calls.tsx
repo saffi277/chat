@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Call } from "@/lib/api";
 import { calls as callsApi, conversations as convApi } from "@/lib/endpoints";
 import { Avatar, Chip, duration, Empty, IconButton, listTime, nameOf } from "./bits";
+import { ScreenHeader } from "./ChatList";
 import { Icon } from "./icons";
 import { useWasl } from "./store";
 
@@ -23,26 +24,26 @@ export function CallsView() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="px-4 pt-[max(1.1rem,env(safe-area-inset-top))]">
-        <h1 className="text-2xl font-extrabold">المكالمات</h1>
+      <header className="px-4 pt-[max(1rem,env(safe-area-inset-top))]">
+        <ScreenHeader title="المكالمات" />
         <div className="mt-4 flex gap-2">
           <Chip label="الكل" active={filter === "all"} onClick={() => setFilter("all")} />
           <Chip label="الفائتة" active={filter === "missed"} onClick={() => setFilter("missed")} />
         </div>
       </header>
-      <div className="w-scroll mt-3 flex-1 overflow-y-auto px-2 pb-28">
+      <div className="w-scroll mt-2 flex-1 overflow-y-auto pb-4">
         {log?.length === 0 && <Empty icon="phone" title="ماكو مكالمات" text="اتصل بأي شخص من زر السماعة فوك المحادثة." />}
         {log?.map((c) => {
           const missed = c.direction === "missed";
           const name = c.peer ? nameOf(c.peer) : c.title || "مجموعة";
           return (
-            <div key={c.id} className="w-hover flex items-center gap-3 rounded-[20px] px-3 py-2.5">
+            <div key={c.id} className="w-hover w-line flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0">
               <button onClick={() => c.peer && setPanel({ type: "contact", userId: c.peer.id })}>
                 <Avatar user={c.peer} name={name} size={50} />
               </button>
               <div className="min-w-0 flex-1">
-                <div className="truncate font-extrabold" style={missed ? { color: "var(--danger)" } : undefined}>{name}</div>
-                <div className="w-muted flex items-center gap-1 text-xs">
+                <div className="truncate font-bold" style={missed ? { color: "var(--danger)" } : undefined}>{name}</div>
+                <div className="w-muted mt-0.5 flex items-center gap-1 text-[13px]">
                   <span style={{ color: missed ? "var(--danger)" : "var(--online)" }}><Icon name={c.direction === "outgoing" ? "outgoing" : "incoming"} size={14} strokeWidth={2.4} /></span>
                   <Icon name={c.kind === "video" ? "video" : "phone"} size={13} />
                   {missed ? "فائتة" : c.status === "declined" ? "مرفوضة" : c.duration ? duration(c.duration) : c.direction === "outgoing" ? "صادرة" : "واردة"}

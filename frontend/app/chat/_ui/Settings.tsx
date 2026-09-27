@@ -7,14 +7,16 @@ import { Avatar, nameOf, Section, Toggle } from "./bits";
 import { Icon } from "./icons";
 import { useWasl } from "./store";
 
-const themes: { value: Theme; label: string; preview: string }[] = [
-  { value: "glass", label: "الزجاجي", preview: "url(/bg/glass-landscape.svg) center / cover" },
-  { value: "dark", label: "الداكن", preview: "linear-gradient(135deg,#08051b,#3b137a 60%,#d946ef)" },
-  { value: "system", label: "حسب الجهاز", preview: "linear-gradient(90deg,#6fa8d8 50%,#120b30 50%)" },
+const themes: { value: Theme; label: string; icon: "sun" | "moon" | "device" }[] = [
+  { value: "light", label: "فاتح", icon: "sun" },
+  { value: "dark", label: "داكن", icon: "moon" },
+  { value: "system", label: "حسب الجهاز", icon: "device" },
 ];
 
 export function SettingsView() {
-  const { me, updateMe, signOut, openSaved, notify } = useWasl();
+  const { me, updateMe, signOut, openSaved, notify, setTab, stories } = useWasl();
+  // "glass" قديم، نعامله كفاتح لحد ما نرجع للثيمات
+  const current: Theme = me.theme === "glass" ? "light" : me.theme;
   const [form, setForm] = useState({ display_name: me.display_name, bio: me.bio, phone: me.phone, city: me.city });
   const [busy, setBusy] = useState(false);
   const pick = useRef<HTMLInputElement>(null);
@@ -34,14 +36,14 @@ export function SettingsView() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="px-4 pt-[max(1.1rem,env(safe-area-inset-top))]">
-        <h1 className="text-2xl font-extrabold">الإعدادات</h1>
+      <header className="px-4 pt-[max(1rem,env(safe-area-inset-top))]">
+        <h1 className="text-[26px] font-extrabold leading-10">الإعدادات</h1>
       </header>
-      <div className="w-scroll flex-1 overflow-y-auto px-4 pb-28">
-        <div className="w-card mt-4 flex items-center gap-4 rounded-[24px] p-4">
+      <div className="w-scroll flex-1 overflow-y-auto px-4 pb-6">
+        <div className="w-card mt-3 flex items-center gap-4 rounded-2xl p-4">
           <button onClick={() => pick.current?.click()} className="relative" aria-label="تغيير الصورة">
             <Avatar user={me} size={72} />
-            <span className="w-accent absolute -bottom-1 -left-1 grid h-8 w-8 place-items-center rounded-full"><Icon name="camera" size={15} /></span>
+            <span className="w-accent absolute -bottom-1 -left-1 grid h-8 w-8 place-items-center rounded-full border-2" style={{ borderColor: "var(--card)" }}><Icon name="camera" size={15} /></span>
           </button>
           <input ref={pick} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) run(() => auth.setAvatar(f), "انحفظت الصورة"); e.target.value = ""; }} />
           <div className="min-w-0 flex-1">
@@ -63,20 +65,21 @@ export function SettingsView() {
                 {label}
                 <input value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} placeholder={ph}
                   dir={key === "phone" ? "ltr" : "auto"} inputMode={key === "phone" ? "tel" : undefined}
-                  className="w-input mt-1.5 h-12 w-full rounded-2xl px-4 text-base font-normal outline-none md:text-sm" />
+                  className="w-input mt-1.5 h-11 w-full rounded-xl px-4 text-base font-normal outline-none md:text-sm" style={{ background: "var(--panel)" }} />
               </label>
             ))}
-            <button disabled={!dirty || busy} className="w-accent w-full rounded-full py-3 font-extrabold disabled:opacity-40">{busy ? "جاري الحفظ..." : "حفظ"}</button>
+            <button disabled={!dirty || busy} className="w-accent w-full rounded-full py-3 font-bold disabled:opacity-40">{busy ? "جاري الحفظ..." : "حفظ"}</button>
           </form>
         </Section>
 
-        <Section title="شكل التطبيق">
-          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="شكل التطبيق">
+        <Section title="المظهر">
+          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="المظهر">
             {themes.map((t) => (
-              <button key={t.value} role="radio" aria-checked={me.theme === t.value} disabled={busy}
+              <button key={t.value} role="radio" aria-checked={current === t.value} disabled={busy}
                 onClick={() => run(() => auth.updateMe({ theme: t.value }))}
-                className={`rounded-2xl p-2 text-xs font-bold transition ${me.theme === t.value ? "w-accent" : "w-card"}`}>
-                <span className="mb-2 block h-16 rounded-xl" style={{ background: t.preview }} />
+                className={`grid justify-items-center gap-1.5 rounded-xl border py-3 text-[13px] font-semibold transition ${current === t.value ? "w-accent border-transparent" : "w-line"}`}
+                style={current === t.value ? undefined : { background: "var(--panel)" }}>
+                <Icon name={t.icon} size={20} />
                 {t.label}
               </button>
             ))}
@@ -85,11 +88,23 @@ export function SettingsView() {
 
         <Section><PushToggle /></Section>
 
-        <Section>
-          <button onClick={openSaved} className="flex w-full items-center gap-3 font-bold"><Icon name="bookmark" size={20} className="w-accent-text" />الرسائل المحفوظة</button>
-        </Section>
+        <section className="w-card mt-4 overflow-hidden rounded-2xl">
+          <button onClick={() => setTab("stories")} className="w-hover flex w-full items-center gap-3 px-4 py-3.5 font-semibold">
+            <Icon name="stories" size={20} className="w-accent-text" /><span className="flex-1 text-right">الحالات</span>
+            {stories.some((g) => !g.is_me && !g.all_seen) && <span className="w-badge h-2.5 w-2.5 rounded-full" aria-label="حالات جديدة" />}
+            <Icon name="back" size={18} className="w-muted rotate-180" />
+          </button>
+          <button onClick={() => setTab("people")} className="w-hover w-line flex w-full items-center gap-3 border-t px-4 py-3.5 font-semibold">
+            <Icon name="users" size={20} className="w-accent-text" /><span className="flex-1 text-right">جهات الاتصال</span>
+            <Icon name="back" size={18} className="w-muted rotate-180" />
+          </button>
+          <button onClick={openSaved} className="w-hover w-line flex w-full items-center gap-3 border-t px-4 py-3.5 font-semibold">
+            <Icon name="bookmark" size={20} className="w-accent-text" /><span className="flex-1 text-right">الرسائل المحفوظة</span>
+            <Icon name="back" size={18} className="w-muted rotate-180" />
+          </button>
+        </section>
 
-        <button onClick={signOut} className="mt-4 flex w-full items-center justify-center gap-2 rounded-[20px] py-3.5 font-extrabold"
+        <button onClick={signOut} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 font-bold"
           style={{ background: "color-mix(in srgb, var(--danger) 14%, transparent)", color: "var(--danger)" }}>
           <Icon name="logout" size={19} />تسجيل الخروج
         </button>
@@ -140,7 +155,7 @@ export function PushBanner() {
   }, []);
   if (state !== "off" || hidden) return null;
   return (
-    <div className="w-card mx-1 mb-2 flex items-center gap-3 rounded-[20px] p-3">
+    <div className="w-card mx-4 mb-2 flex items-center gap-3 rounded-2xl p-3">
       <span className="w-accent grid h-10 w-10 shrink-0 place-items-center rounded-full"><Icon name="bell" size={18} /></span>
       <div className="min-w-0 flex-1 text-xs"><p className="font-extrabold">فعّل الإشعارات</p><p className="w-muted">حتى ما تفوتك أي رسالة</p></div>
       <button className="w-accent rounded-full px-3 py-1.5 text-xs font-bold" onClick={async () => setState(await enablePush().catch((): PushState => "off"))}>تفعيل</button>

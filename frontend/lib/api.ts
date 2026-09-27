@@ -15,7 +15,8 @@ export type User = {
   date_joined: string;
 };
 
-export type Theme = "glass" | "dark" | "system";
+/** "glass" قديم (يرجع بعدين كثيم إضافي)، هسه يطلع فاتح */
+export type Theme = "light" | "dark" | "system" | "glass";
 /** أنا: نفس User + إعداداتي الخاصة */
 export type Me = User & { theme: Theme };
 

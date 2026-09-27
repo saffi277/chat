@@ -150,28 +150,28 @@ export function Conversation({ conv }: { conv: Conv }) {
   return (
     <div className="flex h-full min-h-0 flex-col" onClick={() => { setMenuFor(null); setMoreOpen(false); }}>
       {/* الهيدر */}
-      <header className="w-panel relative z-10 m-2 flex items-center gap-2 rounded-[24px] px-2 py-2 md:m-3">
-        <IconButton icon="back" label="رجوع" onClick={() => openConv(null)} className="md:hidden" />
-        <button onClick={openInfo} className="flex min-w-0 flex-1 items-center gap-3 text-right">
+      <header className="w-line relative z-10 flex items-center gap-1 border-b px-2 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]" style={{ background: "var(--panel)" }}>
+        <IconButton icon="back" label="رجوع" onClick={() => openConv(null)} className="md:hidden" plain />
+        <button onClick={openInfo} className="flex min-w-0 flex-1 items-center gap-3 px-1 text-right">
           <ConvAvatar conv={conv} other={other} size={44} online={other?.is_online} />
           <div className="min-w-0">
-            <div className="truncate font-extrabold">{title}</div>
+            <div className="truncate font-bold">{title}</div>
             <div className={`truncate text-xs ${typing || other?.is_online ? "font-bold" : "w-muted"}`}
               style={{ color: conn !== "open" ? "#f59e0b" : typing || other?.is_online ? "var(--online)" : undefined }}>{status}</div>
           </div>
         </button>
         {conv.kind === "direct" && (
           <>
-            <IconButton icon="phone" label="مكالمة صوتية" onClick={() => startCall(conv, "audio")} />
-            <IconButton icon="video" label="مكالمة فيديو" onClick={() => startCall(conv, "video")} />
+            <IconButton icon="video" label="مكالمة فيديو" onClick={() => startCall(conv, "video")} plain />
+            <IconButton icon="phone" label="مكالمة صوتية" onClick={() => startCall(conv, "audio")} plain />
           </>
         )}
         <div className="relative" onClick={(e) => e.stopPropagation()}>
-          <IconButton icon="more" label="المزيد" onClick={() => setMoreOpen((o) => !o)} />
+          <IconButton icon="more" label="المزيد" onClick={() => setMoreOpen((o) => !o)} plain />
           {moreOpen && (
             <div className="w-strong w-shadow absolute left-0 top-12 z-20 w-60 rounded-2xl p-1.5" style={{ border: "1px solid var(--border)" }}>
               {menuItems.map((it) => (
-                <button key={it.label} onClick={it.run} className="w-hover flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold">
+                <button key={it.label} onClick={it.run} className="w-hover flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold">
                   <Icon name={it.icon} size={18} className="w-accent-text" />{it.label}
                 </button>
               ))}
@@ -185,7 +185,7 @@ export function Conversation({ conv }: { conv: Conv }) {
         {loading && <p className="w-muted py-10 text-center text-sm">جاري التحميل...</p>}
         {hasMore && !loading && <button onClick={loadOlder} className="w-chip mx-auto my-3 block rounded-full px-4 py-1.5 text-xs">رسائل أقدم</button>}
         {!loading && msgs.length === 0 && (
-          <div className="w-panel mx-auto mt-10 max-w-xs rounded-3xl p-5 text-center text-sm">
+          <div className="w-panel mx-auto mt-10 max-w-xs rounded-2xl p-5 text-center text-sm">
             <p className="font-bold">{conv.kind === "saved" ? "احفظ هنا أي شي تريده" : "ابدأ المحادثة 👋"}</p>
             <p className="w-muted mt-1 text-xs">الرسائل توصل فوراً، ويا الصور والرسائل الصوتية.</p>
           </div>
@@ -199,19 +199,19 @@ export function Conversation({ conv }: { conv: Conv }) {
             <Fragment key={m.id}>
               {newDay && (
                 <div className="my-4 flex justify-center">
-                  <span className="w-panel rounded-full px-4 py-1 text-xs font-bold">{dayLabel(m.created_at)}</span>
+                  <span className="w-panel rounded-full px-3 py-1 text-xs font-semibold">{dayLabel(m.created_at)}</span>
                 </div>
               )}
               {m.kind === "system" || m.kind === "call" ? (
                 <div className="my-3 flex justify-center">
                   <span className="w-panel flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs">
-                    {m.kind === "call" && <Icon name="phone" size={13} className="w-accent-text" />}
+                    {m.kind === "call" && <Icon name="phone" size={13} className="w-call" />}
                     {m.content}{m.kind === "call" && <span className="w-muted">• {clock(m.created_at)}</span>}
                   </span>
                 </div>
               ) : (
                 <div id={`m-${m.id}`} className={`group flex items-end gap-1 ${mine ? "justify-start" : "justify-end"} ${grouped ? "mt-1" : "mt-3"}`}>
-                  <div className={`relative max-w-[82%] rounded-[22px] px-3.5 py-2 md:max-w-[65%] ${mine ? "w-bubble-out rounded-tr-md" : "w-bubble-in rounded-tl-md"}`}
+                  <div className={`relative max-w-[82%] rounded-2xl px-3 py-1.5 md:max-w-[65%] ${mine ? "w-bubble-out rounded-tr-sm" : "w-bubble-in rounded-tl-sm"}`}
                     onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === m.id ? null : m.id); }}>
                     {conv.kind === "group" && !mine && !grouped && <SenderName m={m} />}
                     {m.reply_to && <ReplyQuote r={m.reply_to} mine={mine} onClick={() => document.getElementById(`m-${m.reply_to!.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })} />}
@@ -237,7 +237,7 @@ export function Conversation({ conv }: { conv: Conv }) {
         })}
         {typing && conv.kind !== "group" && (
           <div className="mt-3 flex justify-end">
-            <span className="w-bubble-in flex gap-1 rounded-[22px] px-4 py-3">
+            <span className="w-bubble-in flex gap-1 rounded-2xl px-4 py-3">
               {[0, 1, 2].map((i) => <span key={i} className="h-2 w-2 animate-bounce rounded-full" style={{ background: "var(--muted)", animationDelay: `${i * 0.15}s` }} />)}
             </span>
           </div>

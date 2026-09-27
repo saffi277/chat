@@ -19,7 +19,7 @@ function compact(n: number) {
 }
 
 export function StoriesView() {
-  const { stories, me, setPanel, setStoryViewer } = useWasl();
+  const { stories, me, setPanel, setStoryViewer, setTab } = useWasl();
   const [kind, setKind] = useState<Kind>("all");
   const mine = stories.find((g) => g.is_me);
   // كل الحالات بشبكة وحدة، الأحدث أول
@@ -30,10 +30,12 @@ export function StoriesView() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="px-4 pt-[max(1.1rem,env(safe-area-inset-top))]">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-extrabold">الحالات</h1>
-          <IconButton icon="plus" label="حالة جديدة" onClick={() => setPanel({ type: "storyCompose" })} size={42} />
+      <header className="px-4 pt-[max(1rem,env(safe-area-inset-top))]">
+        <div className="flex items-center gap-2">
+          <IconButton icon="back" label="رجوع" onClick={() => setTab("settings")} />
+          <h1 className="flex-1 text-[22px] font-extrabold">الحالات</h1>
+          <button onClick={() => setPanel({ type: "storyCompose" })} aria-label="حالة جديدة" title="حالة جديدة"
+            className="w-accent grid h-10 w-10 place-items-center rounded-full"><Icon name="plus" size={22} strokeWidth={2.4} /></button>
         </div>
         <div className="w-noscroll -mx-4 mt-4 flex gap-3 overflow-x-auto px-4">
           <button className="grid shrink-0 justify-items-center gap-1 text-[11px]"
@@ -56,7 +58,7 @@ export function StoriesView() {
           {kinds.map((k) => <Chip key={k.id} label={k.label} active={kind === k.id} onClick={() => setKind(k.id)} />)}
         </div>
       </header>
-      <div className="w-scroll mt-3 flex-1 overflow-y-auto px-3 pb-28">
+      <div className="w-scroll mt-3 flex-1 overflow-y-auto px-3 pb-4">
         {cards.length === 0 ? (
           <Empty icon="stories" title="ماكو حالات بعد" text="شارك صورة أو فيديو أو كلمة، وتختفي بعد 24 ساعة.">
             <button onClick={() => setPanel({ type: "storyCompose" })} className="w-accent mt-4 rounded-full px-6 py-2.5 font-bold">أضف حالة</button>
@@ -65,7 +67,7 @@ export function StoriesView() {
           <div className="grid grid-cols-2 gap-3">
             {cards.map(({ s, index, user }) => (
               <button key={s.id} onClick={() => setStoryViewer({ userId: user.id, index })}
-                className="relative aspect-[3/4] overflow-hidden rounded-[22px] text-right text-white shadow-lg">
+                className="relative aspect-[3/4] overflow-hidden rounded-2xl text-right text-white">
                 <StoryMedia s={s} thumb />
                 <span className="absolute inset-x-0 top-0 flex items-center gap-2 bg-gradient-to-b from-black/50 to-transparent p-2.5">
                   <Avatar user={user} size={28} />

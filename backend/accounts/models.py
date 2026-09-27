@@ -16,7 +16,7 @@ class Profile(models.Model):
     bio = models.CharField(max_length=140, blank=True)  # "حول"
     city = models.CharField(max_length=60, blank=True)
     # شكل الواجهة اللي اختاره: الزجاجي الفاتح، أو الداكن الفاخر
-    THEMES = [('glass', 'النموذج الزجاجي'), ('dark', 'النموذج الداكن'), ('system', 'حسب الجهاز')]
+    THEMES = [('light', 'فاتح'), ('dark', 'داكن'), ('system', 'حسب الجهاز'), ('glass', 'الزجاجي (قديم)')]
     theme = models.CharField(max_length=10, choices=THEMES, default='system')
     is_online = models.BooleanField(default=False)
     # كم تبويب/جهاز فاتح هسه. "غير متصل" بس لما يصير صفر

@@ -10,13 +10,13 @@
 
 body {
   font-family: Tahoma, Arial, sans-serif;
-  background: #f5f7fb;
+  background: #ffffff;
   color: #101827;
 }
 
 button, input { font: inherit; }
 
-::selection { background: #deddff; color: #27216f; }
+::selection { background: #cfe2ff; color: #0b2a5b; }
 
 .app-shell {
   background:

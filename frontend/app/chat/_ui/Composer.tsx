@@ -142,9 +142,9 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent }: {
   const hasText = text.trim().length > 0;
 
   return (
-    <div className="relative px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
+    <div className="w-line relative border-t px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2" style={{ background: "var(--panel)" }}>
       {(reply || editing) && (
-        <div className="w-panel mb-2 flex items-center gap-3 rounded-2xl px-3 py-2">
+        <div className="w-card mb-2 flex items-center gap-3 rounded-xl border-r-4 px-3 py-2" style={{ borderColor: "var(--accent)" }}>
           <Icon name={editing ? "edit" : "reply"} size={18} className="w-accent-text" />
           <div className="min-w-0 flex-1 text-xs">
             <div className="w-accent-text font-extrabold">{editing ? "تعديل الرسالة" : `رد على ${nameOf((reply as Message).sender)}`}</div>
@@ -155,14 +155,14 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent }: {
       )}
 
       {menu === "emoji" && (
-        <div className="w-strong w-shadow absolute bottom-full right-3 z-10 mb-2 grid w-[292px] grid-cols-8 gap-1 rounded-2xl p-2" style={{ border: "1px solid var(--border)" }}>
+        <div className="w-strong w-shadow absolute bottom-full left-3 z-10 mb-2 grid w-[292px] grid-cols-8 gap-1 rounded-2xl p-2" style={{ border: "1px solid var(--border)" }}>
           {EMOJIS.map((e) => (
             <button key={e} className="rounded-lg p-1 text-xl hover:bg-black/5" onClick={() => { setText((t) => t + e); input.current?.focus(); }}>{e}</button>
           ))}
         </div>
       )}
       {menu === "attach" && (
-        <div className="w-strong w-shadow absolute bottom-full left-3 z-10 mb-2 grid w-56 gap-1 rounded-2xl p-2" style={{ border: "1px solid var(--border)" }}>
+        <div className="w-strong w-shadow absolute bottom-full right-3 z-10 mb-2 grid w-56 gap-1 rounded-2xl p-2" style={{ border: "1px solid var(--border)" }}>
           <AttachItem icon="image" label="صورة أو فيديو" onClick={() => mediaPick.current?.click()} />
           <AttachItem icon="file" label="ملف" onClick={() => filePick.current?.click()} />
           <AttachItem icon="pin" label="الموقع" onClick={() => { setMenu(null); setPanel({ type: "location", convId }); }} />
@@ -172,29 +172,31 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent }: {
       <input ref={filePick} type="file" hidden onChange={(e) => { const f = e.target.files?.[0]; setMenu(null); if (f) upload(f, { kind: "file" }); e.target.value = ""; }} />
 
       {rec ? (
-        <div className="w-panel flex items-center gap-3 rounded-full p-1.5 pr-4">
+        <div className="flex items-center gap-3 p-0.5 pr-3">
           <span className="h-3 w-3 animate-pulse rounded-full" style={{ background: "var(--danger)" }} />
           <span className="flex-1 text-sm font-bold">جاري التسجيل {duration(rec.secs)}</span>
           <button onClick={() => stopRecording(true)} aria-label="إلغاء التسجيل" className="grid h-11 w-11 place-items-center rounded-full w-card"><Icon name="trash" size={19} /></button>
           <button onClick={() => stopRecording(false)} aria-label="إرسال التسجيل" className="w-accent grid h-12 w-12 place-items-center rounded-full"><Icon name="send" size={20} /></button>
         </div>
       ) : (
-        <form onSubmit={(e) => { e.preventDefault(); sendText(); }} className="w-panel flex items-center gap-1 rounded-full p-1.5">
-          <button type="button" aria-label="إيموجي" onClick={() => setMenu(menu === "emoji" ? null : "emoji")}
-            className="w-muted grid h-11 w-11 shrink-0 place-items-center rounded-full"><Icon name="smile" size={22} /></button>
-          <input ref={input} value={text} onChange={(e) => onType(e.target.value)} onFocus={() => setMenu(null)}
-            placeholder="اكتب رسالة..." enterKeyHint="send" aria-label="الرسالة" dir="auto"
-            className="h-11 min-w-0 flex-1 bg-transparent px-1 text-base outline-none md:text-sm" style={{ color: "var(--text)" }} />
+        <form onSubmit={(e) => { e.preventDefault(); sendText(); }} className="flex items-center gap-1">
           {!editing && (
             <button type="button" aria-label="إرفاق" onClick={() => setMenu(menu === "attach" ? null : "attach")}
-              className="w-muted grid h-11 w-11 shrink-0 place-items-center rounded-full"><Icon name="paperclip" size={21} /></button>
+              className="w-accent-text grid h-11 w-10 shrink-0 place-items-center rounded-full"><Icon name="plus" size={24} strokeWidth={2.2} /></button>
           )}
+          <div className="w-input flex h-11 min-w-0 flex-1 items-center rounded-full pr-4">
+            <input ref={input} value={text} onChange={(e) => onType(e.target.value)} onFocus={() => setMenu(null)}
+              placeholder="اكتب رسالة..." enterKeyHint="send" aria-label="الرسالة" dir="auto"
+              className="h-full min-w-0 flex-1 bg-transparent text-base outline-none md:text-sm" style={{ color: "var(--text)" }} />
+            <button type="button" aria-label="إيموجي" onClick={() => setMenu(menu === "emoji" ? null : "emoji")}
+              className="w-muted grid h-10 w-10 shrink-0 place-items-center rounded-full"><Icon name="smile" size={21} /></button>
+          </div>
           {hasText || editing ? (
             <button type="submit" disabled={busy || !hasText} aria-label={editing ? "حفظ التعديل" : "إرسال"}
-              className="w-accent grid h-12 w-12 shrink-0 place-items-center rounded-full disabled:opacity-50"><Icon name={editing ? "check" : "send"} size={21} /></button>
+              className="w-accent grid h-11 w-11 shrink-0 place-items-center rounded-full disabled:opacity-50"><Icon name={editing ? "check" : "send"} size={20} /></button>
           ) : (
             <button type="button" onClick={startRecording} disabled={busy} aria-label="تسجيل رسالة صوتية"
-              className="w-accent grid h-12 w-12 shrink-0 place-items-center rounded-full disabled:opacity-50"><Icon name="mic" size={21} /></button>
+              className="w-accent grid h-11 w-11 shrink-0 place-items-center rounded-full disabled:opacity-50"><Icon name="mic" size={20} /></button>
           )}
         </form>
       )}
@@ -202,7 +204,7 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent }: {
 
       {pending && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setPending(null)}>
-          <div className="w-strong w-shadow w-full max-w-md rounded-[28px] p-4" onClick={(e) => e.stopPropagation()} style={{ border: "1px solid var(--border)" }}>
+          <div className="w-strong w-shadow w-full max-w-md rounded-2xl p-4" onClick={(e) => e.stopPropagation()} style={{ border: "1px solid var(--border)" }}>
             {pending.kind === "image" ? (
               // eslint-disable-next-line @next/next/no-img-element -- معاينة محلية قبل الرفع
               <img src={pending.url} alt="" className="max-h-[55dvh] w-full rounded-2xl object-contain" />

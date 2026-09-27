@@ -117,12 +117,13 @@ export function ConvAvatar({ conv, other, size = 52, online }: { conv: Conversat
 }
 
 // ------------------------------------------------------------ أزرار
-export function IconButton({ icon, label, onClick, active, size = 40, className = "" }: {
-  icon: IconName; label: string; onClick?: () => void; active?: boolean; size?: number; className?: string;
+/** plain: بدون خلفية (للهيدرات)، الأيقونة بلون التطبيق */
+export function IconButton({ icon, label, onClick, active, size = 40, className = "", plain }: {
+  icon: IconName; label: string; onClick?: () => void; active?: boolean; size?: number; className?: string; plain?: boolean;
 }) {
   return (
     <button type="button" aria-label={label} title={label} onClick={onClick}
-      className={`grid shrink-0 place-items-center rounded-full transition active:scale-95 ${active ? "w-accent" : "w-card w-hover"} ${className}`}
+      className={`grid shrink-0 place-items-center rounded-full transition active:scale-95 ${active ? "w-accent" : plain ? "w-accent-text w-hover" : "w-card w-hover"} ${className}`}
       style={{ width: size, height: size }}>
       <Icon name={icon} size={size * 0.46} />
     </button>
@@ -132,7 +133,7 @@ export function IconButton({ icon, label, onClick, active, size = 40, className 
 export function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button type="button" aria-pressed={active} onClick={onClick}
-      className="w-chip shrink-0 rounded-full px-4 py-2 text-xs font-bold transition">
+      className="w-chip shrink-0 rounded-full px-4 py-1.5 text-[13px] font-semibold transition">
       {label}
     </button>
   );
@@ -158,9 +159,9 @@ export function Panel({ title, onClose, children, actions, wide }: {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-40 flex justify-start bg-black/40 backdrop-blur-sm md:p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex justify-start bg-black/40 md:p-4" onClick={onClose}>
       <section role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}
-        className={`w-strong w-shadow flex h-full w-full flex-col overflow-hidden md:rounded-[28px] ${wide ? "md:w-[520px]" : "md:w-[430px]"}`}
+        className={`w-strong w-shadow flex h-full w-full flex-col overflow-hidden md:rounded-2xl ${wide ? "md:w-[520px]" : "md:w-[430px]"}`}
         style={{ border: "1px solid var(--border)" }}>
         <header className="flex items-center gap-3 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))]">
           <IconButton icon="back" label="رجوع" onClick={onClose} />
@@ -175,7 +176,7 @@ export function Panel({ title, onClose, children, actions, wide }: {
 
 export function Section({ title, extra, children }: { title?: string; extra?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="w-card mt-4 rounded-[20px] p-4">
+    <section className="w-card mt-4 rounded-2xl p-4">
       {title && (
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-extrabold">{title}</h3>
@@ -190,7 +191,7 @@ export function Section({ title, extra, children }: { title?: string; extra?: Re
 export function Empty({ icon, title, text, children }: { icon: IconName; title: string; text?: string; children?: React.ReactNode }) {
   return (
     <div className="m-auto max-w-xs px-6 py-10 text-center">
-      <div className="w-accent mx-auto grid h-20 w-20 place-items-center rounded-[28px]"><Icon name={icon} size={36} /></div>
+      <div className="w-card w-accent-text mx-auto grid h-20 w-20 place-items-center rounded-full"><Icon name={icon} size={34} /></div>
       <h3 className="mt-5 text-lg font-extrabold">{title}</h3>
       {text && <p className="w-muted mt-2 text-sm leading-7">{text}</p>}
       {children}

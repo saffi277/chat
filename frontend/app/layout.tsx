@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#5b5cf0",
+  themeColor: [{ media: "(prefers-color-scheme: light)", color: "#ffffff" }, { media: "(prefers-color-scheme: dark)", color: "#0b141a" }],
   // نستخدم كل الشاشة حتى جوة النوتش، ونحمي الأطراف بـ env(safe-area-inset-*)
   viewportFit: "cover",
   // لما يطلع الكيبورد، الصفحة تصغر بدل ما يغطي خانة الكتابة

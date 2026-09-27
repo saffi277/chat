@@ -12,7 +12,8 @@ import { auth, calls, conversations as convApi, messages as msgApi, stories as s
 import { syncPushSubscription } from "@/lib/push";
 import { openSocket, type LiveSocket } from "@/lib/socket";
 
-export type Tab = "chats" | "calls" | "people" | "stories" | "settings";
+/** تبويبات الشريط السفلي (chats/calls/groups/settings) + شاشات نوصلها من أزرار (people/stories) */
+export type Tab = "chats" | "calls" | "groups" | "settings" | "people" | "stories";
 
 export type PanelState =
   | { type: "contact"; userId: number }
@@ -41,7 +42,7 @@ type Ctx = {
   users: User[];
   convs: Conversation[];
   stories: StoryGroup[];
-  theme: "glass" | "dark";
+  theme: "light" | "dark";
   tab: Tab;
   setTab: (t: Tab) => void;
   activeId: number | null;
@@ -346,9 +347,9 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     await msgApi.stopLiveLocation(msgId).catch(() => {});
   }, [stopWatch]);
 
-  // ------------------------------------------------ الشكل: زجاجي أو داكن
+  // ------------------------------------------------ الشكل: فاتح أو داكن
   const deviceDark = useSyncExternalStore(subscribeDark, () => window.matchMedia(darkQuery).matches, () => false);
-  const theme: "glass" | "dark" = me?.theme === "dark" || (me?.theme === "system" && deviceDark) ? "dark" : "glass";
+  const theme: "light" | "dark" = me?.theme === "dark" || (me?.theme === "system" && deviceDark) ? "dark" : "light";
 
   // عدد غير المقروء بعنوان التبويب
   const unread = convs.reduce((n, c) => n + c.unread_count, 0);
