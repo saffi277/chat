@@ -169,7 +169,7 @@ export default function ChatPage() {
   const shownUsers = users.filter(matches);
 
   return (
-    <main className="app-shell h-dvh p-0 md:p-4 lg:p-6">
+    <main className="app-shell dark-theme h-dvh p-0 md:p-4 lg:p-6">
       <div className="flex h-full overflow-hidden bg-white md:mx-auto md:max-w-[1600px] md:rounded-[28px] md:border md:border-white/80 md:shadow-[0_18px_60px_rgba(31,34,70,.12)]">
       <aside className={`${active ? "hidden md:flex" : "flex"} w-full flex-col border-l border-slate-100 bg-white md:w-[350px]`}>
         <header className="border-b border-slate-100 px-5 pb-5 pt-[max(1.5rem,env(safe-area-inset-top))]">
