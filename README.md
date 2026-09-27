@@ -1,6 +1,8 @@
 # شات — Django + Next.js
 
-تطبيق محادثات فوري: تسجيل دخول، قائمة مستخدمين، محادثات، رسائل مباشرة بدون Refresh (WebSocket)، حالة متصل/غير متصل، "يكتب..."، وعلامة مقروء ✓✓.
+تطبيق محادثات فوري ("وَصل"): محادثات ثنائية ومجموعات، رسائل مباشرة (WebSocket)، صور وفيديو ورسائل صوتية وملفات،
+مشاركة الموقع (ومباشر)، رد وتعديل وحذف، ✓ / ✓✓ / ✓✓ أزرق، الحالات (24 ساعة)، مكالمات صوت وفيديو (WebRTC)،
+إشعارات Push، ملف شخصي، الرسائل المحفوظة، ونموذجين للشكل (زجاجي وداكن).
 
 ![screenshot](docs/screenshot.png)
 
@@ -23,7 +25,18 @@ npm run dev
 ```
 افتح http://localhost:3000 بمتصفحين (واحد منهم Incognito) وسجل مستخدمين وجرب.
 
+**بعد كل `git pull`** (إذا انضافت مكتبات أو جداول):
+```bash
+cd backend && pip install -r requirements.txt && python manage.py migrate
+cd ../frontend && npm install
+```
+
 **الاختبارات:** `cd backend && python manage.py test`
+
+**📚 الملفات المهمة:**
+- `docs/API.md`: كل شاشة وشنو تستخدم من الـ API (للمصمم)
+- `docs/roadmap.html`: شنو عدنا وشنو الجاي
+- `docs/study-guide.html`: شرح كل المفاهيم مع أسئلة
 
 ## الهيكل
 
@@ -36,9 +49,15 @@ backend/
   chat/views.py         الـ REST API للمحادثات والرسائل
   chat/consumers.py     الـ WebSocket (رسائل مباشرة + الحضور)
   chat/services.py      حفظ الرسالة + تنبيه المشاركين (مشترك بين API و WS)
+  notifications/        إشعارات Push (VAPID)
+  stories/              الحالات (24 ساعة) والمشاهدات
+  calls/                سجل المكالمات + تمرير رسائل WebRTC
 frontend/
   lib/api.ts            كل Requests للـ Backend
-  lib/socket.ts         فتح اتصال WebSocket
+  lib/socket.ts         WebSocket (يرجع يتصل وحده) + أنواع الأحداث
+  lib/endpoints.ts      دالة جاهزة لكل رابط بالـ API
+  lib/call.ts           المكالمات (WebRTC)
+  lib/push.ts           الاشتراك بالإشعارات
   app/login, register   صفحات الدخول
   app/chat/page.tsx     واجهة الشات
 docs/LEARN.md           شرح المفاهيم مربوط بالكود
