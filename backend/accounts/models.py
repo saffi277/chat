@@ -15,7 +15,12 @@ class Profile(models.Model):
     phone = models.CharField(max_length=20, blank=True)
     bio = models.CharField(max_length=140, blank=True)  # "حول"
     city = models.CharField(max_length=60, blank=True)
-    # شكل الواجهة اللي اختاره: الزجاجي الفاتح، أو الداكن الفاخر
+    # الدور بالجامعة: ينحفظ بالتسجيل، وبالدخول لازم يطابق اللي اختاره
+    STUDENT, FACULTY, STAFF = 'student', 'faculty', 'staff'
+    ROLES = [(STUDENT, 'طالب'), (FACULTY, 'تدريسي'), (STAFF, 'إداري')]
+    role = models.CharField(max_length=10, choices=ROLES, default=STUDENT)
+    # الرقم الجامعي (اختياري). يكدر يدخل بيه بدل اسم المستخدم
+    university_id = models.CharField(max_length=30, blank=True, db_index=True)
     # الوضع: نهاري/ليلي (مو ثيم). والثيم (شكل التطبيق) شي منفصل، نضيف ثيمات بعدين
     MODES = [('light', 'نهاري'), ('dark', 'ليلي'), ('system', 'تلقائي')]
     mode = models.CharField(max_length=10, choices=MODES, default='system')
@@ -28,3 +33,27 @@ class Profile(models.Model):
 
     def __str__(self):
         return f'{self.user.username} profile'
+
+
+class SupportRequest(models.Model):
+    """طلبات "نسيت كلمة المرور" و"الدعم الفني" من صفحة الدخول. الإداري يشوفها بلوحة الإدارة (/admin)."""
+
+    PASSWORD, SUPPORT = 'password', 'support'
+    KINDS = [(PASSWORD, 'نسيت كلمة المرور'), (SUPPORT, 'دعم فني')]
+
+    kind = models.CharField(max_length=10, choices=KINDS)
+    identifier = models.CharField('البريد أو الرقم الجامعي', max_length=150, blank=True)
+    contact = models.CharField('وسيلة التواصل', max_length=150, blank=True)
+    message = models.TextField('الرسالة', blank=True)
+    # إذا لگينا الحساب من الـ identifier نربطه، حتى الإداري يعرف منو
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    handled = models.BooleanField('تم الحل', default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['handled', '-created_at']
+        verbose_name = 'طلب مساعدة'
+        verbose_name_plural = 'طلبات المساعدة'
+
+    def __str__(self):
+        return f'{self.get_kind_display()}: {self.identifier or self.contact}'

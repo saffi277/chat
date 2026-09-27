@@ -9,6 +9,7 @@ import {
   type Member,
   type Message,
   type MessageKind,
+  type Role,
   type StoryGroup,
   type StoryItem,
   type User,
@@ -23,10 +24,14 @@ const qs = (params: Record<string, string | number | undefined>) => {
 
 // ---------------------------------------------------------------- الحساب
 export const auth = {
-  login: (username: string, password: string) =>
-    api<{ token: string; user: Me }>("/auth/login/", "POST", { username, password }),
-  register: (username: string, password: string, display_name = "") =>
-    api<{ token: string; user: Me }>("/auth/register/", "POST", { username, password, display_name }),
+  /** identifier = اسم المستخدم أو البريد الجامعي أو الرقم الجامعي. role لازم يطابق دور الحساب */
+  login: (identifier: string, password: string, role?: Role) =>
+    api<{ token: string; user: Me }>("/auth/login/", "POST", { identifier, password, role }),
+  register: (data: { username: string; password: string; display_name?: string; role?: Role; email?: string; university_id?: string }) =>
+    api<{ token: string; user: Me }>("/auth/register/", "POST", data),
+  /** من صفحة الدخول: نسيت كلمة المرور أو دعم فني (يوصل للإداري) */
+  help: (data: { kind: "password" | "support"; identifier?: string; contact?: string; message?: string }) =>
+    api<{ detail: string }>("/auth/help/", "POST", data),
   me: () => api<Me>("/auth/me/"),
   updateMe: (data: Partial<Pick<Me, "display_name" | "bio" | "phone" | "city" | "mode" | "theme">>) =>
     api<Me>("/auth/me/", "PATCH", data),

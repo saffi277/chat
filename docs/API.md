@@ -31,6 +31,22 @@ import { CallSession } from "@/lib/call";      // المكالمات
 
 ---
 
+## 🔐 الدخول والتسجيل (بوابة كلية الأسباط الجامعة)
+
+| الشي | الدالة |
+|---|---|
+| **الدخول** بالاسم أو البريد الجامعي أو الرقم الجامعي | `auth.login(identifier, password, role)`؛ إذا الدور ما يطابق يرجع 400 ويا `role` الصحيح |
+| **حساب جديد** | `auth.register({ username, password, display_name, role, email, university_id })` |
+| **نسيت كلمة المرور / الدعم الفني** | `auth.help({ kind: "password" \| "support", identifier, contact, message })` ← يوصل للإداري بـ `/admin` ← "طلبات المساعدة" |
+| **تذكرني** | `saveSession(token, user, remember)`: مفعلة = localStorage، وبدونها sessionStorage |
+
+- الأدوار: `student` طالب، `faculty` تدريسي، `staff` إداري (`ROLE_LABELS` بـ `lib/api.ts`). الدور يطلع للناس (`user.role`)، أما البريد والرقم الجامعي فخاصين (`me.email`, `me.university_id`).
+- الإداري يغير كلمة مرور أي حساب من `/admin` ← Users ← الحساب ← "change password".
+- الصور: `frontend/public/brand/logo.png` (شعار الكلية؛ إذا ما موجود يطلع شعار مؤقت) و `campus-day.svg` / `campus-night.svg`.
+- الألوان بـ `app/wasl.css` تحت `.portal[data-theme=...]`.
+
+---
+
 ## 🗺️ كل شاشة ← شنو تستخدم
 
 | الشاشة | الدوال |

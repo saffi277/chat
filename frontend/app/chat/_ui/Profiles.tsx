@@ -1,7 +1,7 @@
 "use client";
 // ملف جهة الاتصال، معلومات المجموعة، الوسائط المشتركة، إنشاء مجموعة
 import { useEffect, useRef, useState } from "react";
-import { mediaUrl, type Member, type Message, type User } from "@/lib/api";
+import { mediaUrl, ROLE_LABELS, type Member, type Message, type User } from "@/lib/api";
 import { conversations as convApi, messages as msgApi, users as usersApi } from "@/lib/endpoints";
 import { Avatar, Chip, ConvAvatar, fileSize, IconButton, lastSeenText, listTime, nameOf, Panel, preview, Section } from "./bits";
 import { Icon, type IconName } from "./icons";
@@ -175,6 +175,7 @@ export function ContactPanel({ userId }: { userId: number }) {
         <p className="w-muted mt-0.5 flex items-center gap-1.5 text-sm">
           {u.is_online && <span className="h-2 w-2 rounded-full" style={{ background: "var(--online)" }} />}{lastSeenText(u)}
         </p>
+        {u.role && <span className="w-tint mt-2 rounded-full px-3 py-0.5 text-xs font-bold">{ROLE_LABELS[u.role]}</span>}
       </div>
       <div className="mt-5 flex gap-2">
         <Action icon="chats" label="مراسلة" active onClick={() => openWith(userId)} />

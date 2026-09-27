@@ -13,14 +13,19 @@ export type User = {
   is_online: boolean;
   last_seen: string | null;
   date_joined: string;
+  role: Role;
 };
+
+/** الدور بالجامعة */
+export type Role = "student" | "faculty" | "staff";
+export const ROLE_LABELS: Record<Role, string> = { student: "طالب", faculty: "تدريسي", staff: "إداري" };
 
 /** الوضع: نهاري / ليلي / تلقائي (حسب الجهاز). مو ثيم */
 export type Mode = "light" | "dark" | "system";
 /** الثيم = شكل التطبيق. هسه بس الأساسي، والثيمات الثانية تنضاف بعدين */
 export type Theme = "default";
 /** أنا: نفس User + إعداداتي الخاصة */
-export type Me = User & { mode: Mode; theme: Theme };
+export type Me = User & { mode: Mode; theme: Theme; email: string; university_id: string };
 
 export type MessageKind = "text" | "image" | "video" | "voice" | "file" | "location" | "system" | "call";
 /** sent = ✓ ، delivered = ✓✓ رمادي ، read = ✓✓ أزرق */
@@ -108,13 +113,23 @@ export type Call = {
   ice_servers?: RTCIceServer[];
 };
 
-export function getToken() {
-  return typeof window === "undefined" ? null : localStorage.getItem("token");
+/**
+ * وين نحفظ الدخول: "تذكرني" = localStorage (يبقى حتى لو سديت المتصفح)،
+ * وبدونها sessionStorage (ينمسح لما تسد المتصفح).
+ */
+function sessionStore(): Storage {
+  return sessionStorage.getItem("token") ? sessionStorage : localStorage;
 }
 
-export function saveSession(token: string, user: User) {
-  localStorage.setItem("token", token);
-  localStorage.setItem("user", JSON.stringify(user));
+export function getToken() {
+  return typeof window === "undefined" ? null : sessionStore().getItem("token");
+}
+
+export function saveSession(token: string, user: User, remember = true) {
+  logout();
+  const store = remember ? localStorage : sessionStorage;
+  store.setItem("token", token);
+  store.setItem("user", JSON.stringify(user));
 }
 
 // الصور تنخدم من سيرفر الـ Backend، فنضيف عنوانه على المسار
@@ -123,17 +138,19 @@ export function mediaUrl(path: string | null) {
 }
 
 export function saveMe(user: User) {
-  localStorage.setItem("user", JSON.stringify(user));
+  sessionStore().setItem("user", JSON.stringify(user));
 }
 
 export function getMe(): User | null {
-  const raw = typeof window === "undefined" ? null : localStorage.getItem("user");
+  const raw = typeof window === "undefined" ? null : sessionStore().getItem("user");
   return raw ? (JSON.parse(raw) as User) : null;
 }
 
 export function logout() {
-  localStorage.removeItem("token");
-  localStorage.removeItem("user");
+  for (const store of [localStorage, sessionStorage]) {
+    store.removeItem("token");
+    store.removeItem("user");
+  }
 }
 
 export class ApiError extends Error {

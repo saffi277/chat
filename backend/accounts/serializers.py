@@ -20,11 +20,12 @@ class UserSerializer(serializers.ModelSerializer):
     city = serializers.SerializerMethodField()
     is_online = serializers.SerializerMethodField()
     last_seen = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = ['id', 'username', 'display_name', 'avatar', 'bio', 'phone', 'city',
-                  'is_online', 'last_seen', 'date_joined']
+                  'is_online', 'last_seen', 'date_joined', 'role']
 
     def get_display_name(self, user):
         return profile_of(user).display_name or user.username
@@ -46,6 +47,9 @@ class UserSerializer(serializers.ModelSerializer):
     def get_is_online(self, user):
         return profile_of(user).is_online
 
+    def get_role(self, user):
+        return profile_of(user).role
+
     def get_last_seen(self, user):
         last_seen = profile_of(user).last_seen
         return last_seen.isoformat() if last_seen else None
@@ -56,9 +60,14 @@ class MeSerializer(UserSerializer):
 
     mode = serializers.SerializerMethodField()
     theme = serializers.SerializerMethodField()
+    university_id = serializers.SerializerMethodField()
 
     class Meta(UserSerializer.Meta):
-        fields = UserSerializer.Meta.fields + ['mode', 'theme']
+        # البريد والرقم الجامعي خاصين: يطلعن إلي بس، مو للناس
+        fields = UserSerializer.Meta.fields + ['mode', 'theme', 'email', 'university_id']
+
+    def get_university_id(self, user):
+        return profile_of(user).university_id
 
     def get_mode(self, user):
         return profile_of(user).mode
@@ -70,16 +79,33 @@ class MeSerializer(UserSerializer):
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
     display_name = serializers.CharField(write_only=True, required=False, allow_blank=True, max_length=50)
+    role = serializers.ChoiceField(choices=Profile.ROLES, default=Profile.STUDENT, write_only=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    university_id = serializers.CharField(write_only=True, required=False, allow_blank=True, max_length=30)
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'password', 'display_name']
+        fields = ['id', 'username', 'password', 'display_name', 'role', 'email', 'university_id']
+
+    def validate_email(self, value):
+        value = value.strip().lower()
+        if value and User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError('هذا البريد مسجل بحساب ثاني')
+        return value
+
+    def validate_university_id(self, value):
+        value = value.strip()
+        if value and Profile.objects.filter(university_id__iexact=value).exists():
+            raise serializers.ValidationError('هذا الرقم الجامعي مسجل بحساب ثاني')
+        return value
 
     def create(self, validated_data):
         display_name = validated_data.pop('display_name', '').strip()
+        role = validated_data.pop('role', Profile.STUDENT)
+        university_id = validated_data.pop('university_id', '')
         # create_user يشفّر (hash) الباسورد، ما نخزنه نص عادي أبداً
         user = User.objects.create_user(**validated_data)
-        Profile.objects.create(user=user, display_name=display_name)
+        Profile.objects.create(user=user, display_name=display_name, role=role, university_id=university_id)
         return user
 
 

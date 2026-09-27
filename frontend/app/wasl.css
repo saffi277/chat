@@ -130,3 +130,67 @@
 /* خلفية الخريطة إذا الصور ما حملت (نت ضعيف) */
 .w-map { background-color: #dfe9e4; background-image: linear-gradient(#c9d8d1 1px, transparent 1px), linear-gradient(90deg, #c9d8d1 1px, transparent 1px); background-size: 32px 32px; }
 .wasl[data-theme="dark"] .w-map { background-color: #16232b; background-image: linear-gradient(#22333d 1px, transparent 1px), linear-gradient(90deg, #22333d 1px, transparent 1px); }
+
+/* ================= بوابة الدخول (كلية الأسباط الجامعة) ================= */
+.portal {
+  color: var(--p-text);
+  background: var(--p-bg);
+}
+.portal[data-theme="light"] {
+  --p-bg: radial-gradient(1200px 600px at 100% 0%, #fbfaf6, transparent), radial-gradient(900px 700px at 0% 100%, #f1ede2, transparent), #f7f5ef;
+  --p-page: #f7f5ef;
+  --p-card: #ffffff;
+  --p-card-border: #ece8de;
+  --p-card-shadow: 0 30px 70px rgba(40, 52, 40, .12);
+  --p-text: #14261f;
+  --p-muted: #6a746f;
+  --p-green: #0f5c45;
+  --p-green-2: #0b4535;
+  --p-btn: linear-gradient(180deg, #13654c, #0d5040);
+  --p-gold: #c29a4e;
+  --p-input: #ffffff;
+  --p-input-border: #e3e0d7;
+  --p-seg: #f2f0ea;
+  --p-seg-line: #e2ded4;
+  --p-soft: #f6f4ee;
+  --p-feature: #efe7d6;
+  --p-feature-icon: #9a7534;
+}
+.portal[data-theme="dark"] {
+  --p-bg: radial-gradient(900px 600px at 100% 0%, rgba(38, 92, 72, .35), transparent), radial-gradient(900px 700px at 0% 100%, rgba(20, 60, 48, .5), transparent), #0a1c17;
+  --p-page: #0a1c17;
+  --p-card: rgba(22, 44, 37, .78);
+  --p-card-border: rgba(255, 255, 255, .09);
+  --p-card-shadow: 0 30px 80px rgba(0, 0, 0, .5);
+  --p-text: #eef3ef;
+  --p-muted: #a3b2ab;
+  --p-green: #1f8a66;
+  --p-green-2: #d8b56b;
+  --p-btn: linear-gradient(180deg, #1c7d5d, #10604a);
+  --p-gold: #d8b56b;
+  --p-input: rgba(255, 255, 255, .03);
+  --p-input-border: rgba(255, 255, 255, .13);
+  --p-seg: rgba(255, 255, 255, .03);
+  --p-seg-line: rgba(255, 255, 255, .12);
+  --p-soft: rgba(255, 255, 255, .04);
+  --p-feature: rgba(216, 181, 107, .14);
+  --p-feature-icon: #d8b56b;
+}
+.p-card { background: var(--p-card); border: 1px solid var(--p-card-border); box-shadow: var(--p-card-shadow); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+.p-muted { color: var(--p-muted); }
+.p-green { color: var(--p-green); }
+.p-gold { color: var(--p-gold); }
+.p-field { background: var(--p-input); border: 1px solid var(--p-input-border); color: var(--p-text); transition: border-color .15s, box-shadow .15s; }
+.p-field:focus-within { border-color: var(--p-green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-green) 18%, transparent); }
+.p-field input, .p-field select { background: transparent; color: var(--p-text); outline: none; }
+.p-field input::placeholder { color: var(--p-muted); }
+.p-btn { background: var(--p-btn); color: #fff; box-shadow: 0 10px 24px color-mix(in srgb, var(--p-green) 35%, transparent); }
+.p-seg { background: var(--p-seg); border: 1px solid var(--p-seg-line); }
+.p-seg > button + button { border-inline-start: 1px solid var(--p-seg-line); }
+.p-seg > button[aria-pressed="true"] { background: var(--p-btn); color: #fff; border-color: transparent; border-radius: 10px; }
+.p-soft { background: var(--p-soft); border: 1px solid var(--p-card-border); }
+.p-feature { background: var(--p-feature); color: var(--p-feature-icon); }
+.p-link { color: var(--p-green); text-decoration: underline; text-underline-offset: 4px; text-decoration-color: color-mix(in srgb, var(--p-green) 45%, transparent); }
+.portal[data-theme="dark"] .p-link { color: var(--p-gold); text-decoration-color: color-mix(in srgb, var(--p-gold) 45%, transparent); }
+.portal[data-theme="dark"] .p-title-accent { color: var(--p-gold); }
+.p-checkbox { accent-color: var(--p-green); }

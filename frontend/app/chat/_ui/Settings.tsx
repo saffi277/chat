@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import type { Mode } from "@/lib/api";
+import { ROLE_LABELS, type Mode } from "@/lib/api";
 import { auth } from "@/lib/endpoints";
 import { disablePush, enablePush, getPushState, type PushState } from "@/lib/push";
 import { Avatar, nameOf, Section, Toggle } from "./bits";
@@ -48,6 +48,10 @@ export function SettingsView() {
           <div className="min-w-0 flex-1">
             <div className="truncate text-lg font-extrabold">{nameOf(me)}</div>
             <div className="w-muted truncate text-sm" dir="ltr">@{me.username}</div>
+            <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] font-bold">
+              <span className="w-tint rounded-full px-2 py-0.5">{ROLE_LABELS[me.role] ?? me.role}</span>
+              {me.university_id && <span className="w-tint rounded-full px-2 py-0.5" dir="ltr">{me.university_id}</span>}
+            </div>
             {me.avatar && <button onClick={() => run(() => auth.setAvatar(null))} className="mt-1 text-xs font-bold" style={{ color: "var(--danger)" }}>حذف الصورة</button>}
           </div>
         </div>
