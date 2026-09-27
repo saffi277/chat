@@ -15,12 +15,16 @@ def profile_of(user):
 class UserSerializer(serializers.ModelSerializer):
     display_name = serializers.SerializerMethodField()
     avatar = serializers.SerializerMethodField()
+    bio = serializers.SerializerMethodField()
+    phone = serializers.SerializerMethodField()
+    city = serializers.SerializerMethodField()
     is_online = serializers.SerializerMethodField()
     last_seen = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'display_name', 'avatar', 'is_online', 'last_seen', 'date_joined']
+        fields = ['id', 'username', 'display_name', 'avatar', 'bio', 'phone', 'city',
+                  'is_online', 'last_seen', 'date_joined']
 
     def get_display_name(self, user):
         return profile_of(user).display_name or user.username
@@ -30,12 +34,33 @@ class UserSerializer(serializers.ModelSerializer):
         avatar = profile_of(user).avatar
         return avatar.url if avatar else None
 
+    def get_bio(self, user):
+        return profile_of(user).bio
+
+    def get_phone(self, user):
+        return profile_of(user).phone
+
+    def get_city(self, user):
+        return profile_of(user).city
+
     def get_is_online(self, user):
         return profile_of(user).is_online
 
     def get_last_seen(self, user):
         last_seen = profile_of(user).last_seen
         return last_seen.isoformat() if last_seen else None
+
+
+class MeSerializer(UserSerializer):
+    """معلوماتي أنا: نفس المستخدم + إعداداتي الخاصة."""
+
+    theme = serializers.SerializerMethodField()
+
+    class Meta(UserSerializer.Meta):
+        fields = UserSerializer.Meta.fields + ['theme']
+
+    def get_theme(self, user):
+        return profile_of(user).theme
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -59,10 +84,16 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ['display_name', 'avatar']
+        fields = ['display_name', 'avatar', 'bio', 'phone', 'city', 'theme']
 
     def validate_display_name(self, value):
         return value.strip()
+
+    def validate_phone(self, value):
+        value = value.strip().replace(' ', '')
+        if value and not value.lstrip('+').isdigit():
+            raise serializers.ValidationError('رقم الهاتف أرقام بس (ويجوز + بالبداية)')
+        return value
 
     def validate_avatar(self, value):
         if value and value.size > 3 * 1024 * 1024:

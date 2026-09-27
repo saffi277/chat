@@ -154,6 +154,8 @@ if DEBUG:
 # الملفات اللي يرفعها المستخدمين (الصور الشخصية)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+# أكبر ملف نقبله بالطلب (الفيديو 50 ميگا + شوية)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 60 * 1024 * 1024
 
 # إشعارات Push: وسيلة تواصل وياك تنطيها لخدمات الإشعارات (Google/Apple) إذا صار مشكلة
 VAPID_CONTACT = 'mailto:admin@wasl.local'

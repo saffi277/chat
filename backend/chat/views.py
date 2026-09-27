@@ -1,63 +1,352 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
-from django.db.models import Max
+from django.db.models import Count, Max, Q
+from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
-from .models import Conversation
-from .serializers import ConversationSerializer, MessageSerializer
-from .services import broadcast, create_message
+from accounts.serializers import profile_of
+
+from . import services
+from .media import guess_kind, validate_upload
+from .models import Conversation, Membership, Message
+from .serializers import ConversationSerializer, MemberSerializer, MessageSerializer
 
 User = get_user_model()
+PAGE = 50
 
 
-def my_conversation(request, pk):
-    # نتأكد أن المستخدم مشارك بالمحادثة، وإلا 404 (ما نكشف وجودها)
-    return get_object_or_404(Conversation, pk=pk, participants=request.user)
+def name_of(user):
+    return profile_of(user).display_name or user.username
 
+
+def my_membership(request, pk):
+    # نتأكد أن المستخدم عضو بالمحادثة، وإلا 404 (ما نكشف وجودها)
+    return get_object_or_404(Membership.objects.select_related('conversation'), conversation_id=pk, user=request.user)
+
+
+def require_admin(membership):
+    if membership.conversation.kind != Conversation.GROUP or membership.role != Membership.ADMIN:
+        raise PermissionDenied('بس المشرف يكدر يسوي هذا')
+
+
+def conv_data(request, conv):
+    return ConversationSerializer(conv, context={'request': request}).data
+
+
+# ------------------------------------------------------------------ المحادثات
 
 @api_view(['GET', 'POST'])
 def conversations(request):
     if request.method == 'GET':
-        qs = (request.user.conversations.prefetch_related('participants__profile')
-              .annotate(last=Max('messages__created_at')).order_by('-last', '-created_at'))
-        return Response(ConversationSerializer(qs, many=True, context={'request': request}).data)
+        # ?filter=all|groups|favorites|unread|archived  و  ?q=نص للبحث
+        f = request.query_params.get('filter', 'all')
+        mine = Membership.objects.filter(user=request.user)
+        qs = Conversation.objects.filter(memberships__in=mine.filter(is_archived=(f == 'archived')))
+        if f == 'groups':
+            qs = qs.filter(kind=Conversation.GROUP)
+        elif f == 'favorites':
+            qs = qs.filter(memberships__in=mine.filter(is_favorite=True))
+        q = request.query_params.get('q', '').strip()
+        if q:
+            qs = qs.filter(
+                Q(title__icontains=q) | Q(memberships__user__username__icontains=q)
+                | Q(memberships__user__profile__display_name__icontains=q)).distinct()
+        qs = qs.annotate(last=Coalesce(Max('messages__created_at'), 'created_at')).order_by('-last')
+        data = ConversationSerializer(qs, many=True, context={'request': request}).data
+        if f == 'unread':
+            data = [c for c in data if c['unread_count']]
+        return Response(data)
 
-    # POST {"user_id": 5} → نرجع المحادثة الموجودة أو ننشئ وحدة جديدة
+    # POST {"user_id": 5} → نرجع المحادثة الثنائية الموجودة أو ننشئ وحدة جديدة
     other = get_object_or_404(User, pk=request.data.get('user_id'))
     if other == request.user:
-        return Response({'detail': 'ما تكدر تحچي ويا نفسك'}, status=status.HTTP_400_BAD_REQUEST)
-    # filter مرتين = JOIN مرتين: محادثة فيها أنا وفيها هو
-    conv = Conversation.objects.filter(participants=request.user).filter(participants=other).first()
+        return Response({'detail': 'للرسائل لنفسك استخدم الرسائل المحفوظة'}, status=status.HTTP_400_BAD_REQUEST)
+    # filter مرتين = JOIN مرتين: محادثة ثنائية فيها أنا وفيها هو
+    conv = (Conversation.objects.filter(kind=Conversation.DIRECT)
+            .filter(memberships__user=request.user).filter(memberships__user=other).first())
     created = conv is None
     if created:
-        conv = Conversation.objects.create()
-        conv.participants.add(request.user, other)
-    data = ConversationSerializer(conv, context={'request': request}).data
-    return Response(data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+        conv = Conversation.objects.create(kind=Conversation.DIRECT, created_by=request.user)
+        Membership.objects.bulk_create([Membership(conversation=conv, user=u) for u in (request.user, other)])
+    return Response(conv_data(request, conv), status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+def saved(request):
+    """الرسائل المحفوظة: محادثة بيك وحدك، تحفظ بيها أي شي."""
+    conv = Conversation.objects.filter(kind=Conversation.SAVED, memberships__user=request.user).first()
+    if not conv:
+        conv = Conversation.objects.create(kind=Conversation.SAVED, created_by=request.user)
+        Membership.objects.create(conversation=conv, user=request.user, role=Membership.ADMIN)
+    return Response(conv_data(request, conv))
+
+
+@api_view(['POST'])
+def create_group(request):
+    """POST {title, member_ids: [..], description?} (+ avatar إذا multipart)"""
+    title = (request.data.get('title') or '').strip()
+    if not title:
+        raise ValidationError({'title': 'اسم المجموعة مطلوب'})
+    ids = request.data.getlist('member_ids') if hasattr(request.data, 'getlist') else request.data.get('member_ids', [])
+    members = list(User.objects.filter(id__in=ids).exclude(id=request.user.id))
+    conv = Conversation.objects.create(
+        kind=Conversation.GROUP, title=title[:80], created_by=request.user,
+        description=(request.data.get('description') or '')[:300], avatar=request.FILES.get('avatar'))
+    Membership.objects.create(conversation=conv, user=request.user, role=Membership.ADMIN)
+    Membership.objects.bulk_create([Membership(conversation=conv, user=u) for u in members])
+    services.system_message(conv, request.user, f'{name_of(request.user)} أنشأ المجموعة "{title}"')
+    return Response(conv_data(request, conv), status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET', 'PATCH', 'DELETE'])
+def conversation_detail(request, pk):
+    m = my_membership(request, pk)
+    conv = m.conversation
+    if request.method == 'GET':
+        return Response(conv_data(request, conv))
+
+    if request.method == 'DELETE':
+        # بالمجموعة = مغادرة. بالثنائية = أرشفة (ما نمسح رسائل الطرف الثاني)
+        if conv.kind == Conversation.GROUP:
+            leave_group(request.user, m, actor=request.user)
+        else:
+            Membership.objects.filter(pk=m.pk).update(is_archived=True)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    # PATCH: إعداداتي الخاصة (أي عضو)
+    prefs = {k: bool(request.data[k]) for k in ('is_favorite', 'is_muted', 'is_archived') if k in request.data}
+    if prefs:
+        Membership.objects.filter(pk=m.pk).update(**prefs)
+    # معلومات المجموعة (المشرف بس)
+    group_fields = [k for k in ('title', 'description', 'avatar') if k in request.data]
+    if group_fields:
+        require_admin(m)
+        if 'title' in request.data:
+            title = (request.data.get('title') or '').strip()
+            if not title:
+                raise ValidationError({'title': 'اسم المجموعة مطلوب'})
+            if title != conv.title:
+                services.system_message(conv, request.user, f'{name_of(request.user)} غيّر اسم المجموعة إلى "{title}"')
+            conv.title = title[:80]
+        if 'description' in request.data:
+            conv.description = (request.data.get('description') or '')[:300]
+        if 'avatar' in request.data:
+            if conv.avatar:
+                conv.avatar.delete(save=False)
+            conv.avatar = request.FILES.get('avatar')
+            if conv.avatar:
+                validate_upload(Message.IMAGE, conv.avatar)
+        conv.save()
+        services.send_to_users(services.member_ids(conv), {'type': 'conversation_updated', 'conversation_id': conv.id})
+    conv = Conversation.objects.get(pk=conv.pk)
+    return Response(conv_data(request, conv))
+
+
+# ------------------------------------------------------------------ أعضاء المجموعة
+
+def leave_group(user, membership, actor):
+    conv = membership.conversation
+    was_admin = membership.role == Membership.ADMIN
+    membership.delete()
+    text = f'{name_of(user)} غادر المجموعة' if actor == user else f'{name_of(actor)} أزال {name_of(user)}'
+    remaining = conv.memberships.order_by('joined_at', 'id')
+    if not remaining.exists():
+        conv.delete()  # آخر واحد طلع: المجموعة ما إلها داعي
+        return
+    services.system_message(conv, actor, text)
+    # إذا طلع آخر مشرف، أقدم عضو يصير مشرف
+    if was_admin and not remaining.filter(role=Membership.ADMIN).exists():
+        remaining.filter(pk=remaining.first().pk).update(role=Membership.ADMIN)
+    services.send_to_users([user.id, *services.member_ids(conv)], {'type': 'conversation_updated', 'conversation_id': conv.id})
 
 
 @api_view(['GET', 'POST'])
-def messages(request, pk):
-    conv = my_conversation(request, pk)
+def members(request, pk):
+    m = my_membership(request, pk)
+    conv = m.conversation
     if request.method == 'GET':
-        # SQL تقريباً: SELECT * FROM chat_message WHERE conversation_id = pk ORDER BY created_at
-        return Response(MessageSerializer(conv.messages.select_related('sender__profile'), many=True).data)
+        qs = conv.memberships.select_related('user__profile').order_by('-role', 'joined_at')
+        return Response(MemberSerializer(qs, many=True).data)
+    require_admin(m)
+    ids = request.data.get('user_ids') or []
+    existing = set(services.member_ids(conv))
+    new = list(User.objects.filter(id__in=ids).exclude(id__in=existing))
+    Membership.objects.bulk_create([Membership(conversation=conv, user=u) for u in new])
+    for u in new:
+        services.system_message(conv, request.user, f'{name_of(request.user)} أضاف {name_of(u)}')
+    services.send_to_users(services.member_ids(conv), {'type': 'conversation_updated', 'conversation_id': conv.id})
+    return Response(MemberSerializer(conv.memberships.select_related('user__profile'), many=True).data,
+                    status=status.HTTP_201_CREATED)
 
+
+@api_view(['PATCH', 'DELETE'])
+def member_detail(request, pk, user_id):
+    m = my_membership(request, pk)
+    target = get_object_or_404(Membership.objects.select_related('user__profile', 'conversation'),
+                               conversation_id=pk, user_id=user_id)
+    if request.method == 'DELETE':
+        if target.user_id != request.user.id:
+            require_admin(m)  # تطلع بنفسك، أو المشرف يطلعك
+        if m.conversation.kind != Conversation.GROUP:
+            raise ValidationError('هذي مو مجموعة')
+        leave_group(target.user, target, actor=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    require_admin(m)
+    role = request.data.get('role')
+    if role not in (Membership.ADMIN, Membership.MEMBER):
+        raise ValidationError({'role': 'admin أو member'})
+    target.role = role
+    target.save(update_fields=['role'])
+    return Response(MemberSerializer(target).data)
+
+
+# ------------------------------------------------------------------ الرسائل
+
+@api_view(['GET', 'POST'])
+def messages(request, pk):
+    m = my_membership(request, pk)
+    conv = m.conversation
+    if request.method == 'GET':
+        # آخر 50 رسالة. للأقدم: ?before=<id الرسالة الأقدم عندك>
+        qs = conv.messages.select_related('sender__profile', 'reply_to__sender__profile')
+        before = request.query_params.get('before')
+        if before:
+            qs = qs.filter(id__lt=before)
+        try:
+            limit = max(1, min(int(request.query_params.get('limit', PAGE)), 200))
+        except ValueError:
+            limit = PAGE
+        page = list(qs.order_by('-id')[:limit])[::-1]
+        receipts = services.receipts_for(conv)
+        return Response(MessageSerializer(page, many=True, context={'receipts': receipts}).data)
+    return Response(send_message(request, conv), status=status.HTTP_201_CREATED)
+
+
+def send_message(request, conv):
+    """
+    نص:      {"content": "هلو"}
+    ملف:     multipart: file=<الملف>, kind=image|video|voice|file (اختياري)، content=تعليق، duration=ثواني
+    موقع:    {"kind": "location", "latitude": .., "longitude": .., "live_minutes": 15|60|480 (اختياري)}
+    رد:      أضف "reply_to": <id>
+    """
+    data = request.data
+    content = (data.get('content') or '').strip()
+    upload = request.FILES.get('file')
+    kind = data.get('kind') or (guess_kind(upload) if upload else Message.TEXT)
+    fields = {'kind': kind}
+
+    reply_id = data.get('reply_to')
+    if reply_id:
+        fields['reply_to'] = get_object_or_404(Message, pk=reply_id, conversation=conv)
+
+    if kind == Message.TEXT:
+        if not content:
+            raise ValidationError({'content': 'الرسالة فارغة'})
+    elif kind == Message.LOCATION:
+        try:
+            lat, lng = float(data.get('latitude')), float(data.get('longitude'))
+        except (TypeError, ValueError):
+            raise ValidationError({'latitude': 'الإحداثيات مطلوبة'})
+        if not (-90 <= lat <= 90 and -180 <= lng <= 180):
+            raise ValidationError({'latitude': 'إحداثيات غلط'})
+        fields.update(latitude=lat, longitude=lng)
+        minutes = data.get('live_minutes')
+        if minutes:
+            minutes = int(minutes)
+            if not 1 <= minutes <= 8 * 60:
+                raise ValidationError({'live_minutes': 'من دقيقة لحد 8 ساعات'})
+            fields['live_until'] = timezone.now() + timedelta(minutes=minutes)
+    elif kind in (Message.IMAGE, Message.VIDEO, Message.VOICE, Message.FILE):
+        if not upload:
+            raise ValidationError({'file': 'الملف مطلوب'})
+        validate_upload(kind, upload)
+        fields.update(file=upload, file_name=upload.name[:255], file_size=upload.size)
+        if data.get('duration'):
+            fields['duration'] = float(data['duration'])
+    else:
+        raise ValidationError({'kind': 'نوع رسالة غير معروف'})
+    return services.create_message(conv, request.user, content, **fields)
+
+
+def my_message(request, message_id):
+    msg = get_object_or_404(Message.objects.select_related('conversation'), pk=message_id,
+                            conversation__memberships__user=request.user)
+    if msg.sender_id != request.user.id:
+        raise PermissionDenied('هذي مو رسالتك')
+    if msg.deleted_at:
+        raise ValidationError('الرسالة محذوفة')
+    return msg
+
+
+@api_view(['PATCH', 'DELETE'])
+def message_detail(request, message_id):
+    """PATCH {"content": "..."} تعديل (النص بس) — DELETE حذف للكل."""
+    msg = my_message(request, message_id)
+    if request.method == 'DELETE':
+        services.soft_delete(msg)
+        return Response(status=status.HTTP_204_NO_CONTENT)
     content = (request.data.get('content') or '').strip()
-    if not content:
-        return Response({'detail': 'الرسالة فارغة'}, status=status.HTTP_400_BAD_REQUEST)
-    data = create_message(conv, request.user, content)
-    broadcast(conv.id, {'type': 'message', 'message': data})
-    return Response(data, status=status.HTTP_201_CREATED)
+    if msg.kind not in (Message.TEXT, Message.IMAGE, Message.VIDEO, Message.FILE):
+        raise ValidationError('هذا النوع ما يتعدل')
+    if msg.kind == Message.TEXT and not content:
+        raise ValidationError({'content': 'الرسالة فارغة'})
+    msg.content = content
+    msg.edited_at = timezone.now()
+    msg.save(update_fields=['content', 'edited_at'])
+    return Response(services.message_changed(msg))
+
+
+@api_view(['PATCH'])
+def live_location(request, message_id):
+    """الموقع المباشر: {"latitude", "longitude"} تحديث، أو {"stop": true} إيقاف."""
+    msg = my_message(request, message_id)
+    if msg.kind != Message.LOCATION or not msg.is_live:
+        raise ValidationError('هذا مو موقع مباشر شغال')
+    if request.data.get('stop'):
+        msg.live_until = timezone.now()
+    else:
+        try:
+            msg.latitude, msg.longitude = float(request.data['latitude']), float(request.data['longitude'])
+        except (KeyError, TypeError, ValueError):
+            raise ValidationError({'latitude': 'الإحداثيات مطلوبة'})
+    msg.save(update_fields=['latitude', 'longitude', 'live_until'])
+    return Response(services.message_changed(msg))
 
 
 @api_view(['PATCH'])
 def mark_read(request, pk):
-    """PATCH: نعلّم كل رسائل الطرف الثاني بهاي المحادثة كمقروءة."""
-    conv = my_conversation(request, pk)
-    count = conv.messages.filter(is_read=False).exclude(sender=request.user).update(is_read=True)
-    if count:
-        broadcast(conv.id, {'type': 'read', 'reader_id': request.user.id})
-    return Response({'updated': count})
+    """PATCH: فتحت المحادثة، فكل اللي بيها صار مقروء."""
+    m = my_membership(request, pk)
+    return Response({'updated': services.mark_read(m.conversation, request.user)})
+
+
+MEDIA_TYPES = {
+    'image': Q(kind=Message.IMAGE),
+    'video': Q(kind=Message.VIDEO),
+    'media': Q(kind__in=[Message.IMAGE, Message.VIDEO]),
+    'voice': Q(kind=Message.VOICE),
+    'file': Q(kind=Message.FILE),
+    'link': Q(kind=Message.TEXT, content__icontains='http'),
+    'location': Q(kind=Message.LOCATION),
+}
+
+
+@api_view(['GET'])
+def shared_media(request, pk):
+    """الوسائط المشتركة: ?type=media|image|video|voice|file|link|location و ?before=<id>"""
+    m = my_membership(request, pk)
+    base = m.conversation.messages.filter(deleted_at__isnull=True)
+    counts = base.aggregate(**{k: Count('id', filter=q) for k, q in MEDIA_TYPES.items()})
+    kind = request.query_params.get('type', 'media')
+    if kind not in MEDIA_TYPES:
+        raise ValidationError({'type': 'نوع غير معروف'})
+    qs = base.filter(MEDIA_TYPES[kind]).select_related('sender__profile').order_by('-id')
+    if request.query_params.get('before'):
+        qs = qs.filter(id__lt=request.query_params['before'])
+    return Response({'counts': counts, 'results': MessageSerializer(qs[:60], many=True).data})

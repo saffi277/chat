@@ -2,31 +2,148 @@ from rest_framework import serializers
 
 from accounts.serializers import UserSerializer
 
-from .models import Conversation, Message
+from .models import Conversation, Membership, Message
+
+
+def message_status(message, receipts):
+    """
+    ✓ sent: وصل للسيرفر   ✓✓ delivered: وصل لأجهزة الكل   ✓✓ أزرق read: الكل قرأوه
+    receipts = قائمة {user_id, last_delivered_id, last_read_id} لكل الأعضاء
+    """
+    if receipts is None:
+        return 'read' if message.is_read else 'sent'
+    others = [r for r in receipts if r['user_id'] != message.sender_id]
+    if not others:  # الرسائل المحفوظة
+        return 'read'
+    if all(r['last_read_id'] >= message.id for r in others):
+        return 'read'
+    if all(r['last_delivered_id'] >= message.id for r in others):
+        return 'delivered'
+    return 'sent'
+
+
+class ReplySerializer(serializers.ModelSerializer):
+    """نسخة مختصرة من الرسالة اللي ردينا عليها (تطلع فوك الرد)."""
+
+    sender_name = serializers.SerializerMethodField()
+    preview = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Message
+        fields = ['id', 'kind', 'sender_id', 'sender_name', 'preview']
+
+    def get_sender_name(self, obj):
+        profile = getattr(obj.sender, 'profile', None)
+        return (profile.display_name if profile and profile.display_name else obj.sender.username)
+
+    def get_preview(self, obj):
+        from .services import preview_text
+        return preview_text(obj)[:120]
 
 
 class MessageSerializer(serializers.ModelSerializer):
     sender = UserSerializer(read_only=True)
+    file_url = serializers.SerializerMethodField()
+    reply_to = ReplySerializer(read_only=True)
+    is_live = serializers.BooleanField(read_only=True)
+    is_deleted = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    is_read = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
-        fields = ['id', 'conversation', 'sender', 'content', 'created_at', 'is_read']
-        read_only_fields = ['conversation', 'is_read']
+        fields = ['id', 'conversation', 'sender', 'kind', 'content', 'file_url', 'file_name', 'file_size',
+                  'duration', 'latitude', 'longitude', 'live_until', 'is_live', 'reply_to',
+                  'created_at', 'edited_at', 'is_deleted', 'status', 'is_read']
+
+    def get_file_url(self, obj):
+        return obj.file.url if obj.file else None
+
+    def get_is_deleted(self, obj):
+        return obj.deleted_at is not None
+
+    def get_status(self, obj):
+        return message_status(obj, self.context.get('receipts'))
+
+    def get_is_read(self, obj):
+        return self.get_status(obj) == 'read'
+
+
+class MemberSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+
+    class Meta:
+        model = Membership
+        fields = ['user', 'role', 'joined_at']
 
 
 class ConversationSerializer(serializers.ModelSerializer):
-    participants = UserSerializer(many=True, read_only=True)
+    participants = serializers.SerializerMethodField()
+    title = serializers.SerializerMethodField()
+    avatar = serializers.SerializerMethodField()
+    member_count = serializers.SerializerMethodField()
+    my_role = serializers.SerializerMethodField()
+    is_favorite = serializers.SerializerMethodField()
+    is_muted = serializers.SerializerMethodField()
+    is_archived = serializers.SerializerMethodField()
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
-        fields = ['id', 'participants', 'created_at', 'last_message', 'unread_count']
+        fields = ['id', 'kind', 'title', 'description', 'avatar', 'participants', 'member_count', 'my_role',
+                  'is_favorite', 'is_muted', 'is_archived', 'last_message', 'unread_count', 'created_at']
+
+    def _memberships(self, obj):
+        # نحفظها على الكائن حتى ما نسأل الداتابيس كل مرة
+        if not hasattr(obj, '_members_cache'):
+            obj._members_cache = list(obj.memberships.select_related('user__profile').order_by('joined_at', 'id'))
+        return obj._members_cache
+
+    def _mine(self, obj):
+        me = self.context['request'].user
+        return next((m for m in self._memberships(obj) if m.user_id == me.id), None)
+
+    def get_participants(self, obj):
+        return UserSerializer([m.user for m in self._memberships(obj)], many=True).data
+
+    def get_title(self, obj):
+        if obj.kind == Conversation.SAVED:
+            return 'الرسائل المحفوظة'
+        return obj.title  # بالمحادثة الثنائية فارغ: الواجهة تعرض اسم الطرف الثاني
+
+    def get_avatar(self, obj):
+        return obj.avatar.url if obj.avatar else None
+
+    def get_member_count(self, obj):
+        return len(self._memberships(obj))
+
+    def get_my_role(self, obj):
+        mine = self._mine(obj)
+        return mine.role if mine else None
+
+    def get_is_favorite(self, obj):
+        mine = self._mine(obj)
+        return bool(mine and mine.is_favorite)
+
+    def get_is_muted(self, obj):
+        mine = self._mine(obj)
+        return bool(mine and mine.is_muted)
+
+    def get_is_archived(self, obj):
+        mine = self._mine(obj)
+        return bool(mine and mine.is_archived)
 
     def get_last_message(self, obj):
-        msg = obj.messages.order_by('-created_at').first()
-        return MessageSerializer(msg).data if msg else None
+        msg = obj.messages.select_related('sender__profile', 'reply_to').order_by('-id').first()
+        if not msg:
+            return None
+        receipts = [{'user_id': m.user_id, 'last_delivered_id': m.last_delivered_id, 'last_read_id': m.last_read_id}
+                    for m in self._memberships(obj)]
+        return MessageSerializer(msg, context={'receipts': receipts}).data
 
     def get_unread_count(self, obj):
-        me = self.context['request'].user
-        return obj.messages.filter(is_read=False).exclude(sender=me).count()
+        mine = self._mine(obj)
+        if not mine:
+            return 0
+        return obj.messages.filter(id__gt=mine.last_read_id).exclude(sender_id=mine.user_id).count()
