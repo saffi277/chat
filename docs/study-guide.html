@@ -120,6 +120,7 @@
     <li><a href="#s13">Git و Branch</a></li>
     <li><a href="#s14">تشغيل التطبيق وتصليح الأخطاء 🛠️</a></li>
     <li><a href="#s15">وين كل شي بالكود</a></li>
+    <li><a href="#s16">المرحلة 1 من الداخل 🚀</a></li>
     <li><a href="#final">الاختبار النهائي</a></li>
   </ol>
 </section>
@@ -130,7 +131,7 @@
     <tr><th>اليوم</th><th>شنو تسوي</th></tr>
     <tr><td><b>اليوم 1</b></td><td>الأقسام 1 إلى 7: الصورة الكبيرة، التقنيات، JSON، HTTP، أرقام الحالة، Methods، API و Token. جاوب أسئلة كل قسم.</td></tr>
     <tr><td><b>اليوم 2</b></td><td>الأقسام 8 إلى 14: Database، SQL، المفاتيح، WebSocket، Channels، Git، وتصليح الأخطاء. بآخر اليوم سوّي <b>الاختبار النهائي</b>.</td></tr>
-    <tr><td><b>اليوم 3</b></td><td>نفتح الكود سوه (القسم 15) ونطبق كل مفهوم على ملفه، ونكمل تشغيل التطبيق على جهازك.</td></tr>
+    <tr><td><b>اليوم 3</b></td><td>نفتح الكود سوه (القسم 15) ونطبق كل مفهوم على ملفه. وبعدها القسم 16 (الميزات الجديدة).</td></tr>
   </table></div>
   <p>📌 لا تستعجل. قسم ينفهم زين أحسن من ثلاثة تنقرا بسرعة.</p>
 </section>
@@ -809,8 +810,110 @@ daphne -p 8000 config.asgi:application</code></pre>
     <tr><td>WebSocket و Groups (Consumer)</td><td><code>backend/chat/consumers.py</code></td></tr>
     <tr><td>توزيع HTTP و WebSocket</td><td><code>backend/config/asgi.py</code></td></tr>
     <tr><td>الـ Token والإعدادات</td><td><code>backend/config/settings.py</code></td></tr>
+    <tr><td>الملف الشخصي (الاسم والصورة)</td><td><code>backend/accounts/models.py</code> و <code>frontend/app/chat/ui.tsx</code></td></tr>
+    <tr><td>إشعارات Push (الباك اند)</td><td><code>backend/notifications/</code></td></tr>
+    <tr><td>إشعارات Push (الفرونت اند)</td><td><code>frontend/lib/push.ts</code> و <code>frontend/public/sw.js</code></td></tr>
+    <tr><td>إعادة الاتصال</td><td><code>frontend/lib/socket.ts</code></td></tr>
+    <tr><td>تطبيق الشاشة الرئيسية (PWA)</td><td><code>frontend/app/manifest.ts</code></td></tr>
   </table></div>
   <p>💡 <b>تمرين بعد الجلسة:</b> تكتب بإيدك ميزة <b>حذف رسالة</b> (DELETE). تمر على كل المفاهيم: Method، URL، View، SQL، رقم حالة، وتبثها بالـ WebSocket.</p>
+</section>
+
+<!-- ============ 16 ============ -->
+<section class="card lesson" id="s16">
+  <span class="badge">القسم 16</span>
+  <h2>🚀 المرحلة 1 من الداخل: شلون تشتغل الميزات الجديدة</h2>
+  <p>ضفنا ميزات حتى التطبيق يصير أقرب لواتساب. هنا نشرح كل وحدة شلون تشتغل من الداخل، وبنفس المفاهيم اللي تعلمتها.</p>
+
+  <h3>1. الاسم الظاهر مقابل اسم المستخدم</h3>
+  <div class="table-wrap"><table>
+    <tr><th></th><th><code>username</code></th><th><code>display_name</code></th></tr>
+    <tr><td>شغلته</td><td>للدخول بس</td><td>اللي يشوفه الناس</td></tr>
+    <tr><td>يقبل فراغ وعربي؟</td><td>لا</td><td>إي ("مصطفى محمد")</td></tr>
+    <tr><td>يتغير؟</td><td>لا</td><td>إي، من "ملفي الشخصي"</td></tr>
+    <tr><td>وين ينحفظ</td><td>جدول <code>auth_user</code></td><td>جدول <code>accounts_profile</code> (عمود جديد)</td></tr>
+  </table></div>
+  <p>ضفنا عمود جديد للجدول، فسوينا <b>Migration</b>: ملف يگول للداتابيس "ضيف هذا العمود". وهذا ليش لازم <code>python manage.py migrate</code> بعد التحديث.</p>
+
+  <h3>2. رفع الصورة الشخصية</h3>
+  <p>الصورة <b>مو نص</b>، فما تنرسل بـ JSON. تنرسل بصيغة اسمها <b>multipart/form-data</b> (نفس اللي تستخدمه أي خانة "اختر ملف").</p>
+  <div class="flow">Browser (FormData) → PATCH /api/auth/me/ → Django يتأكد إنها صورة (Pillow) → media/avatars/x.png</div>
+  <ul>
+    <li><b>الملف نفسه</b> ينحفظ بفولدر <code>backend/media/avatars/</code>.</li>
+    <li><b>الداتابيس</b> تحفظ بس المسار (<code>avatars/x.png</code>)، مو الصورة.</li>
+    <li><b>Pillow</b> مكتبة تفتح الصورة وتتأكد إنها صورة حقيقية، مو ملف ثاني متنكر.</li>
+    <li>حددنا الحجم بـ 3 ميگا، ولما تتبدل الصورة نمسح القديمة حتى ما تتكدس.</li>
+  </ul>
+  <div class="interview">"الصور تنرسل بـ multipart/form-data، و Django يحفظ الملف بـ MEDIA_ROOT والداتابيس تحفظ مساره بس. أتأكد إنها صورة حقيقية بـ Pillow، وأحدد الحجم."</div>
+
+  <h3>3. إعادة الاتصال (Reconnect)</h3>
+  <p>الـ WebSocket اتصال مفتوح، بس ممكن ينقطع: النت يطفى، الموبايل ينام، أو السيرفر يرجع يشتغل. قبل، الشات جان يوكف. هسه:</p>
+  <ol>
+    <li>لما ينقطع، يطلع بالهيدر <b>"جاري الاتصال..."</b>.</li>
+    <li>يحاول يرجع يتصل بعد <b>1 ثانية، بعدين 2، 4، 8...</b> لحد 30 ثانية. هذا اسمه <b>Exponential Backoff</b>: ما نضغط على السيرفر بآلاف المحاولات مرة وحدة.</li>
+    <li>لما يرجع، يجيب الرسائل بـ <b>HTTP</b> حتى ما يفوته شي صار وهو منقطع.</li>
+    <li>وإذا دزيت رسالة والاتصال مقطوع، تنرسل بـ <b>HTTP POST</b> بدل الـ WebSocket.</li>
+  </ol>
+  <p>جربناها: طفينا السيرفر، وطلع "جاري الاتصال..."، ورجعناه، والرسالة وصلت.</p>
+
+  <h3>4. الموبايل</h3>
+  <div class="table-wrap"><table>
+    <tr><th>المشكلة</th><th>الحل</th></tr>
+    <tr><td>شريط المتصفح بالموبايل يغطي أسفل الصفحة</td><td><code>h-dvh</code> (ارتفاع الشاشة الحقيقي) بدل <code>h-full</code></td></tr>
+    <tr><td>النوتش والشريط السفلي بالآيفون</td><td><code>env(safe-area-inset-*)</code>: مسافة آمنة</td></tr>
+    <tr><td>الآيفون يكبّر الصفحة لما تضغط خانة الكتابة</td><td>خط 16px بالخانات</td></tr>
+    <tr><td>الكيبورد يغطي خانة الكتابة</td><td><code>interactiveWidget: "resizes-content"</code></td></tr>
+    <tr><td>أزرار صغيرة صعب تنضغط بالإصبع</td><td>أقل حجم 44px</td></tr>
+  </table></div>
+
+  <h3>5. PWA: تطبيق على الشاشة الرئيسية</h3>
+  <p><b>PWA</b> (Progressive Web App) = موقع يتصرف مثل تطبيق: ينضاف للشاشة الرئيسية بأيقونة، ويفتح بدون شريط المتصفح، ويستلم إشعارات. يحتاج شغلتين:</p>
+  <ul>
+    <li><b>Manifest</b> (<code>app/manifest.ts</code>): بطاقة تعريف التطبيق. الاسم "وَصل"، الأيقونة، الألوان، ويفتح على <code>/chat</code>.</li>
+    <li><b>Service Worker</b> (<code>public/sw.js</code>): سكربت يشتغل <b>بالخلفية</b> حتى لو الصفحة مسدودة.</li>
+  </ul>
+  <div class="analogy">📱 الـ Manifest = <b>هوية</b> التطبيق. والـ Service Worker = <b>حارس</b> يبقى صاحي بالخلفية ويستلم الإشعارات حتى لو إنت نايم.</div>
+
+  <h3>6. إشعارات Push: الرحلة الكاملة</h3>
+  <p>الإشعار ما يوصل من سيرفرنا للموبايل مباشرة. يمر من <b>خدمة الإشعارات</b> مال شركة المتصفح (Google لـ Chrome، Apple لـ Safari، Mozilla لـ Firefox).</p>
+  <p><b>أولاً: الاشتراك</b> (مرة وحدة، لما تضغط "تفعيل"):</p>
+  <ol>
+    <li>المتصفح يطلب <b>إذنك</b>.</li>
+    <li>ياخذ <b>المفتاح العام</b> مال سيرفرنا من <code>GET /api/push/key/</code>.</li>
+    <li>يروح لشركته ويسوي <b>"عنوان"</b> خاص بجهازك (endpoint).</li>
+    <li>ندز العنوان للباك اند بـ <code>POST /api/push/subscribe/</code>، ونحفظه بجدول <code>PushSubscription</code>.</li>
+  </ol>
+  <p><b>ثانياً: الإرسال</b> (بكل رسالة جديدة):</p>
+  <div class="flow">Ali sends → create_message() → pywebpush → Google/Apple push service → Sara's Service Worker → notification 🔔</div>
+  <ul>
+    <li>الإرسال يصير بـ <b>thread</b> منفصل، حتى الرسالة ما تتأخر بانتظار Google.</li>
+    <li>إذا الشركة گالت "هذا العنوان ميت" (404 أو 410)، نمسحه.</li>
+    <li>إذا سارة <b>فاتحة نفس المحادثة وشايفتها</b>، الـ Service Worker ما يعرض إشعار.</li>
+    <li>لما تضغط على الإشعار، يفتح <code>/chat?c=5</code>، يعني المحادثة نفسها.</li>
+  </ul>
+  <h3>🔑 شنو هي VAPID؟</h3>
+  <p>زوج مفاتيح هو <b>هوية سيرفرنا</b> عند خدمات الإشعارات:</p>
+  <ul>
+    <li><b>المفتاح العام:</b> ينطى للمتصفح وقت الاشتراك.</li>
+    <li><b>المفتاح الخاص:</b> يبقى سري عدنا (ملف <code>backend/vapid_keys.json</code>، وما ينرفع لـ GitHub)، ونوقّع بيه كل إشعار. هيچ محد غيرنا يكدر يدز إشعارات بإسم تطبيقنا.</li>
+  </ul>
+  <div class="analogy">✍️ مثل <b>التوقيع والختم</b>: خدمة الإشعارات تشوف التوقيع وتتأكد إن الإشعار فعلاً من سيرفرنا.</div>
+  <p>⚠️ <b>ملاحظة:</b> الإشعارات تشتغل على <code>localhost</code> بالكمبيوتر. بس على <b>الموبايل الحقيقي</b> تحتاج <b>HTTPS</b>، يعني لازم نرفع التطبيق على سيرفر بدومين (المرحلة 4). وعلى الآيفون لازم أول تضيف التطبيق للشاشة الرئيسية.</p>
+  <div class="interview">"الإشعارات بـ Web Push. المتصفح يشترك عند خدمة الإشعارات مال شركته، وأحفظ الاشتراك بالداتابيس. بكل رسالة، السيرفر يوقّع الإشعار بمفتاح VAPID ويدزه لخدمة الإشعارات، وهي توصله للـ Service Worker حتى لو التطبيق مسدود."</div>
+
+  <div class="quiz">
+    <h3>✍️ أسئلة</h3>
+    <div class="mcq" data-correct="1"><p>1. ليش الصورة ما تنرسل بـ JSON؟</p><div class="opts"><button>لأن JSON بطيء</button><button>لأن الصورة ملف مو نص، فتنرسل بـ multipart/form-data</button><button>لأن Django ما يقبل JSON</button></div><div class="why">JSON للنصوص والأرقام. الملفات تنرسل بـ multipart/form-data.</div></div>
+    <div class="mcq" data-correct="2"><p>2. الداتابيس شنو تحفظ عن الصورة الشخصية؟</p><div class="opts"><button>الصورة كاملة</button><button>لون الصورة</button><button>مسار الملف بس</button></div><div class="why">الملف بفولدر media، والداتابيس تحفظ مساره.</div></div>
+    <div class="mcq" data-correct="0"><p>3. شنو يعني Exponential Backoff؟</p><div class="opts"><button>ننتظر أكثر بين كل محاولة اتصال وثانية (1، 2، 4، 8...)</button><button>نحاول ألف مرة بالثانية</button><button>نسد التطبيق</button></div><div class="why">حتى ما نضغط على السيرفر إذا جان واقع.</div></div>
+    <div class="mcq" data-correct="1"><p>4. منو يعرض الإشعار لما التطبيق مسدود؟</p><div class="opts"><button>الصفحة نفسها</button><button>الـ Service Worker</button><button>الداتابيس</button></div><div class="why">الـ Service Worker يشتغل بالخلفية حتى لو الصفحة مسدودة.</div></div>
+    <div class="mcq" data-correct="2"><p>5. الإشعار يوصل من سيرفرنا للموبايل شلون؟</p><div class="opts"><button>مباشرة</button><button>عن طريق WebSocket</button><button>عن طريق خدمة الإشعارات مال شركة المتصفح (Google/Apple)</button></div><div class="why">سيرفرنا يدز لخدمة الإشعارات، وهي توصله للجهاز.</div></div>
+    <details><summary>6. ليش نحتاج Migration لما نضيف display_name؟</summary><div class="ans">لأن ضفنا عمود جديد لجدول بالداتابيس. الـ Migration يگول للداتابيس تضيف العمود، ويتنفذ بـ <code>python manage.py migrate</code>.</div></details>
+    <details><summary>7. شنو فايدة مفتاح VAPID الخاص؟ وليش ما ينرفع لـ GitHub؟</summary><div class="ans">نوقّع بيه الإشعارات حتى خدمة الإشعارات تتأكد إنها من سيرفرنا. إذا انتشر، أي أحد يكدر يدز إشعارات بإسم تطبيقنا.</div></details>
+    <details><summary>8. ليش الإشعارات ما تشتغل على الموبايل هسه؟</summary><div class="ans">لأن Push بالموبايل يحتاج HTTPS، وإحنا بعدنا على localhost. تشتغل من نرفع التطبيق على سيرفر بدومين و HTTPS.</div></details>
+    <details><summary>9. إذا الاتصال انقطع ودزيت رسالة، شنو يصير؟</summary><div class="ans">تنرسل بـ HTTP POST بدل الـ WebSocket، حتى ما تضيع. ولما يرجع الاتصال نجيب الرسائل بـ HTTP حتى ما يفوتنا شي.</div></details>
+    <details><summary>10. ليش خط خانة الكتابة 16px بالموبايل؟</summary><div class="ans">لأن الآيفون يكبّر الصفحة تلقائياً إذا الخط أصغر من 16px لما تضغط على الخانة.</div></details>
+  </div>
 </section>
 
 <!-- ============ FINAL ============ -->

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>خطة وَصل</title>
+<style>
+  :root{
+    --bg:#f4f7fb; --card:#ffffff; --text:#172033; --muted:#5b6475; --border:#e3e9f2;
+    --primary:#0d47a1; --primary-2:#1976d2; --accent:#047857; --accent-bg:#e7f7ef;
+    --code-bg:#eef3f8; --flow-bg:#0f172a; --flow-text:#e2e8f0;
+    --warn-bg:#fff8e7; --warn-border:#f0d48a; --ok:#15803d; --bad:#b91c1c;
+    --ok-bg:#e8f7ee; --bad-bg:#fdecec; --badge-bg:#e3f2fd;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0b1120; --card:#131c2e; --text:#e5e9f0; --muted:#9aa4b5; --border:#24304a;
+      --primary:#7fb2ff; --primary-2:#4f8fe8; --accent:#4ade80; --accent-bg:#11271d;
+      --code-bg:#1d2840; --flow-bg:#050a15; --flow-text:#dbe4f0;
+      --warn-bg:#2a2210; --warn-border:#6b5520; --ok:#4ade80; --bad:#f87171;
+      --ok-bg:#12281b; --bad-bg:#2e1414; --badge-bg:#1a2a48;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0b1120; --card:#131c2e; --text:#e5e9f0; --muted:#9aa4b5; --border:#24304a;
+    --primary:#7fb2ff; --primary-2:#4f8fe8; --accent:#4ade80; --accent-bg:#11271d;
+    --code-bg:#1d2840; --flow-bg:#050a15; --flow-text:#dbe4f0;
+    --warn-bg:#2a2210; --warn-border:#6b5520; --ok:#4ade80; --bad:#f87171;
+    --ok-bg:#12281b; --bad-bg:#2e1414; --badge-bg:#1a2a48;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:Tahoma,Arial,sans-serif;line-height:1.9;font-size:16px}
+  .wrap{max-width:900px;margin:auto;padding:24px 16px 60px}
+  .hero{background:linear-gradient(135deg,#0d47a1,#1976d2);color:#fff;padding:26px;border-radius:20px;margin-bottom:18px}
+  .hero h1{margin:0 0 6px;font-size:28px}
+  .hero p{margin:0;opacity:.95}
+  .progress{margin-top:14px;background:rgba(255,255,255,.25);border-radius:99px;height:10px;overflow:hidden}
+  .progress > div{height:100%;width:0;background:#a7f3d0;transition:width .3s}
+  .progress-label{font-size:13px;margin-top:6px;opacity:.95}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;margin:16px 0;box-shadow:0 6px 20px rgba(0,0,0,.05)}
+  .card h2{margin:0 0 10px;color:var(--primary);font-size:22px}
+  h3{color:var(--primary);margin:18px 0 6px;font-size:18px}
+  .badge{display:inline-block;background:var(--badge-bg);color:var(--primary);padding:2px 10px;border-radius:99px;font-weight:bold;font-size:13px;margin-bottom:6px}
+  .toc{columns:2;column-gap:24px;padding-right:20px;margin:0}
+  .toc a{color:var(--primary);text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+  .toc .done::after{content:" ✅"}
+  code{direction:ltr;unicode-bidi:embed;background:var(--code-bg);padding:1px 6px;border-radius:6px;font-family:Consolas,monospace;font-size:.92em}
+  pre{direction:ltr;text-align:left;background:var(--flow-bg);color:var(--flow-text);padding:14px;border-radius:12px;overflow-x:auto;font-family:Consolas,monospace;font-size:14px;line-height:1.6;margin:10px 0}
+  pre code{background:none;padding:0;color:inherit}
+  .flow{direction:ltr;text-align:center;background:var(--flow-bg);color:var(--flow-text);padding:14px;border-radius:12px;font-family:Consolas,monospace;overflow-x:auto;font-size:14px}
+  .table-wrap{overflow-x:auto;margin:10px 0}
+  table{border-collapse:collapse;width:100%;min-width:320px;font-size:15px}
+  th,td{border:1px solid var(--border);padding:7px 10px;text-align:right;vertical-align:top}
+  th{background:var(--code-bg)}
+  .analogy{background:var(--accent-bg);border-right:4px solid var(--accent);padding:10px 14px;border-radius:10px;margin:10px 0}
+  .interview{background:var(--warn-bg);border:1px solid var(--warn-border);padding:10px 14px;border-radius:10px;margin:10px 0}
+  .bug{background:var(--bad-bg);border:1px solid var(--bad);padding:10px 14px;border-radius:10px;margin:10px 0}
+  .interview::before{content:"🎯 بالمقابلة گول:";display:block;font-weight:bold;margin-bottom:2px}
+  .quiz{border-top:2px dashed var(--border);margin-top:18px;padding-top:12px}
+  .quiz > h3{margin-top:0}
+  details{background:var(--code-bg);border-radius:10px;padding:8px 12px;margin:8px 0}
+  summary{cursor:pointer;font-weight:bold}
+  details .ans{margin-top:6px;color:var(--text)}
+  details .ans::before{content:"✅ الجواب: ";font-weight:bold;color:var(--ok)}
+  .mcq{background:var(--code-bg);border-radius:10px;padding:10px 12px;margin:10px 0}
+  .mcq p{margin:0 0 8px;font-weight:bold}
+  .mcq .opts{display:flex;flex-wrap:wrap;gap:8px}
+  .mcq button{font:inherit;font-size:15px;border:1px solid var(--border);background:var(--card);color:var(--text);border-radius:10px;padding:6px 12px;cursor:pointer}
+  .mcq button:hover:not(:disabled){border-color:var(--primary-2)}
+  .mcq button:disabled{cursor:default}
+  .mcq button.right{background:var(--ok-bg);border-color:var(--ok);color:var(--ok);font-weight:bold}
+  .mcq button.wrong{background:var(--bad-bg);border-color:var(--bad);color:var(--bad)}
+  .mcq .why{display:none;margin-top:8px;font-size:15px}
+  .mcq.answered .why{display:block}
+  .done-row{margin-top:14px;display:flex;align-items:center;gap:8px;font-weight:bold;color:var(--accent)}
+  .done-row input{width:20px;height:20px;accent-color:var(--accent)}
+  .score{position:sticky;bottom:12px;background:var(--primary);color:#fff;padding:10px 16px;border-radius:12px;text-align:center;font-weight:bold;margin-top:12px}
+  .btn{font:inherit;background:var(--primary-2);color:#fff;border:0;border-radius:10px;padding:8px 14px;cursor:pointer}
+  .top-actions{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .theme-btn{background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:10px;padding:4px 10px;font:inherit;font-size:14px;cursor:pointer}
+  .footer{text-align:center;color:var(--muted);font-size:14px;margin-top:24px}
+  @media (max-width:600px){
+    .hero h1{font-size:22px}
+    .toc{columns:1}
+    .card{padding:16px}
+    body{font-size:15px}
+  }
+
+  .st{display:inline-block;padding:1px 10px;border-radius:99px;font-size:13px;font-weight:bold;white-space:nowrap}
+  .st.done{background:var(--ok-bg);color:var(--ok)}
+  .st.now{background:var(--badge-bg);color:var(--primary)}
+  .st.next{background:var(--code-bg);color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>خطة وَصل 🗺️</h1>
+  <p>شنو عندنا هسه، شنو ضفنا، وشنو الجاي. ومعاها قائمة للمصمم.</p>
+</header>
+
+<section class="card">
+  <h2>📍 شنو عندنا هسه</h2>
+  <div class="table-wrap"><table>
+    <tr><th>الميزة</th><th>الحالة</th></tr>
+    <tr><td>تسجيل ودخول (Token)</td><td><span class="st done">شغال</span></td></tr>
+    <tr><td>قائمة مستخدمين ومحادثات ثنائية</td><td><span class="st done">شغال</span></td></tr>
+    <tr><td>رسائل فورية (WebSocket)</td><td><span class="st done">شغال</span></td></tr>
+    <tr><td>متصل / غير متصل / يكتب الآن</td><td><span class="st done">شغال</span></td></tr>
+    <tr><td>✓ انرسلت / ✓✓ أزرق انقرت، وعداد غير المقروء</td><td><span class="st done">شغال</span></td></tr>
+    <tr><td><b>جديد:</b> الاسم الظاهر (يقبل عربي وفراغ)</td><td><span class="st done">شغال</span></td></tr>
+    <tr><td><b>جديد:</b> الصورة الشخصية (رفع وحذف)</td><td><span class="st done">شغال</span></td></tr>
+    <tr><td><b>جديد:</b> آخر ظهور ("آخر ظهور اليوم 10:30")</td><td><span class="st done">شغال</span></td></tr>
+    <tr><td><b>جديد:</b> البحث بالمحادثات والأشخاص</td><td><span class="st done">شغال</span></td></tr>
+    <tr><td><b>جديد:</b> لوحة معلومات المحادثة (زر ⓘ)</td><td><span class="st done">شغال</span></td></tr>
+    <tr><td><b>جديد:</b> إعادة الاتصال التلقائي + "جاري الاتصال..."</td><td><span class="st done">شغال</span></td></tr>
+    <tr><td><b>جديد:</b> عدد غير المقروء بعنوان التبويب "(3) وَصل"</td><td><span class="st done">شغال</span></td></tr>
+    <tr><td><b>جديد:</b> تطبيق على الشاشة الرئيسية (PWA)</td><td><span class="st done">شغال</span> (بالموبايل يحتاج HTTPS)</td></tr>
+    <tr><td><b>جديد:</b> إشعارات Push حتى والتطبيق مسدود</td><td><span class="st done">شغال</span> (بالموبايل يحتاج HTTPS)</td></tr>
+    <tr><td><b>مصلّح:</b> أيقونة زر الإرسال، ألوان ✓✓، نقطة "متصل" بالقائمة، رابط الإشعار يفتح المحادثة</td><td><span class="st done">مصلّح</span></td></tr>
+    <tr><td><b>الموبايل:</b> مجرّب على 360، 390، 412، 768، 1024، 1440</td><td><span class="st done">مجرّب</span></td></tr>
+  </table></div>
+</section>
+
+<section class="card">
+  <h2>🔄 شلون تحدّث جهازك</h2>
+  <p>بعد هالتحديث انضافت مكتبات وجداول جديدة، فلازم:</p>
+<pre><code>cd ~/chat
+git pull
+source .venv/bin/activate
+cd backend
+pip install -r requirements.txt
+python manage.py migrate
+daphne -p 8000 config.asgi:application</code></pre>
+  <p>وبـ Terminal ثاني:</p>
+<pre><code>cd ~/chat/frontend
+npm install
+npm run dev</code></pre>
+  <div class="analogy">🔔 <b>تجربة الإشعارات على الكمبيوتر:</b> ادخل بحساب، واضغط "تفعيل" ببطاقة الإشعارات، ووافق على الإذن. بعدين سد التبويب، ومن حساب ثاني (Incognito) دز رسالة. الإشعار يطلع حتى والتبويب مسدود. ملاحظة: نافذة Incognito نفسها ما تدعم الإشعارات.</div>
+</section>
+
+<section class="card">
+  <h2>🧭 المراحل</h2>
+  <h3><span class="st done">خلصت</span> المرحلة 1: الأساس المهم</h3>
+  <p>الملف الشخصي، البحث، لوحة المعلومات، إعادة الاتصال، تحسينات الموبايل، PWA، إشعارات Push.</p>
+
+  <h3><span class="st now">الجاية</span> المرحلة 2: الرسائل</h3>
+  <ul>
+    <li>إرسال <b>صور وملفات</b> (زر ➕)</li>
+    <li><b>حذف</b> رسالة ("انحذفت هذه الرسالة") و<b>تعديلها</b></li>
+    <li><b>الرد</b> على رسالة معينة</li>
+    <li>حالة <b>"وصلت"</b> ✓✓ رمادي، غير "انقرت" ✓✓ أزرق</li>
+    <li>تحميل الرسائل القديمة <b>على دفعات</b> (مو كلها مرة وحدة)</li>
+    <li><b>الوضع الليلي</b></li>
+  </ul>
+
+  <h3><span class="st next">بعدها</span> المرحلة 3: الحسابات والمجموعات</h3>
+  <ul>
+    <li><b>تأكيد الحساب</b> بالإيميل (كود 6 أرقام)</li>
+    <li><b>نسيت كلمة المرور</b></li>
+    <li><b>المجموعات:</b> اسم، صورة، أعضاء، مشرف</li>
+    <li><b>حظر</b> مستخدم</li>
+  </ul>
+
+  <h3><span class="st next">بعدها</span> المرحلة 4: الإطلاق</h3>
+  <ul>
+    <li>قاعدة بيانات <b>PostgreSQL</b> بدل SQLite</li>
+    <li><b>Redis</b> حتى نكدر نشغل أكثر من سيرفر</li>
+    <li>رفع على <b>سيرفر بدومين و HTTPS</b>. هنا الإشعارات وتطبيق الشاشة الرئيسية يشتغلن على الموبايل الحقيقي</li>
+    <li>حماية من كثرة الطلبات (rate limiting)، ونسخ احتياطي</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>🎨 للمصمم</h2>
+  <p>التصميم الحالي حلو، وكل الشاشات الجديدة مبنية على نفس الستايل. هذي الأشياء اللي تحتاج تصميم (أو مراجعة):</p>
+  <h3>من المرحلة 1 (موجودة، تحتاج لمسة)</h3>
+  <div class="table-wrap"><table>
+    <tr><th>العنصر</th><th>وين بالكود</th></tr>
+    <tr><td>نافذة "ملفي الشخصي" (الصورة، الاسم، الإشعارات، الخروج)</td><td><code>app/chat/ui.tsx</code> ← <code>ProfileSheet</code></td></tr>
+    <tr><td>لوحة معلومات المحادثة (ⓘ)</td><td><code>app/chat/ui.tsx</code> ← <code>InfoPanel</code></td></tr>
+    <tr><td>بطاقة "فعّل الإشعارات"</td><td><code>app/chat/ui.tsx</code> ← <code>PushBanner</code></td></tr>
+    <tr><td>الصورة الشخصية والحروف البديلة</td><td><code>app/chat/ui.tsx</code> ← <code>Avatar</code></td></tr>
+    <tr><td>مؤشر "جاري الاتصال..." بالهيدر</td><td><code>app/chat/page.tsx</code></td></tr>
+    <tr><td>نتائج البحث الفارغة ("ماكو أحد بهذا الاسم")</td><td><code>app/chat/page.tsx</code></td></tr>
+    <tr><td>أيقونة التطبيق (192 و 512، ونسخة maskable)</td><td><code>public/icons/</code></td></tr>
+  </table></div>
+  <h3>للمرحلة 2 (جديدة)</h3>
+  <ul>
+    <li>فقاعة رسالة بيها <b>صورة</b>، وفقاعة <b>ملف</b></li>
+    <li>رسالة <b>محذوفة</b></li>
+    <li><b>الرد على رسالة</b>: شكلها بالفقاعة وفوك خانة الكتابة</li>
+    <li><b>قائمة خيارات الرسالة</b> (رد، نسخ، تعديل، حذف): ضغطة مطولة بالموبايل</li>
+    <li>✓✓ <b>وصلت</b> مقابل ✓✓ <b>انقرت</b></li>
+    <li><b>الوضع الليلي</b> لكل الشاشات</li>
+  </ul>
+  <p>📌 المصمم يشتغل على برانچ خاص (<code>git checkout -b design</code>) ويفتح Pull Request، وما يلمس <code>lib/</code> ولا <code>backend/</code>.</p>
+</section>
+
+<div class="footer">خطة وَصل — تتحدث مع كل مرحلة</div>
+</div>
+</body>
+</html>
