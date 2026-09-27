@@ -689,6 +689,65 @@ daphne -p 8000 config.asgi:application</code></pre>
     <code>fuser -k 8000/tcp</code> = "اطفي أي برنامج ساكن بباب 8000".
   </div>
 
+  <div class="bug">
+    <b>الخطأ 6 (السبب الحقيقي!):</b> باب 3000 و 8000 محجوزات بمشروع ثاني بـ <b>Docker</b><br>
+    <b>شلون لكيناه:</b>
+    <ol>
+      <li><code>ss -ltnp</code> طلع الأبواب 3000 و 8000 محجوزة، بس <b>بدون اسم برنامج</b>. معناها البرنامج مو إلنا، مشغله مستخدم ثاني (root).</li>
+      <li><code>sudo ss -ltnp</code> (بصلاحيات المدير) طلع الاسم: <code>docker-proxy</code>.</li>
+      <li><code>docker ps</code> طلع شنو شغال بالضبط: <code>hum-backend-1</code> على <b>8000</b>، و <code>hum-frontend-1</code> على <b>3000</b>. يعني مشروع ثاني اسمه <b>hum</b>، شغال بالخلفية من 6 أسابيع.</li>
+    </ol>
+    <b>هذا يفسر كلشي:</b> الفرونت اند مالتنا راح لـ 3001 لأن 3000 محجوز. وطلباته على 8000 <b>رد عليها الباك اند مال hum</b>، مو مالتنا، فرفضها بـ CORS. و daphne مالتنا ما كدر يشتغل لأن الباب محجوز. وجنا نحسبه "daphne قديم"، بس طلع شي ثاني تماماً!<br>
+    <b>الحل:</b> نوكف كل صناديق Docker:
+<pre><code>docker stop $(docker ps -q)</code></pre>
+    <code>docker ps -q</code> يطلع أرقام الصناديق الشغالة، و <code>docker stop</code> يوكفهن. هذا <b>يوكف بس، ما يمسح</b>. ومن تريد hum مرة ثانية: <code>docker start hum-backend-1 hum-frontend-1</code>.<br>
+    <b>شنو تعلمنا:</b> التخمين الأول (daphne قديم) جان غلط. المعلومات (<code>sudo ss</code> و <code>docker ps</code>) هي اللي كشفت الحقيقة.
+  </div>
+
+  <h3>🐳 شنو هو Docker؟</h3>
+  <p><b>Docker</b> برنامج يشغّل التطبيقات داخل <b>صناديق مسدودة (Containers)</b>. كل صندوق بيه تطبيق كامل ويا كل اللي يحتاجه (Python، مكتبات، إعدادات).</p>
+  <p>الصندوق يكدر يربط باب من داخله بباب بجهازك. مثلاً <code>0.0.0.0:8000->8000/tcp</code> معناها: أي طلب يوصل لباب 8000 بجهازك، يروح لباب 8000 داخل الصندوق.</p>
+  <div class="analogy">📦 Docker مثل <b>شقق مفروشة جاهزة</b>: تسكن بيها فوراً بدون ما تشتري أثاث. بس إذا نسيت شقة مسكونة، تبقى شاغلة رقمها بالعمارة!</div>
+  <div class="table-wrap"><table>
+    <tr><th>الأمر</th><th>شنو يسوي</th></tr>
+    <tr><td><code>docker ps</code></td><td>يطلع الصناديق الشغالة</td></tr>
+    <tr><td><code>docker stop &lt;name&gt;</code></td><td>يوكف صندوق (ما يمسحه)</td></tr>
+    <tr><td><code>docker start &lt;name&gt;</code></td><td>يرجع يشغله</td></tr>
+  </table></div>
+
+  <h3>🚪 شنو هو daphne؟</h3>
+  <p>كود Django اللي كتبناه (views و models) <b>ما يعرف يستقبل طلبات من الشبكة وحده</b>. يعرف بس "إذا وصلني Request شنو أسوي". فنحتاج برنامج يوكف على <b>الباب (البورت)</b>، يستلم الطلبات، يسلمها لـ Django، ويرجع الجواب. هذا اسمه <b>سيرفر (Server)</b>، و <b>daphne</b> واحد منهم.</p>
+  <div class="analogy">🍽️ <b>Django</b> = الطباخ، يعرف يطبخ بس ما يوكف على الباب. <b>daphne</b> = <b>النادل على الباب</b>، يستقبل الطلبات ويوصلها للطباخ ويرجع الصحون. <b>البورت 8000</b> = رقم باب المطعم.</div>
+  <h3>ليش daphne بالذات؟</h3>
+  <div class="table-wrap"><table>
+    <tr><th>النوع</th><th>يدعم</th><th>أمثلة</th></tr>
+    <tr><td><b>WSGI</b> (القديم)</td><td>HTTP بس</td><td>gunicorn، runserver القديم</td></tr>
+    <tr><td><b>ASGI</b> (الجديد)</td><td>HTTP <b>و WebSocket</b></td><td><b>daphne</b>، uvicorn</td></tr>
+  </table></div>
+  <p>تطبيقنا يحتاج <b>WebSocket</b>، فلازم سيرفر <b>ASGI</b>. و daphne سوّاه نفس فريق <b>Django Channels</b>.</p>
+  <h3>نفكك الأمر</h3>
+<pre><code>daphne -p 8000 config.asgi:application</code></pre>
+  <div class="table-wrap"><table>
+    <tr><th>الجزء</th><th>معناه</th></tr>
+    <tr><td><code>daphne</code></td><td>شغّل السيرفر</td></tr>
+    <tr><td><code>-p 8000</code></td><td>اوكف على باب (port) رقم 8000</td></tr>
+    <tr><td><code>config.asgi</code></td><td>روح لملف <code>backend/config/asgi.py</code></td></tr>
+    <tr><td><code>:application</code></td><td>وخذ منه المتغير <code>application</code></td></tr>
+  </table></div>
+  <p>و <code>application</code> بملف <code>asgi.py</code> يگرر: إذا الطلب <b>HTTP</b> يوديه لـ Django (الـ API)، وإذا <b>WebSocket</b> يوديه لـ Channels (الشات المباشر).</p>
+
+  <h3>❓ هل daphne هو الـ API؟ لا!</h3>
+  <ul>
+    <li><b>الـ API</b> = <b>المنيو</b>: قائمة الروابط اللي تطبيقنا يقبلها وشنو يسوي كل واحد. <b>إحنا كتبناه</b>: الروابط بـ <code>urls.py</code>، والمنطق بـ <code>views.py</code>.</li>
+    <li><b>daphne</b> = <b>النادل</b>: يوصّل أي طلب للكود مالتنا. ما يعرف شنو يعني <code>/api/users/</code>، بس يوصله.</li>
+  </ul>
+  <p><b>رحلة طلب <code>GET /api/users/</code>:</b></p>
+  <div class="flow">Browser → daphne (port 8000) → config/asgi.py → urls.py → views.py → Database → views.py → daphne → Browser</div>
+  <p>الـ API يبدي من <code>urls.py</code>: هناك يتقرر هذا الرابط يروح لأي view.</p>
+  <p>🧪 <b>الدليل من اللي صار:</b> مشروع hum هم يستخدم daphne، ومشروعنا هم daphne. بس كل واحد إله API مختلف. لهذا لما طلبنا من باب 8000 رد علينا API مال hum، وما عرفنا.</p>
+  <div class="analogy">🍽️ نفس النادل ممكن يشتغل بمطعمين، بس كل مطعم إله <b>منيو</b> مختلف.</div>
+  <div class="interview">"الـ API هو الروابط اللي عرّفتها بـ urls.py ومنطقها بـ views.py. و daphne سيرفر ASGI يستقبل طلبات HTTP و WebSocket على البورت ويسلمها لـ Django. استخدمته بدل runserver لأن تطبيقي يحتاج WebSocket عن طريق Django Channels."</div>
+
   <h3>🌐 شنو هو CORS؟</h3>
   <p><b>CORS</b> قاعدة أمان بالمتصفح: الموقع ما يكدر يحچي ويا سيرفر ثاني <b>إلا إذا السيرفر وافق</b>. السيرفر عنده قائمة بالمواقع المسموحة.</p>
   <p>المتصفح قبل الطلب الحقيقي يدز طلب استئذان اسمه <b>preflight</b> (نوعه <code>OPTIONS</code>). إذا السيرفر ما رد بـ "مسموح" (Header اسمه <code>Access-Control-Allow-Origin</code>)، المتصفح يوكف الطلب ويطلع "Failed to fetch".</p>
@@ -706,6 +765,7 @@ daphne -p 8000 config.asgi:application</code></pre>
 
   <h3>🔍 أمر الفحص (نكمل منه باجر)</h3>
 <pre><code>cd ~/chat && git log --oneline -1 && grep -c ORIGIN_REGEXES backend/config/settings.py; ss -ltnp | grep -E ':(3000|3001|8000) '</code></pre>
+  <p>📌 إذا <code>ss -ltnp</code> ما طلع <b>اسم البرنامج</b> بآخر السطر، معناها البرنامج مو إلك. استخدم <code>sudo ss -ltnp</code> حتى يطلع الاسم، و <code>docker ps</code> إذا طلع <code>docker-proxy</code>.</p>
   <div class="table-wrap"><table>
     <tr><th>الجزء</th><th>شنو يفحص</th><th>النتيجة الصحيحة</th></tr>
     <tr><td><code>git log --oneline -1</code></td><td>آخر commit عندك</td><td><code>bf6f835</code> أو أحدث</td></tr>
@@ -723,6 +783,11 @@ daphne -p 8000 config.asgi:application</code></pre>
     <details><summary>6. طلعلك "No module named 'config'". شنو أول شي تشيك عليه؟</summary><div class="ans">إنت بأي فولدر. لازم تكون داخل <code>~/chat/backend</code> لما تشغل daphne.</div></details>
     <details><summary>7. شنو يسوي <code>fuser -k 8000/tcp</code>؟</summary><div class="ans">يطفي أي برنامج شاغل البورت 8000.</div></details>
     <details><summary>8. ليش سحب التصليح (git pull) ما كفى وحده؟</summary><div class="ans">لأن الـ daphne القديم بعده شغال بالكود القديم. لازم نطفيه ونشغله من جديد حتى ياخذ التصليح.</div></details>
+    <div class="mcq" data-correct="1"><p>9. هل daphne هو الـ API؟</p><div class="opts"><button>إي، هو نفسه</button><button>لا، daphne سيرفر يوصّل الطلبات، والـ API هو urls.py و views.py</button><button>لا، الـ API هو الداتابيس</button></div><div class="why">daphne = النادل، والـ API = المنيو اللي كتبناه.</div></div>
+    <div class="mcq" data-correct="0"><p>10. ليش استخدمنا daphne (ASGI) مو سيرفر WSGI؟</p><div class="opts"><button>لأن تطبيقنا يحتاج WebSocket</button><button>لأنه أسرع بالرسم</button><button>لأنه يحفظ الرسائل</button></div><div class="why">WSGI يدعم HTTP بس، و ASGI يدعم HTTP و WebSocket.</div></div>
+    <details><summary>11. شنو الفرق بين <code>docker stop</code> ومسح المشروع؟</summary><div class="ans"><code>docker stop</code> يوكف الصندوق بس، والمشروع يبقى موجود. ترجعه بـ <code>docker start</code>.</div></details>
+    <details><summary>12. <code>ss -ltnp</code> طلع البورت محجوز بس بدون اسم برنامج. شنو تسوي؟</summary><div class="ans">تستخدم <code>sudo ss -ltnp</code> حتى يطلع الاسم، لأن البرنامج مال مستخدم ثاني. وإذا طلع <code>docker-proxy</code> تستخدم <code>docker ps</code>.</div></details>
+    <details><summary>13. وضح بجملة: شنو يسوي <code>daphne -p 8000 config.asgi:application</code>؟</summary><div class="ans">يشغل سيرفر daphne على باب 8000، وياخذ التطبيق من المتغير application بملف config/asgi.py.</div></details>
   </div>
 </section>
 
