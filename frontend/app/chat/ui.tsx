@@ -208,9 +208,9 @@ export function ProfileSheet({ me, onClose, onSaved, onLogout }: {
 }
 
 const themes: { value: Theme; label: string; preview: string }[] = [
-  { value: "glass", label: "الزجاجي", preview: "linear-gradient(135deg,#eef1ff,#ffffff 55%,#dff7f0)" },
+  { value: "glass", label: "الزجاجي", preview: "linear-gradient(135deg,#073d62,#168fc2 48%,#79ddec)" },
   { value: "dark", label: "الداكن", preview: "linear-gradient(135deg,#08051b,#3b137a 60%,#d332e4)" },
-  { value: "system", label: "حسب الجهاز", preview: "linear-gradient(90deg,#f2f3fb 50%,#120d36 50%)" },
+  { value: "system", label: "حسب الجهاز", preview: "linear-gradient(90deg,#168fc2 50%,#120d36 50%)" },
 ];
 
 const pushLabels: Record<PushState, string> = {
