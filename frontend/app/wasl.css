@@ -1,0 +1,119 @@
+/*
+  ألوان النموذجين كمتغيرات (CSS variables).
+  كل مكون يستخدم var(--xxx) بدل لون ثابت، فنفس الكود يطلع زجاجي أو داكن
+  حسب data-theme على الغلاف .wasl
+*/
+.wasl {
+  --radius: 22px;
+  color: var(--text);
+  background: var(--bg);
+  background-size: cover;
+  background-position: center;
+}
+
+/* ---------------- النموذج الزجاجي ---------------- */
+.wasl[data-theme="glass"] {
+  --bg: linear-gradient(#0000, #0000), url("/bg/glass-landscape.svg") center / cover no-repeat fixed, #6fa8d8;
+  --panel: rgba(240, 248, 255, .42);
+  --panel-strong: rgba(236, 245, 252, .96);
+  --card: rgba(255, 255, 255, .5);
+  --card-hover: rgba(255, 255, 255, .72);
+  --blur: blur(22px) saturate(140%);
+  --border: rgba(255, 255, 255, .55);
+  --divider: rgba(20, 50, 90, .1);
+  --text: #0e2240;
+  --muted: #4b6283;
+  --accent: #1f7bff;
+  --accent-grad: linear-gradient(135deg, #3b95ff, #1462e6);
+  --on-accent: #fff;
+  --chip: rgba(255, 255, 255, .5);
+  --badge: #1f7bff;
+  --online: #22c55e;
+  --danger: #ef4444;
+  --bubble-in: rgba(255, 255, 255, .78);
+  --bubble-in-text: #0e2240;
+  --bubble-out: rgba(214, 233, 255, .9);
+  --bubble-out-text: #0e2240;
+  --tick-read: #1f7bff;
+  --input: rgba(255, 255, 255, .65);
+  --shadow: 0 18px 50px rgba(8, 40, 80, .22);
+  --glow: 0 8px 22px rgba(31, 123, 255, .45);
+  --ring: linear-gradient(135deg, #3b95ff, #7cd3ff);
+  --chat-bg: rgba(210, 232, 248, .18);
+}
+
+/* ---------------- النموذج الداكن الفاخر ---------------- */
+.wasl[data-theme="dark"] {
+  --bg: radial-gradient(circle at 85% 8%, rgba(147, 51, 234, .28), transparent 32rem),
+        radial-gradient(circle at 10% 90%, rgba(79, 70, 229, .22), transparent 30rem), #07031a;
+  --panel: rgba(16, 10, 40, .88);
+  --panel-strong: #120b30;
+  --card: rgba(35, 24, 80, .55);
+  --card-hover: rgba(90, 45, 170, .35);
+  --blur: blur(18px);
+  --border: rgba(167, 139, 250, .2);
+  --divider: rgba(167, 139, 250, .12);
+  --text: #f5f3ff;
+  --muted: #a99bd6;
+  --accent: #a855f7;
+  --accent-grad: linear-gradient(135deg, #7c3aed, #d946ef);
+  --on-accent: #fff;
+  --chip: transparent;
+  --badge: #d946ef;
+  --online: #34d399;
+  --danger: #f43f5e;
+  --bubble-in: #1c1545;
+  --bubble-in-text: #f5f3ff;
+  --bubble-out: linear-gradient(110deg, #6d28d9, #c026d3);
+  --bubble-out-text: #fff;
+  --tick-read: #7dd3fc;
+  --input: #1e1545;
+  --shadow: 0 22px 60px rgba(0, 0, 0, .55);
+  --glow: 0 0 22px rgba(192, 38, 211, .55);
+  --ring: conic-gradient(from 200deg, #f0abfc, #a855f7, #6366f1, #22d3ee, #f0abfc);
+  --chat-bg: rgba(10, 6, 30, .6);
+}
+
+/* أسطح */
+.w-panel { background: var(--panel); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); border: 1px solid var(--border); }
+.w-strong { background: var(--panel-strong); backdrop-filter: blur(34px) saturate(150%); -webkit-backdrop-filter: blur(34px) saturate(150%); }
+.w-card { background: var(--card); border: 1px solid var(--border); }
+.w-hover:hover { background: var(--card-hover); }
+.w-muted { color: var(--muted); }
+.w-divider { border-color: var(--divider); }
+.w-accent { background: var(--accent-grad); color: var(--on-accent); box-shadow: var(--glow); }
+.w-accent-text { color: var(--accent); }
+.w-input { background: var(--input); border: 1px solid var(--border); color: var(--text); }
+.w-input::placeholder { color: var(--muted); }
+.w-chip { background: var(--chip); border: 1px solid var(--border); color: var(--muted); }
+.w-chip[aria-pressed="true"] { background: var(--accent-grad); color: var(--on-accent); border-color: transparent; box-shadow: var(--glow); }
+.w-badge { background: var(--badge); color: #fff; }
+.w-chat-bg { background: var(--chat-bg); }
+.w-bubble-in { background: var(--bubble-in); color: var(--bubble-in-text); border: 1px solid var(--border); }
+.w-bubble-out { background: var(--bubble-out); color: var(--bubble-out-text); }
+.w-shadow { box-shadow: var(--shadow); }
+.w-ring { background: var(--ring); }
+.w-danger { background: var(--danger); color: #fff; }
+
+.wasl[data-theme="dark"] .w-bubble-out { border: 0; }
+.wasl[data-theme="glass"] .w-bubble-in, .wasl[data-theme="glass"] .w-bubble-out { backdrop-filter: blur(12px); }
+
+/* شريط تمرير رفيع */
+.w-scroll { scrollbar-width: thin; scrollbar-color: var(--divider) transparent; }
+.w-scroll::-webkit-scrollbar { width: 5px; height: 5px; }
+.w-scroll::-webkit-scrollbar-thumb { background: var(--divider); border-radius: 99px; }
+.w-noscroll { scrollbar-width: none; }
+.w-noscroll::-webkit-scrollbar { display: none; }
+
+/* موجة الصوت بالمكالمة */
+@keyframes w-wave { 0%, 100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
+.w-wave > span { animation: w-wave 1.1s ease-in-out infinite; transform-origin: center; }
+@keyframes w-pulse { 0% { box-shadow: 0 0 0 0 rgba(192, 38, 211, .55); } 100% { box-shadow: 0 0 0 26px rgba(192, 38, 211, 0); } }
+.w-pulse { animation: w-pulse 1.6s ease-out infinite; }
+@keyframes w-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* خطوط فاصلة بين العناصر بلون هادئ */
+.w-divide > * + * { border-top: 1px solid var(--divider); }
+/* خلفية الخريطة إذا الصور ما حملت (نت ضعيف) */
+.w-map { background-color: #dfe9e4; background-image: linear-gradient(#c9d8d1 1px, transparent 1px), linear-gradient(90deg, #c9d8d1 1px, transparent 1px); background-size: 32px 32px; }
+.wasl[data-theme="dark"] .w-map { background-color: #1a1440; background-image: linear-gradient(#2a2160 1px, transparent 1px), linear-gradient(90deg, #2a2160 1px, transparent 1px); }

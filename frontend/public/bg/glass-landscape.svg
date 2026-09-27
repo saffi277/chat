@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">
+  <!-- خلفية النموذج الزجاجي: جبال وبحيرة (رسم مبسط) -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6fa8d8"/><stop offset=".45" stop-color="#b9daf0"/><stop offset=".62" stop-color="#e6f2f8"/>
+    </linearGradient>
+    <radialGradient id="sun" cx=".72" cy=".2" r=".35">
+      <stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="far" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fb3cf"/><stop offset="1" stop-color="#6d93b5"/>
+    </linearGradient>
+    <linearGradient id="mid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4c7195"/><stop offset="1" stop-color="#2f4f6e"/>
+    </linearGradient>
+    <linearGradient id="near" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#23405a"/><stop offset="1" stop-color="#132a3d"/>
+    </linearGradient>
+    <linearGradient id="lake" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5f9fc4"/><stop offset=".5" stop-color="#2f7aa6"/><stop offset="1" stop-color="#15506f"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#sky)"/>
+  <rect width="1600" height="1000" fill="url(#sun)"/>
+  <!-- جبال بعيدة ويا ثلج -->
+  <path d="M0 560 L140 430 L230 480 L380 300 L470 380 L560 330 L700 190 L820 330 L900 290 L1010 400 L1120 260 L1240 360 L1330 300 L1460 420 L1600 350 L1600 620 L0 620Z" fill="url(#far)"/>
+  <path d="M380 300 L420 340 L400 345 L440 372 L470 380 L430 330Z M700 190 L745 245 L720 250 L770 290 L820 330 L760 260Z M1120 260 L1160 305 L1140 310 L1190 330 L1240 360 L1175 300Z" fill="#f4fbff" opacity=".9"/>
+  <!-- جبال متوسطة -->
+  <path d="M0 600 L120 520 L260 580 L420 450 L560 560 L680 480 L820 580 L980 470 L1120 570 L1260 490 L1420 580 L1600 500 L1600 660 L0 660Z" fill="url(#mid)"/>
+  <!-- غابة صنوبر -->
+  <g fill="url(#near)">
+    <path d="M0 640 L1600 640 L1600 700 L0 700Z"/>
+    <path d="M40 640 l22 -70 l22 70Z M90 640 l18 -55 l18 55Z M130 640 l26 -85 l26 85Z M1380 640 l24 -80 l24 80Z M1430 640 l18 -60 l18 60Z M1470 640 l28 -95 l28 95Z M1530 640 l20 -65 l20 65Z M300 640 l16 -48 l16 48Z M1180 640 l18 -52 l18 52Z"/>
+  </g>
+  <!-- البحيرة ويا انعكاس -->
+  <rect y="690" width="1600" height="310" fill="url(#lake)"/>
+  <path d="M0 690 L120 740 L260 705 L420 770 L560 715 L700 780 L820 715 L980 775 L1120 712 L1260 760 L1420 708 L1600 750 L1600 690Z" fill="#274f6c" opacity=".45"/>
+  <rect x="300" y="760" width="1000" height="3" fill="url(#shine)"/>
+  <rect x="500" y="820" width="700" height="2" fill="url(#shine)"/>
+  <rect x="200" y="880" width="900" height="2" fill="url(#shine)"/>
+  <!-- صخور بالمقدمة -->
+  <path d="M0 1000 L0 900 Q80 860 170 905 Q230 880 300 930 L340 1000Z M1600 1000 L1600 880 Q1510 850 1440 900 Q1380 885 1330 940 L1300 1000Z" fill="#0f2233"/>
+</svg>
