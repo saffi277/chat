@@ -8,14 +8,16 @@ export const nameOf = (u: Pick<User, "display_name" | "username">) => u.display_
 
 // ------------------------------------------------------------ الوقت
 const pad = (n: number) => String(n).padStart(2, "0");
+/** 9:41 AM (أرقام إنگليزية مثل التصميم) */
 export function clock(iso: string) {
-  const d = new Date(iso);
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
+/** التاريخ بالعربي بس الأرقام إنگليزية */
+const arDate = (d: Date, o: Intl.DateTimeFormatOptions) => d.toLocaleDateString("ar-u-nu-latn", o);
 function sameDay(a: Date, b: Date) {
   return a.toDateString() === b.toDateString();
 }
-/** وقت السطر بالقائمة: 12:24 / أمس / 12/9 */
+/** وقت السطر بالقائمة: 9:41 AM / أمس / الاثنين / 12/9 */
 export function listTime(iso: string) {
   const d = new Date(iso);
   const now = new Date();
@@ -23,7 +25,8 @@ export function listTime(iso: string) {
   y.setDate(now.getDate() - 1);
   if (sameDay(d, now)) return clock(iso);
   if (sameDay(d, y)) return "أمس";
-  return d.toLocaleDateString("ar", { day: "numeric", month: "numeric" });
+  if (now.getTime() - d.getTime() < 6 * 86400000) return arDate(d, { weekday: "long" });
+  return arDate(d, { day: "numeric", month: "numeric" });
 }
 /** فاصل الأيام بالمحادثة: اليوم / أمس / الاثنين 12 أيلول */
 export function dayLabel(iso: string) {
@@ -33,7 +36,7 @@ export function dayLabel(iso: string) {
   y.setDate(now.getDate() - 1);
   if (sameDay(d, now)) return "اليوم";
   if (sameDay(d, y)) return "أمس";
-  return d.toLocaleDateString("ar", { weekday: "long", day: "numeric", month: "long" });
+  return arDate(d, { weekday: "long", day: "numeric", month: "long" });
 }
 export function duration(sec: number | null | undefined) {
   const s = Math.max(0, Math.round(sec ?? 0));
@@ -48,7 +51,7 @@ export function lastSeenText(u: User) {
   y.setDate(now.getDate() - 1);
   if (sameDay(d, now)) return `آخر ظهور اليوم ${clock(u.last_seen)}`;
   if (sameDay(d, y)) return `آخر ظهور أمس ${clock(u.last_seen)}`;
-  return `آخر ظهور ${d.toLocaleDateString("ar")}`;
+  return `آخر ظهور ${arDate(d, { day: "numeric", month: "numeric", year: "numeric" })}`;
 }
 export function fileSize(bytes: number | null) {
   if (!bytes) return "";
@@ -110,9 +113,13 @@ export function Avatar({ user, src, name, size = 48, online, ring, square }: {
 /** صورة المحادثة: مجموعة = صورتها، ثنائية = الطرف الثاني، محفوظة = علامة */
 export function ConvAvatar({ conv, other, size = 52, online }: { conv: Conversation; other: User | null; size?: number; online?: boolean }) {
   if (conv.kind === "saved") {
-    return <div className="grid shrink-0 place-items-center rounded-full w-accent" style={{ width: size, height: size }}><Icon name="bookmark" size={size * 0.42} /></div>;
+    return <div className="w-tint grid shrink-0 place-items-center rounded-full" style={{ width: size, height: size }}><Icon name="bookmark" size={size * 0.42} filled /></div>;
   }
-  if (conv.kind === "group") return <Avatar src={conv.avatar} name={conv.title} size={size} user={null} />;
+  if (conv.kind === "group") {
+    // مجموعة بدون صورة: دائرة بنفسجي فاتح ويا أيقونة أشخاص (مثل التصميم)
+    if (!conv.avatar) return <div className="w-tint grid shrink-0 place-items-center rounded-full" style={{ width: size, height: size }}><Icon name="users" size={size * 0.44} filled /></div>;
+    return <Avatar src={conv.avatar} name={conv.title} size={size} user={null} />;
+  }
   return <Avatar user={other} size={size} online={online} />;
 }
 
@@ -123,7 +130,7 @@ export function IconButton({ icon, label, onClick, active, size = 40, className 
 }) {
   return (
     <button type="button" aria-label={label} title={label} onClick={onClick}
-      className={`grid shrink-0 place-items-center rounded-full transition active:scale-95 ${active ? "w-accent" : plain ? "w-accent-text w-hover" : "w-card w-hover"} ${className}`}
+      className={`grid shrink-0 place-items-center rounded-full transition active:scale-95 ${active ? "w-accent" : plain ? "w-hover" : "w-tint"} ${className}`}
       style={{ width: size, height: size }}>
       <Icon name={icon} size={size * 0.46} />
     </button>
@@ -150,8 +157,9 @@ export function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boo
 
 // ------------------------------------------------------------ لوحة جانبية
 /** بالموبايل تاخذ الشاشة كلها، وبالكمبيوتر تطلع من الجنب */
-export function Panel({ title, onClose, children, actions, wide }: {
-  title: string; onClose: () => void; children: React.ReactNode; actions?: React.ReactNode; wide?: boolean;
+/** bare: بدون عنوان مكتوب (زر الرجوع يمين والأزرار يسار، مثل ملف جهة الاتصال) */
+export function Panel({ title, onClose, children, actions, wide, bare }: {
+  title: string; onClose: () => void; children: React.ReactNode; actions?: React.ReactNode; wide?: boolean; bare?: boolean;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -161,11 +169,12 @@ export function Panel({ title, onClose, children, actions, wide }: {
   return (
     <div className="fixed inset-0 z-40 flex justify-start bg-black/40 md:p-4" onClick={onClose}>
       <section role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}
-        className={`w-strong w-shadow flex h-full w-full flex-col overflow-hidden md:rounded-2xl ${wide ? "md:w-[520px]" : "md:w-[430px]"}`}
-        style={{ border: "1px solid var(--border)" }}>
-        <header className="flex items-center gap-3 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))]">
-          <IconButton icon="back" label="رجوع" onClick={onClose} />
-          <h2 className="flex-1 text-lg font-extrabold">{title}</h2>
+        className={`flex h-full w-full flex-col overflow-hidden md:rounded-3xl ${wide ? "md:w-[520px]" : "md:w-[430px]"}`}
+        style={{ background: "var(--bg)", boxShadow: "var(--shadow)" }}>
+        <header className="flex items-center gap-2 px-3 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
+          <IconButton icon="back" label="رجوع" onClick={onClose} plain size={38} />
+          <h2 className={`flex-1 text-lg font-extrabold ${bare ? "sr-only" : ""}`}>{title}</h2>
+          {bare && <span className="flex-1" />}
           {actions}
         </header>
         <div className="w-scroll flex-1 overflow-y-auto px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">{children}</div>
@@ -176,7 +185,7 @@ export function Panel({ title, onClose, children, actions, wide }: {
 
 export function Section({ title, extra, children }: { title?: string; extra?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="w-card mt-4 rounded-2xl p-4">
+    <section className="mt-3 rounded-[22px] p-4" style={{ background: "var(--panel)", boxShadow: "var(--soft-shadow)" }}>
       {title && (
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-extrabold">{title}</h3>

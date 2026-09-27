@@ -1,6 +1,6 @@
 # دليل الـ API لمصمم الواجهة
 
-> ✅ **الواجهة مبنية وجاهزة** بـ `frontend/app/chat/_ui/`، بالشكل **الأساسي (ستاندرد)** بوضعين **فاتح وداكن**، ومربوطة بكل اللي تحت.
+> ✅ **الواجهة مبنية وجاهزة** بـ `frontend/app/chat/_ui/`، بالتصميم **الأساسي** (بنفسجي هادئ) بوضعين **نهاري وليلي**، ومربوطة بكل اللي تحت.
 > الألوان كلها متغيرات بـ `frontend/app/wasl.css` (`[data-theme="light"]` و `[data-theme="dark"]`)،
 > فأي تعديل بالشكل، أو ثيم جديد (زجاجي/بنفسجي بعدين)، يصير هناك بدون ما نلمس الشاشات.
 >
@@ -8,10 +8,9 @@
 > |---|---|
 > | `App.tsx` | الهيكل: عمودين بالكمبيوتر، شاشة وحدة بالموبايل |
 > | `store.tsx` | البيانات المشتركة + الاتصال المباشر + المكالمات |
-> | `ChatList.tsx` | قائمة الدردشات + التبويبات + الشريط السفلي (الدردشات/المكالمات/المجموعات/الإعدادات) |
-> | `Groups.tsx` | تبويب المجموعات: مجموعاتي + مجموعة جديدة |
+> | `ChatList.tsx` | قائمة المحادثات + التبويبات (الكل/غير مقروءة/المجموعات/المكالمات) + الشريط السفلي (الإعدادات/المكالمات/المحادثات/جهات الاتصال) |
 > | `Conversation.tsx` / `Bubbles.tsx` / `Composer.tsx` | المحادثة، أشكال الرسائل، خانة الكتابة (صوت، صور، موقع) |
-> | `Profiles.tsx` | ملف جهة الاتصال، معلومات المجموعة، الوسائط، مجموعة جديدة |
+> | `Profiles.tsx` | ملف جهة الاتصال، معلومات المجموعة، الوسائط، الرسائل المميزة، مجموعة جديدة |
 > | `Location.tsx` | مشاركة الموقع |
 > | `Stories.tsx` | الحالات + العارض + النشر |
 > | `Calls.tsx` | سجل المكالمات + شاشة المكالمة |
@@ -38,7 +37,10 @@ import { CallSession } from "@/lib/call";      // المكالمات
 |---|---|
 | **قائمة الرسائل** + تبويبات الكل/المجموعات/المفضلة/غير مقروءة | `conversations.list("all" \| "groups" \| "favorites" \| "unread")` |
 | البحث فوك القائمة | `conversations.list("all", q)` و `users.list(q)` |
-| نجمة المفضلة / كتم / أرشفة | `conversations.setPrefs(id, { is_favorite: true })` |
+| تثبيت 📌 / مفضلة / كتم / أرشفة | `conversations.setPrefs(id, { is_pinned: true })` (المثبتة تطلع أول) |
+| **حذف المحادثة** (عندي بس) | `conversations.clear(id)`: تختفي لحد ما توصل رسالة جديدة |
+| **تفاعل** ❤️ على رسالة | `messages.react(msgId, "❤️")` (نفس الإيموجي مرة ثانية = يشيله). `m.reactions = [{emoji, count, user_ids}]` |
+| **الرسائل المميزة** ⭐ | `messages.star(msgId)` / `messages.unstar(msgId)` / `messages.starred(convId?)` |
 | **الرسائل المحفوظة** | `conversations.saved()` ← محادثة عادية `kind: "saved"` |
 | فتح محادثة ويا شخص | `conversations.openWith(userId)` |
 | **شاشة المحادثة** | `messages.list(id)` (آخر 50)، وللأقدم `messages.list(id, oldestId)` |
@@ -63,27 +65,20 @@ import { CallSession } from "@/lib/call";      // المكالمات
 | **سجل المكالمات** + الفائتة | `calls.log()` / `calls.log("missed")` |
 | **شاشة المكالمة** (صوت/فيديو، كتم، سماعة، إنهاء) | `CallSession` (تحت) |
 | **الإعدادات**: الاسم، الصورة، حول، الهاتف، المدينة | `auth.updateMe({...})`، `auth.setAvatar(file)` |
-| **المظهر** (فاتح / داكن / حسب الجهاز) | `auth.updateMe({ theme: "light" \| "dark" \| "system" })` |
+| **الوضع** (نهاري / ليلي / تلقائي) | `auth.updateMe({ mode: "light" \| "dark" \| "system" })` |
 | الإشعارات | موجودة: `PushToggle` و `PushBanner` بـ `app/chat/_ui/Settings.tsx` |
 
 ---
 
-## 🎨 المظهر: فاتح / داكن
+## 🎨 الوضع (نهاري/ليلي) والثيم: شيئين مختلفين
 
-المستخدم يختار من الإعدادات ← "المظهر"، وينحفظ بحسابه (`me.theme`)، فيتبعه على كل أجهزته:
+- **الوضع** `me.mode`: `light` نهاري، `dark` ليلي، `system` تلقائي حسب الجهاز (الافتراضي). مو ثيم، بس نهار وليل لنفس التصميم.
+- **الثيم** `me.theme`: شكل التطبيق. هسه بس `default` (الأساسي البنفسجي). الثيمات الثانية (زجاجي...) تنضاف بعدين.
 
-| القيمة | الشكل |
-|---|---|
-| `light` | الفاتح الأساسي (أبيض + أزرق) |
-| `dark` | الداكن |
-| `system` | حسب إعداد الجهاز (الافتراضي) |
-| `glass` | قديم: يطلع فاتح لحد ما نرجع للثيمات |
+**شلون شغال:** `store.tsx` يحسب `light` أو `dark` من `me.mode` ويحطها على `<div class="wasl" data-theme="...">`.
+وكل الألوان متغيرات (`--bg`, `--panel`, `--card`, `--tint`, `--text`, `--muted`, `--accent`, `--bubble-in/out`...) بـ `app/wasl.css`.
 
-**شلون شغال:** `store.tsx` يحسب `light` أو `dark` ويحطها على الغلاف `<div class="wasl" data-theme="...">`.
-وكل الألوان متغيرات (`--bg`, `--panel`, `--card`, `--text`, `--muted`, `--accent`, `--bubble-in/out`...) بـ `app/wasl.css`.
-
-إذا تضيف شاشة جديدة: استخدم الكلاسات الجاهزة (`w-panel`, `w-card`, `w-muted`, `w-accent`, `w-line`...) أو `var(--xxx)`، ولا تكتب لون ثابت، فتشتغل بالوضعين تلقائياً.
-**ثيم جديد** (مثلاً الزجاجي) = بلوك متغيرات جديد `.wasl[data-theme="glass"] { ... }` بـ `wasl.css` + قيمة بالباك اند.
+إذا تضيف شاشة جديدة: استخدم الكلاسات الجاهزة (`w-panel`, `w-card`, `w-tint`, `w-muted`, `w-accent`, `w-line`...) أو `var(--xxx)`، ولا تكتب لون ثابت، فتشتغل بالوضعين تلقائياً.
 
 ---
 
@@ -101,6 +96,7 @@ import { CallSession } from "@/lib/call";      // المكالمات
 | `status` | `sent` ✓ ، `delivered` ✓✓ رمادي ، `read` ✓✓ أزرق |
 | `is_deleted` | اعرض "🚫 تم حذف هذه الرسالة" |
 | `edited_at` | إذا موجود اعرض "(معدّلة)" |
+| `reactions` | `[{emoji, count, user_ids}]`: التفاعلات (تتحدث مباشرة بحدث `message_updated`) |
 
 ### المحادثة `Conversation`
 | الحقل | المعنى |
@@ -108,7 +104,7 @@ import { CallSession } from "@/lib/call";      // المكالمات
 | `kind` | `direct` (ثنائية)، `group`، `saved` |
 | `title`, `avatar` | للمجموعة والمحفوظة. بالثنائية: اعرض الطرف الثاني من `participants` |
 | `member_count`, `my_role` | "مجموعة • 12 عضواً"، وهل أني مشرف |
-| `is_favorite`, `is_muted`, `is_archived` | إعداداتي |
+| `is_favorite`, `is_muted`, `is_archived`, `is_pinned` | إعداداتي |
 | `last_message`, `unread_count` | للسطر الثاني والرقم البنفسجي |
 
 ---

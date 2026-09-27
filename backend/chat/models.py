@@ -35,6 +35,9 @@ class Membership(models.Model):
     is_favorite = models.BooleanField(default=False)
     is_muted = models.BooleanField(default=False)
     is_archived = models.BooleanField(default=False)
+    is_pinned = models.BooleanField(default=False)  # 📌 تطلع فوك القائمة
+    # "حذف المحادثة" عندي: الرسائل قبل هذا الوقت ما تطلعلي، والمحادثة تنخفي لحد ما تجي رسالة جديدة
+    cleared_at = models.DateTimeField(null=True, blank=True)
     # آخر رسالة وصلت لجهازه، وآخر رسالة قراها. منها نحسب ✓ / ✓✓ / ✓✓ أزرق وعدد غير المقروء
     last_delivered_id = models.PositiveBigIntegerField(default=0)
     last_read_id = models.PositiveBigIntegerField(default=0)
@@ -84,3 +87,26 @@ class Message(models.Model):
 
     def live_for(self, minutes):
         self.live_until = timezone.now() + timedelta(minutes=minutes)
+
+
+class Reaction(models.Model):
+    """تفاعل على رسالة (❤️ 👍 ...). كل شخص إله تفاعل واحد على الرسالة."""
+
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='reactions')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='reactions')
+    emoji = models.CharField(max_length=16)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['message', 'user'], name='one_reaction_per_user')]
+
+
+class StarredMessage(models.Model):
+    """الرسائل المميزة ⭐: خاصة بكل مستخدم (الطرف الثاني ما يدري)."""
+
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='stars')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='starred')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['message', 'user'], name='unique_star')]

@@ -16,8 +16,11 @@ class Profile(models.Model):
     bio = models.CharField(max_length=140, blank=True)  # "حول"
     city = models.CharField(max_length=60, blank=True)
     # شكل الواجهة اللي اختاره: الزجاجي الفاتح، أو الداكن الفاخر
-    THEMES = [('light', 'فاتح'), ('dark', 'داكن'), ('system', 'حسب الجهاز'), ('glass', 'الزجاجي (قديم)')]
-    theme = models.CharField(max_length=10, choices=THEMES, default='system')
+    # الوضع: نهاري/ليلي (مو ثيم). والثيم (شكل التطبيق) شي منفصل، نضيف ثيمات بعدين
+    MODES = [('light', 'نهاري'), ('dark', 'ليلي'), ('system', 'تلقائي')]
+    mode = models.CharField(max_length=10, choices=MODES, default='system')
+    THEMES = [('default', 'الأساسي')]
+    theme = models.CharField(max_length=20, choices=THEMES, default='default')
     is_online = models.BooleanField(default=False)
     # كم تبويب/جهاز فاتح هسه. "غير متصل" بس لما يصير صفر
     connections = models.IntegerField(default=0)

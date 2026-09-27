@@ -155,15 +155,53 @@ class GroupTests(Base, TestCase):
         self.assertFalse(s['is_live'])
 
     def test_profile_extras(self, _):
-        r = self.ali.patch('/api/auth/me/', {'phone': '+964 770 123 4567', 'city': 'بغداد', 'bio': 'هلا', 'theme': 'dark'},
+        r = self.ali.patch('/api/auth/me/', {'phone': '+964 770 123 4567', 'city': 'بغداد', 'bio': 'هلا', 'mode': 'dark'},
                            format='json')
-        self.assertEqual((r.data['phone'], r.data['theme']), ('+9647701234567', 'dark'))
+        self.assertEqual((r.data['phone'], r.data['mode'], r.data['theme']), ('+9647701234567', 'dark', 'default'))
         self.assertEqual(self.ali.patch('/api/auth/me/', {'phone': 'abc'}, format='json').status_code, 400)
-        self.assertEqual(self.ali.patch('/api/auth/me/', {'theme': 'pink'}, format='json').status_code, 400)
+        self.assertEqual(self.ali.patch('/api/auth/me/', {'mode': 'pink'}, format='json').status_code, 400)
         other = self.sara.get(f"/api/users/{self.ali.user['id']}/").data
         self.assertEqual(other['city'], 'بغداد')
-        self.assertNotIn('theme', other)  # إعدادات خاصة ما تطلع للناس
+        self.assertNotIn('mode', other)  # إعدادات خاصة ما تطلع للناس
         self.assertEqual([u['username'] for u in self.sara.get('/api/users/?q=770').data], ['ali'])
+
+    def test_pin_react_star_clear(self, _):
+        d = self.ali.post('/api/conversations/', {'user_id': self.sara.user['id']}, format='json').data
+        g = self.ali.post('/api/conversations/groups/', {'title': 'الشلة', 'member_ids': [self.sara.user['id']]},
+                          format='json').data
+        m = self.ali.post(f"/api/conversations/{d['id']}/messages/", {'content': 'هلو'}, format='json').data
+        # تثبيت: المثبتة تطلع أول حتى لو أقدم
+        self.assertTrue(self.ali.patch(f"/api/conversations/{d['id']}/", {'is_pinned': True}, format='json').data['is_pinned'])
+        self.ali.post(f"/api/conversations/{g['id']}/messages/", {'content': 'أحدث'}, format='json')
+        self.assertEqual([c['id'] for c in self.ali.get('/api/conversations/').data][:1], [d['id']])
+        self.assertFalse(self.sara.get(f"/api/conversations/{d['id']}/").data['is_pinned'])  # التثبيت خاص بيه
+
+        # تفاعل: سارة ❤️، علي ❤️، علي مرة ثانية = يشيل، وبعدها 👍 يبدل
+        r = self.sara.post(f"/api/messages/{m['id']}/react/", {'emoji': '❤️'}, format='json').data
+        self.assertEqual(r['reactions'], [{'emoji': '❤️', 'count': 1, 'user_ids': [self.sara.user['id']]}])
+        self.ali.post(f"/api/messages/{m['id']}/react/", {'emoji': '❤️'}, format='json')
+        r = self.ali.post(f"/api/messages/{m['id']}/react/", {'emoji': '❤️'}, format='json').data
+        self.assertEqual(r['reactions'][0]['count'], 1)
+        r = self.sara.post(f"/api/messages/{m['id']}/react/", {'emoji': '👍'}, format='json').data
+        self.assertEqual([x['emoji'] for x in r['reactions']], ['👍'])
+        self.assertEqual(self.omar.post(f"/api/messages/{m['id']}/react/", {'emoji': '❤️'}, format='json').status_code, 404)
+
+        # نجمة: خاصة بكل شخص
+        self.assertTrue(self.sara.post(f"/api/messages/{m['id']}/star/").data['starred'])
+        self.assertEqual([x['id'] for x in self.sara.get(f"/api/starred/?conversation={d['id']}").data], [m['id']])
+        self.assertEqual(self.ali.get('/api/starred/').data, [])
+        self.sara.delete(f"/api/messages/{m['id']}/star/")
+        self.assertEqual(self.sara.get('/api/starred/').data, [])
+
+        # حذف المحادثة عندي: تختفي من عندي بس، وترجع إذا وصلت رسالة جديدة
+        self.assertEqual(self.ali.post(f"/api/conversations/{d['id']}/clear/").status_code, 204)
+        self.assertNotIn(d['id'], [c['id'] for c in self.ali.get('/api/conversations/').data])
+        self.assertEqual(self.ali.get(f"/api/conversations/{d['id']}/messages/").data, [])
+        self.assertEqual(len(self.sara.get(f"/api/conversations/{d['id']}/messages/").data), 1)
+        self.sara.post(f"/api/conversations/{d['id']}/messages/", {'content': 'رجعت'}, format='json')
+        back = next(c for c in self.ali.get('/api/conversations/').data if c['id'] == d['id'])
+        self.assertEqual((back['last_message']['content'], back['unread_count']), ('رجعت', 1))
+        self.assertEqual([x['content'] for x in self.ali.get(f"/api/conversations/{d['id']}/messages/").data], ['رجعت'])
 
 
 class DeliveredTests(Base, TransactionTestCase):

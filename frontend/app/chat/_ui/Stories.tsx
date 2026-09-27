@@ -35,7 +35,7 @@ export function StoriesView() {
           <IconButton icon="back" label="رجوع" onClick={() => setTab("settings")} />
           <h1 className="flex-1 text-[22px] font-extrabold">الحالات</h1>
           <button onClick={() => setPanel({ type: "storyCompose" })} aria-label="حالة جديدة" title="حالة جديدة"
-            className="w-accent grid h-10 w-10 place-items-center rounded-full"><Icon name="plus" size={22} strokeWidth={2.4} /></button>
+            className="w-tint grid h-10 w-10 place-items-center rounded-full"><Icon name="plus" size={22} strokeWidth={2.4} /></button>
         </div>
         <div className="w-noscroll -mx-4 mt-4 flex gap-3 overflow-x-auto px-4">
           <button className="grid shrink-0 justify-items-center gap-1 text-[11px]"

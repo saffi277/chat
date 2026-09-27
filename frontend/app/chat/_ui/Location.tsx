@@ -49,7 +49,7 @@ export function LocationPanel({ convId }: { convId: number }) {
 
   return (
     <Panel title="مشاركة الموقع" onClose={() => setPanel(null)}>
-      <div className="w-card overflow-hidden rounded-[24px]">
+      <div className="w-panel overflow-hidden rounded-[24px]">
         {pos ? (
           <MiniMap lat={pos.lat} lng={pos.lng} height={300} zoom={15}
             pin={<Avatar user={me} size={46} ring />} />
@@ -60,7 +60,7 @@ export function LocationPanel({ convId }: { convId: number }) {
         )}
       </div>
 
-      <div className="w-card mt-4 rounded-[24px] p-4">
+      <div className="w-panel mt-4 rounded-[24px] p-4">
         <button onClick={() => setLive(true)} className="flex w-full items-center gap-3 text-right">
           <span className={`grid h-11 w-11 place-items-center rounded-2xl ${live ? "w-accent" : "w-card"}`}><Icon name="navigation" size={20} /></span>
           <span className="flex-1"><span className="block font-extrabold">مشاركة موقعي المباشر</span><span className="w-muted text-xs">يتحدث وياك وإنت تتحرك</span></span>

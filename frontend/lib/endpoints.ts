@@ -11,7 +11,6 @@ import {
   type MessageKind,
   type StoryGroup,
   type StoryItem,
-  type Theme,
   type User,
 } from "./api";
 
@@ -29,7 +28,7 @@ export const auth = {
   register: (username: string, password: string, display_name = "") =>
     api<{ token: string; user: Me }>("/auth/register/", "POST", { username, password, display_name }),
   me: () => api<Me>("/auth/me/"),
-  updateMe: (data: Partial<Pick<Me, "display_name" | "bio" | "phone" | "city">> & { theme?: Theme }) =>
+  updateMe: (data: Partial<Pick<Me, "display_name" | "bio" | "phone" | "city" | "mode" | "theme">>) =>
     api<Me>("/auth/me/", "PATCH", data),
   setAvatar: (file: File | null) => {
     if (!file) return api<Me>("/auth/me/", "PATCH", { avatar: null });
@@ -57,7 +56,7 @@ export const conversations = {
   createGroup: (title: string, memberIds: number[], description = "") =>
     api<Conversation>("/conversations/groups/", "POST", { title, member_ids: memberIds, description }),
   /** إعداداتي: مفضلة، كتم، أرشفة */
-  setPrefs: (id: number, prefs: Partial<Pick<Conversation, "is_favorite" | "is_muted" | "is_archived">>) =>
+  setPrefs: (id: number, prefs: Partial<Pick<Conversation, "is_favorite" | "is_muted" | "is_archived" | "is_pinned">>) =>
     api<Conversation>(`/conversations/${id}/`, "PATCH", prefs),
   /** المشرف بس: اسم ووصف المجموعة */
   updateGroup: (id: number, data: { title?: string; description?: string }) =>
@@ -75,6 +74,8 @@ export const conversations = {
   removeMember: (id: number, userId: number) => api(`/conversations/${id}/members/${userId}/`, "DELETE"),
   setRole: (id: number, userId: number, role: "admin" | "member") =>
     api<Member>(`/conversations/${id}/members/${userId}/`, "PATCH", { role }),
+  /** حذف المحادثة عندي بس (الطرف الثاني ما يتأثر) */
+  clear: (id: number) => api(`/conversations/${id}/clear/`, "POST"),
   markRead: (id: number) => api<{ updated: number }>(`/conversations/${id}/read/`, "PATCH"),
   /** الوسائط المشتركة + عددها لكل نوع */
   media: (id: number, type: "media" | "image" | "video" | "voice" | "file" | "link" | "location" = "media", before?: number) =>
@@ -108,6 +109,12 @@ export const messages = {
   stopLiveLocation: (messageId: number) => api<Message>(`/messages/${messageId}/location/`, "PATCH", { stop: true }),
   edit: (messageId: number, content: string) => api<Message>(`/messages/${messageId}/`, "PATCH", { content }),
   remove: (messageId: number) => api(`/messages/${messageId}/`, "DELETE"),
+  /** تفاعل ❤️: نفس الإيموجي مرة ثانية يشيله */
+  react: (messageId: number, emoji: string) => api<Message>(`/messages/${messageId}/react/`, "POST", { emoji }),
+  star: (messageId: number) => api<{ starred: boolean }>(`/messages/${messageId}/star/`, "POST"),
+  unstar: (messageId: number) => api<{ starred: boolean }>(`/messages/${messageId}/star/`, "DELETE"),
+  /** الرسائل المميزة ⭐ (كلها، أو لمحادثة وحدة) */
+  starred: (conversationId?: number) => api<Message[]>(`/starred/${qs({ conversation: conversationId })}`),
 };
 
 // ---------------------------------------------------------------- الحالات

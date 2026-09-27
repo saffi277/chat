@@ -15,14 +15,19 @@ export type User = {
   date_joined: string;
 };
 
-/** "glass" قديم (يرجع بعدين كثيم إضافي)، هسه يطلع فاتح */
-export type Theme = "light" | "dark" | "system" | "glass";
+/** الوضع: نهاري / ليلي / تلقائي (حسب الجهاز). مو ثيم */
+export type Mode = "light" | "dark" | "system";
+/** الثيم = شكل التطبيق. هسه بس الأساسي، والثيمات الثانية تنضاف بعدين */
+export type Theme = "default";
 /** أنا: نفس User + إعداداتي الخاصة */
-export type Me = User & { theme: Theme };
+export type Me = User & { mode: Mode; theme: Theme };
 
 export type MessageKind = "text" | "image" | "video" | "voice" | "file" | "location" | "system" | "call";
 /** sent = ✓ ، delivered = ✓✓ رمادي ، read = ✓✓ أزرق */
 export type MessageStatus = "sent" | "delivered" | "read";
+
+/** تفاعل: الإيموجي، كم واحد، ومنو (حتى نعرف إذا أني تفاعلت) */
+export type Reaction = { emoji: string; count: number; user_ids: number[] };
 
 export type ReplyPreview = { id: number; kind: MessageKind; sender_id: number; sender_name: string; preview: string };
 
@@ -46,6 +51,7 @@ export type Message = {
   is_deleted: boolean;
   status: MessageStatus;
   is_read: boolean;
+  reactions: Reaction[];
 };
 
 export type ConversationKind = "direct" | "group" | "saved";
@@ -62,6 +68,7 @@ export type Conversation = {
   is_favorite: boolean;
   is_muted: boolean;
   is_archived: boolean;
+  is_pinned: boolean;
   last_message: Message | null;
   unread_count: number;
   created_at: string;

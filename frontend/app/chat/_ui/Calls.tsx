@@ -9,19 +9,7 @@ import { useWasl } from "./store";
 
 // ------------------------------------------------------------ سجل المكالمات
 export function CallsView() {
-  const { convs, startCall, call, setPanel } = useWasl();
   const [filter, setFilter] = useState<"all" | "missed">("all");
-  const [log, setLog] = useState<Call[] | null>(null);
-  useEffect(() => {
-    callsApi.log(filter === "missed" ? "missed" : undefined).then(setLog).catch(() => setLog([]));
-  }, [filter, call?.phase]);
-
-  const again = async (c: Call) => {
-    if (!c.peer) return;
-    const conv = convs.find((x) => x.id === c.conversation) ?? (await convApi.openWith(c.peer.id));
-    startCall(conv, c.kind);
-  };
-
   return (
     <div className="flex h-full flex-col">
       <header className="px-4 pt-[max(1rem,env(safe-area-inset-top))]">
@@ -31,31 +19,52 @@ export function CallsView() {
           <Chip label="الفائتة" active={filter === "missed"} onClick={() => setFilter("missed")} />
         </div>
       </header>
-      <div className="w-scroll mt-2 flex-1 overflow-y-auto pb-4">
-        {log?.length === 0 && <Empty icon="phone" title="ماكو مكالمات" text="اتصل بأي شخص من زر السماعة فوك المحادثة." />}
-        {log?.map((c) => {
-          const missed = c.direction === "missed";
-          const name = c.peer ? nameOf(c.peer) : c.title || "مجموعة";
-          return (
-            <div key={c.id} className="w-hover w-line flex items-center gap-3 border-b px-4 py-2.5 last:border-b-0">
-              <button onClick={() => c.peer && setPanel({ type: "contact", userId: c.peer.id })}>
-                <Avatar user={c.peer} name={name} size={50} />
-              </button>
+      <div className="w-scroll mt-2 flex-1 overflow-y-auto pb-4"><CallLog missed={filter === "missed"} /></div>
+    </div>
+  );
+}
+
+/** قائمة المكالمات (بشاشة المكالمات، وبتبويب "المكالمات" بقائمة المحادثات) */
+export function CallLog({ missed }: { missed?: boolean }) {
+  const { convs, startCall, call, setPanel } = useWasl();
+  const [log, setLog] = useState<Call[] | null>(null);
+  useEffect(() => {
+    callsApi.log(missed ? "missed" : undefined).then(setLog).catch(() => setLog([]));
+  }, [missed, call?.phase]);
+
+  const again = async (c: Call) => {
+    if (!c.peer) return;
+    const conv = convs.find((x) => x.id === c.conversation) ?? (await convApi.openWith(c.peer.id));
+    startCall(conv, c.kind);
+  };
+
+  return (
+    <>
+      {log?.length === 0 && <Empty icon="phone" title="ماكو مكالمات" text="اتصل بأي شخص من زر السماعة فوك المحادثة." />}
+      {log?.map((c) => {
+        const isMissed = c.direction === "missed";
+        const name = c.peer ? nameOf(c.peer) : c.title || "مجموعة";
+        return (
+          <div key={c.id} className="w-hover flex items-center gap-3 px-4">
+            <button className="py-2.5" onClick={() => c.peer && setPanel({ type: "contact", userId: c.peer.id })}>
+              <Avatar user={c.peer} name={name} size={52} />
+            </button>
+            <div className="w-line flex min-w-0 flex-1 items-center gap-3 self-stretch border-b py-3">
               <div className="min-w-0 flex-1">
-                <div className="truncate font-bold" style={missed ? { color: "var(--danger)" } : undefined}>{name}</div>
-                <div className="w-muted mt-0.5 flex items-center gap-1 text-[13px]">
-                  <span style={{ color: missed ? "var(--danger)" : "var(--online)" }}><Icon name={c.direction === "outgoing" ? "outgoing" : "incoming"} size={14} strokeWidth={2.4} /></span>
+                <div className="truncate text-[16px] font-bold" style={isMissed ? { color: "var(--danger)" } : undefined}>{name}</div>
+                <div className="w-muted mt-1 flex items-center gap-1 text-[13px]">
+                  <span style={{ color: isMissed ? "var(--danger)" : "var(--call)" }}><Icon name={c.direction === "outgoing" ? "outgoing" : "incoming"} size={14} strokeWidth={2.4} /></span>
                   <Icon name={c.kind === "video" ? "video" : "phone"} size={13} />
-                  {missed ? "فائتة" : c.status === "declined" ? "مرفوضة" : c.duration ? duration(c.duration) : c.direction === "outgoing" ? "صادرة" : "واردة"}
+                  {isMissed ? "فائتة" : c.status === "declined" ? "مرفوضة" : c.duration ? duration(c.duration) : c.direction === "outgoing" ? "صادرة" : "واردة"}
                   <span>• {listTime(c.created_at)}</span>
                 </div>
               </div>
               {c.peer && <IconButton icon={c.kind === "video" ? "video" : "phone"} label="اتصل مرة ثانية" onClick={() => again(c)} />}
             </div>
-          );
-        })}
-      </div>
-    </div>
+          </div>
+        );
+      })}
+    </>
   );
 }
 

@@ -2,7 +2,7 @@
 // شكل كل نوع رسالة: نص، صورة، فيديو، صوت، ملف، موقع
 import { useEffect, useRef, useState } from "react";
 import { mediaUrl, type Message } from "@/lib/api";
-import { clock, duration, fileSize, MiniMap, nameOf } from "./bits";
+import { Avatar, clock, duration, fileSize, MiniMap, nameOf } from "./bits";
 import { Icon } from "./icons";
 
 // نحول الروابط بالنص لروابط تنضغط
@@ -40,7 +40,8 @@ function bars(seed: number, n = 34) {
   });
 }
 
-export function VoicePlayer({ m, mine }: { m: Message; mine: boolean }) {
+/** مثل التصميم: ▶ ، المدة، الموجة، وصورة المرسل */
+export function VoicePlayer({ m }: { m: Message }) {
   const audio = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -65,18 +66,18 @@ export function VoicePlayer({ m, mine }: { m: Message; mine: boolean }) {
     if (playing) { a.pause(); setPlaying(false); } else { a.play().then(() => setPlaying(true)).catch(() => {}); }
   };
   return (
-    <div className="flex min-w-[210px] items-center gap-3 py-1" dir="ltr">
-      <button onClick={toggle} aria-label={playing ? "إيقاف" : "تشغيل"}
-        className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${mine ? "bg-white/25" : "w-accent"}`}>
-        <Icon name={playing ? "pause" : "play"} size={16} />
+    <div className="flex min-w-[230px] items-center gap-2.5 py-0.5" dir="ltr">
+      <button onClick={toggle} aria-label={playing ? "إيقاف" : "تشغيل"} className="w-accent-text grid h-9 w-7 shrink-0 place-items-center">
+        <Icon name={playing ? "pause" : "play"} size={20} filled />
       </button>
-      <div className="flex h-8 flex-1 items-center gap-[2px]">
+      <span className="w-9 shrink-0 text-[12px]">{duration(playing || elapsed ? elapsed : m.duration)}</span>
+      <div className="flex h-7 flex-1 items-center gap-[2px]">
         {heights.map((h, i) => (
-          <span key={i} className="w-[3px] rounded-full transition-colors"
-            style={{ height: `${h * 100}%`, background: i / heights.length <= progress ? (mine ? "#fff" : "var(--accent)") : "currentColor", opacity: i / heights.length <= progress ? 1 : 0.35 }} />
+          <span key={i} className="w-[2.5px] rounded-full transition-colors"
+            style={{ height: `${h * 100}%`, background: i / heights.length <= progress ? "var(--accent)" : "var(--muted)", opacity: i / heights.length <= progress ? 1 : 0.55 }} />
         ))}
       </div>
-      <span className="w-9 shrink-0 text-[11px] opacity-80">{duration(playing || elapsed ? elapsed : m.duration)}</span>
+      <Avatar user={m.sender} size={38} />
       <audio ref={audio} src={mediaUrl(m.file_url) ?? undefined} preload="none" />
     </div>
   );
@@ -109,16 +110,15 @@ export function MessageBody({ m, mine, onImage, onStopLive, sharingLive }: {
         </div>
       );
     case "voice":
-      return <VoicePlayer m={m} mine={mine} />;
+      return <VoicePlayer m={m} />;
     case "file":
       return (
-        <a href={url ?? "#"} download={m.file_name} className="flex min-w-[220px] items-center gap-3 py-1">
-          <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${mine ? "bg-white/25" : "w-accent"}`}><Icon name="file" size={20} /></span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate font-bold" dir="auto">{m.file_name}</span>
-            <span className="text-xs opacity-75">{fileSize(m.file_size)}</span>
+        <a href={url ?? "#"} download={m.file_name} className="flex min-w-[210px] items-center gap-3 py-1" dir="ltr" aria-label={`تنزيل ${m.file_name}`}>
+          <span className="w-accent grid h-12 w-12 shrink-0 place-items-center rounded-[14px]"><Icon name="fileText" size={24} /></span>
+          <span className="min-w-0 flex-1 text-left">
+            <span className="block truncate text-[15px] font-bold" dir="auto">{m.file_name}</span>
+            <span className="w-muted text-xs">{[fileSize(m.file_size), m.file_name.split(".").pop()?.toUpperCase()].filter(Boolean).join(" • ")}</span>
           </span>
-          <Icon name="download" size={18} className="opacity-80" />
         </a>
       );
     case "location": {
@@ -137,7 +137,7 @@ export function MessageBody({ m, mine, onImage, onStopLive, sharingLive }: {
           </div>
           {m.content && <div className="px-1.5 pt-1"><RichText text={m.content} /></div>}
           {mine && m.is_live && onStopLive && (
-            <button onClick={onStopLive} className="mx-1.5 mt-2 w-[calc(100%-12px)] rounded-full bg-white/20 py-1.5 text-xs font-bold">
+            <button onClick={onStopLive} className="w-tint mx-1.5 mt-2 w-[calc(100%-12px)] rounded-full py-1.5 text-xs font-bold">
               {sharingLive ? "إيقاف المشاركة" : "إيقاف (المشاركة من جهاز ثاني)"}
             </button>
           )}
@@ -149,12 +149,12 @@ export function MessageBody({ m, mine, onImage, onStopLive, sharingLive }: {
   }
 }
 
-export function ReplyQuote({ r, mine, onClick }: { r: NonNullable<Message["reply_to"]>; mine: boolean; onClick?: () => void }) {
+export function ReplyQuote({ r, onClick }: { r: NonNullable<Message["reply_to"]>; mine?: boolean; onClick?: () => void }) {
   return (
     <button type="button" onClick={onClick}
-      className={`mb-1.5 block w-full rounded-xl border-r-4 px-2.5 py-1.5 text-right text-xs ${mine ? "border-white/70 bg-white/15" : "bg-black/5"}`}
-      style={mine ? undefined : { borderColor: "var(--accent)" }}>
-      <span className="block font-bold">{r.sender_name}</span>
+      className="mb-1.5 block w-full rounded-xl border-r-4 px-2.5 py-1.5 text-right text-xs"
+      style={{ borderColor: "var(--accent)", background: "color-mix(in srgb, var(--accent) 9%, transparent)" }}>
+      <span className="w-accent-text block font-bold">{r.sender_name}</span>
       <span className="line-clamp-1 opacity-80">{r.preview}</span>
     </button>
   );

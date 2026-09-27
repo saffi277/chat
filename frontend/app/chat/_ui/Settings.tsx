@@ -1,22 +1,21 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import type { Theme } from "@/lib/api";
+import type { Mode } from "@/lib/api";
 import { auth } from "@/lib/endpoints";
 import { disablePush, enablePush, getPushState, type PushState } from "@/lib/push";
 import { Avatar, nameOf, Section, Toggle } from "./bits";
 import { Icon } from "./icons";
 import { useWasl } from "./store";
 
-const themes: { value: Theme; label: string; icon: "sun" | "moon" | "device" }[] = [
-  { value: "light", label: "فاتح", icon: "sun" },
-  { value: "dark", label: "داكن", icon: "moon" },
-  { value: "system", label: "حسب الجهاز", icon: "device" },
+// الوضع نهاري/ليلي (مو ثيم). الثيمات تنضاف كقسم منفصل بعدين
+const modes: { value: Mode; label: string; icon: "sun" | "moon" | "device" }[] = [
+  { value: "light", label: "نهاري", icon: "sun" },
+  { value: "dark", label: "ليلي", icon: "moon" },
+  { value: "system", label: "تلقائي", icon: "device" },
 ];
 
 export function SettingsView() {
   const { me, updateMe, signOut, openSaved, notify, setTab, stories } = useWasl();
-  // "glass" قديم، نعامله كفاتح لحد ما نرجع للثيمات
-  const current: Theme = me.theme === "glass" ? "light" : me.theme;
   const [form, setForm] = useState({ display_name: me.display_name, bio: me.bio, phone: me.phone, city: me.city });
   const [busy, setBusy] = useState(false);
   const pick = useRef<HTMLInputElement>(null);
@@ -35,15 +34,15 @@ export function SettingsView() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col" style={{ background: "var(--bg)" }}>
       <header className="px-4 pt-[max(1rem,env(safe-area-inset-top))]">
-        <h1 className="text-[26px] font-extrabold leading-10">الإعدادات</h1>
+        <h1 className="text-[28px] font-extrabold leading-tight">الإعدادات</h1>
       </header>
       <div className="w-scroll flex-1 overflow-y-auto px-4 pb-6">
-        <div className="w-card mt-3 flex items-center gap-4 rounded-2xl p-4">
+        <div className="mt-3 flex items-center gap-4 rounded-[22px] p-4" style={{ background: "var(--panel)", boxShadow: "var(--soft-shadow)" }}>
           <button onClick={() => pick.current?.click()} className="relative" aria-label="تغيير الصورة">
             <Avatar user={me} size={72} />
-            <span className="w-accent absolute -bottom-1 -left-1 grid h-8 w-8 place-items-center rounded-full border-2" style={{ borderColor: "var(--card)" }}><Icon name="camera" size={15} /></span>
+            <span className="w-accent absolute -bottom-1 -left-1 grid h-8 w-8 place-items-center rounded-full border-2" style={{ borderColor: "var(--panel)" }}><Icon name="camera" size={15} /></span>
           </button>
           <input ref={pick} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) run(() => auth.setAvatar(f), "انحفظت الصورة"); e.target.value = ""; }} />
           <div className="min-w-0 flex-1">
@@ -65,21 +64,21 @@ export function SettingsView() {
                 {label}
                 <input value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} placeholder={ph}
                   dir={key === "phone" ? "ltr" : "auto"} inputMode={key === "phone" ? "tel" : undefined}
-                  className="w-input mt-1.5 h-11 w-full rounded-xl px-4 text-base font-normal outline-none md:text-sm" style={{ background: "var(--panel)" }} />
+                  className="w-input mt-1.5 h-11 w-full rounded-xl px-4 text-base font-normal outline-none md:text-sm" />
               </label>
             ))}
             <button disabled={!dirty || busy} className="w-accent w-full rounded-full py-3 font-bold disabled:opacity-40">{busy ? "جاري الحفظ..." : "حفظ"}</button>
           </form>
         </Section>
 
-        <Section title="المظهر">
-          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="المظهر">
-            {themes.map((t) => (
-              <button key={t.value} role="radio" aria-checked={current === t.value} disabled={busy}
-                onClick={() => run(() => auth.updateMe({ theme: t.value }))}
-                className={`grid justify-items-center gap-1.5 rounded-xl border py-3 text-[13px] font-semibold transition ${current === t.value ? "w-accent border-transparent" : "w-line"}`}
-                style={current === t.value ? undefined : { background: "var(--panel)" }}>
-                <Icon name={t.icon} size={20} />
+        <Section title="الوضع">
+          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="الوضع">
+            {modes.map((t) => (
+              <button key={t.value} role="radio" aria-checked={me.mode === t.value} disabled={busy}
+                onClick={() => run(() => auth.updateMe({ mode: t.value }))}
+                className={`grid justify-items-center gap-1.5 rounded-2xl py-3 text-[13px] font-semibold transition ${me.mode === t.value ? "w-tint" : ""}`}
+                style={me.mode === t.value ? { border: "1px solid var(--tint-border)" } : { background: "var(--card)" }}>
+                <Icon name={t.icon} size={20} filled={me.mode === t.value && t.icon !== "device"} />
                 {t.label}
               </button>
             ))}
@@ -88,7 +87,7 @@ export function SettingsView() {
 
         <Section><PushToggle /></Section>
 
-        <section className="w-card mt-4 overflow-hidden rounded-2xl">
+        <section className="mt-3 overflow-hidden rounded-[22px]" style={{ background: "var(--panel)", boxShadow: "var(--soft-shadow)" }}>
           <button onClick={() => setTab("stories")} className="w-hover flex w-full items-center gap-3 px-4 py-3.5 font-semibold">
             <Icon name="stories" size={20} className="w-accent-text" /><span className="flex-1 text-right">الحالات</span>
             {stories.some((g) => !g.is_me && !g.all_seen) && <span className="w-badge h-2.5 w-2.5 rounded-full" aria-label="حالات جديدة" />}

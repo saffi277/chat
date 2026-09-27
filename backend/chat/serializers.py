@@ -49,12 +49,13 @@ class MessageSerializer(serializers.ModelSerializer):
     is_deleted = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
     is_read = serializers.SerializerMethodField()
+    reactions = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
         fields = ['id', 'conversation', 'sender', 'kind', 'content', 'file_url', 'file_name', 'file_size',
                   'duration', 'latitude', 'longitude', 'live_until', 'is_live', 'reply_to',
-                  'created_at', 'edited_at', 'is_deleted', 'status', 'is_read']
+                  'created_at', 'edited_at', 'is_deleted', 'status', 'is_read', 'reactions']
 
     def get_file_url(self, obj):
         return obj.file.url if obj.file else None
@@ -67,6 +68,13 @@ class MessageSerializer(serializers.ModelSerializer):
 
     def get_is_read(self, obj):
         return self.get_status(obj) == 'read'
+
+    def get_reactions(self, obj):
+        # [{emoji: "❤️", count: 2, user_ids: [3, 5]}]. نفس البيانات تنبث للكل، وكل واجهة تعرف "أني تفاعلت" من user_ids
+        groups = {}
+        for r in obj.reactions.all():
+            groups.setdefault(r.emoji, []).append(r.user_id)
+        return [{'emoji': e, 'count': len(ids), 'user_ids': ids} for e, ids in groups.items()]
 
 
 class MemberSerializer(serializers.ModelSerializer):
@@ -86,13 +94,14 @@ class ConversationSerializer(serializers.ModelSerializer):
     is_favorite = serializers.SerializerMethodField()
     is_muted = serializers.SerializerMethodField()
     is_archived = serializers.SerializerMethodField()
+    is_pinned = serializers.SerializerMethodField()
     last_message = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Conversation
         fields = ['id', 'kind', 'title', 'description', 'avatar', 'participants', 'member_count', 'my_role',
-                  'is_favorite', 'is_muted', 'is_archived', 'last_message', 'unread_count', 'created_at']
+                  'is_favorite', 'is_muted', 'is_archived', 'is_pinned', 'last_message', 'unread_count', 'created_at']
 
     def _memberships(self, obj):
         # نحفظها على الكائن حتى ما نسأل الداتابيس كل مرة
@@ -134,8 +143,16 @@ class ConversationSerializer(serializers.ModelSerializer):
         mine = self._mine(obj)
         return bool(mine and mine.is_archived)
 
+    def get_is_pinned(self, obj):
+        mine = self._mine(obj)
+        return bool(mine and mine.is_pinned)
+
     def get_last_message(self, obj):
-        msg = obj.messages.select_related('sender__profile', 'reply_to').order_by('-id').first()
+        mine = self._mine(obj)
+        qs = obj.messages.select_related('sender__profile', 'reply_to').prefetch_related('reactions')
+        if mine and mine.cleared_at:
+            qs = qs.filter(created_at__gt=mine.cleared_at)
+        msg = qs.order_by('-id').first()
         if not msg:
             return None
         receipts = [{'user_id': m.user_id, 'last_delivered_id': m.last_delivered_id, 'last_read_id': m.last_read_id}

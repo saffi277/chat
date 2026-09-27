@@ -2,15 +2,17 @@
 // ملف جهة الاتصال، معلومات المجموعة، الوسائط المشتركة، إنشاء مجموعة
 import { useEffect, useRef, useState } from "react";
 import { mediaUrl, type Member, type Message, type User } from "@/lib/api";
-import { conversations as convApi, users as usersApi } from "@/lib/endpoints";
-import { Avatar, Chip, ConvAvatar, fileSize, IconButton, lastSeenText, nameOf, Panel, Section, Toggle } from "./bits";
+import { conversations as convApi, messages as msgApi, users as usersApi } from "@/lib/endpoints";
+import { Avatar, Chip, ConvAvatar, fileSize, IconButton, lastSeenText, listTime, nameOf, Panel, preview, Section } from "./bits";
 import { Icon, type IconName } from "./icons";
 import { useWasl } from "./store";
 
-function Action({ icon, label, onClick }: { icon: IconName; label: string; onClick: () => void }) {
+function Action({ icon, label, onClick, active }: { icon: IconName; label: string; onClick: () => void; active?: boolean }) {
   return (
-    <button onClick={onClick} className="w-card w-hover grid flex-1 justify-items-center gap-1.5 rounded-[18px] py-3 text-xs font-bold">
-      <span className="w-accent-text"><Icon name={icon} size={22} /></span>{label}
+    <button onClick={onClick} aria-pressed={active}
+      className={`grid min-w-0 flex-1 justify-items-center gap-1.5 whitespace-nowrap rounded-[18px] px-1 py-3.5 text-[11px] font-semibold transition active:scale-95 ${active ? "w-tint" : ""}`}
+      style={active ? { border: "1px solid var(--tint-border)" } : { background: "var(--panel)", boxShadow: "var(--soft-shadow)" }}>
+      <span className={active ? "" : "w-accent-text"}><Icon name={icon} size={24} filled={active} /></span>{label}
     </button>
   );
 }
@@ -29,23 +31,58 @@ function InfoRow({ icon, label, value, href }: { icon: IconName; label: string; 
   return href ? <a href={href} className="flex items-center gap-3 py-2.5">{body}</a> : <div className="flex items-center gap-3 py-2.5">{body}</div>;
 }
 
-/** أربع صور من الوسائط المشتركة + العدد */
-function MediaPreview({ convId, onOpen }: { convId: number; onOpen: () => void }) {
+/** صف بقائمة: الأيقونة يمين، النص، والسهم يسار */
+function NavRow({ icon, label, onClick, danger, extra }: { icon: IconName; label: string; onClick: () => void; danger?: boolean; extra?: React.ReactNode }) {
+  return (
+    <button onClick={onClick} className="flex w-full items-center gap-3 py-3 text-right text-[15px] font-semibold"
+      style={danger ? { color: "var(--danger)" } : undefined}>
+      <Icon name={icon} size={22} className={danger ? "" : ""} />
+      <span className="flex-1">{label}</span>
+      {extra}
+      {!danger && <Icon name="chevron" size={18} className="w-muted" />}
+    </button>
+  );
+}
+
+function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <section className={`mt-3 rounded-[22px] px-4 py-1 ${className}`} style={{ background: "var(--panel)", boxShadow: "var(--soft-shadow)" }}>{children}</section>;
+}
+
+type MediaTab = "media" | "file" | "link" | "voice";
+
+/** "الوسائط والملفات": 3 صور + "+N"، وتحتها الصور/الملفات/الروابط/الرسائل المميزة */
+function MediaCard({ convId }: { convId: number }) {
+  const { setPanel } = useWasl();
   const [data, setData] = useState<{ counts: Record<string, number>; results: Message[] } | null>(null);
   useEffect(() => {
     convApi.media(convId, "media").then(setData).catch(() => {});
   }, [convId]);
-  const total = data ? (data.counts.media ?? 0) + (data.counts.file ?? 0) + (data.counts.link ?? 0) + (data.counts.voice ?? 0) : 0;
+  const open = (tab: MediaTab) => setPanel({ type: "media", convId, tab });
+  const pics = data?.results.slice(0, 3) ?? [];
+  const more = (data?.counts.media ?? 0) - pics.length;
   return (
-    <Section title="الوسائط المشتركة" extra={<button onClick={onOpen} className="w-accent-text flex items-center gap-1 text-sm font-bold">{total}<Icon name="chevron" size={16} /></button>}>
-      {data && data.results.length > 0 ? (
-        <button onClick={onOpen} className="grid w-full grid-cols-4 gap-2">
-          {data.results.slice(0, 4).map((m) => <Thumb key={m.id} m={m} />)}
-        </button>
+    <Card className="pt-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-[16px] font-extrabold">الوسائط والملفات</h3>
+        <button onClick={() => open("media")} className="w-accent-text flex items-center gap-0.5 text-sm font-semibold">الكل<Icon name="chevron" size={16} /></button>
+      </div>
+      {pics.length > 0 ? (
+        <div className="mt-3 grid grid-cols-4 gap-2">
+          {pics.map((m) => <button key={m.id} onClick={() => open("media")}><Thumb m={m} /></button>)}
+          {more > 0 && (
+            <button onClick={() => open("media")} className="grid aspect-square place-items-center rounded-2xl text-lg font-bold" style={{ background: "var(--card)" }}>+{more}</button>
+          )}
+        </div>
       ) : (
-        <p className="w-muted text-sm">ماكو صور أو فيديو بعد.</p>
+        <p className="w-muted mt-2 text-sm">ماكو صور أو فيديو بعد.</p>
       )}
-    </Section>
+      <div className="w-divide mt-2">
+        <NavRow icon="image" label="الصور" onClick={() => open("media")} />
+        <NavRow icon="file" label="الملفات" onClick={() => open("file")} />
+        <NavRow icon="link" label="الروابط" onClick={() => open("link")} />
+        <NavRow icon="star" label="الرسائل المميزة" onClick={() => setPanel({ type: "starred", convId })} />
+      </div>
+    </Card>
   );
 }
 
@@ -66,10 +103,30 @@ function Thumb({ m, onClick }: { m: Message; onClick?: () => void }) {
   );
 }
 
+/** "حذف المحادثة" عندي بس */
+function useClearChat() {
+  const { refreshConvs, openConv, activeId, setPanel, notify } = useWasl();
+  return async (convId: number) => {
+    if (!confirm("تحذف المحادثة من عندك؟ الطرف الثاني تبقى عنده.")) return;
+    try {
+      await convApi.clear(convId);
+      await refreshConvs();
+      setPanel(null);
+      if (activeId === convId) openConv(null);
+      notify("انحذفت المحادثة");
+    } catch (e) {
+      notify((e as Error).message);
+    }
+  };
+}
+
 // ------------------------------------------------------------ ملف جهة الاتصال
 export function ContactPanel({ userId }: { userId: number }) {
-  const { userById, convs, openWith, startCall, setPanel, refreshConvs } = useWasl();
+  const { userById, convs, openWith, startCall, setPanel, refreshConvs, notify } = useWasl();
   const [user, setUser] = useState<User | null>(userById(userId) ?? null);
+  const [menu, setMenu] = useState(false);
+  const [info, setInfo] = useState(false);
+  const clearChat = useClearChat();
   useEffect(() => {
     usersApi.get(userId).then(setUser).catch(() => {});
   }, [userId]);
@@ -78,47 +135,121 @@ export function ContactPanel({ userId }: { userId: number }) {
   if (!live) return <Panel title="جهة الاتصال" onClose={() => setPanel(null)}><p className="w-muted p-6 text-center">جاري التحميل...</p></Panel>;
   const u = { ...live, ...(user ?? {}), is_online: live.is_online, last_seen: live.last_seen };
 
+  const ensureConv = async () => conv ?? (await convApi.openWith(userId));
   const call = async (kind: "audio" | "video") => {
-    const c = conv ?? (await convApi.openWith(userId));
+    const c = await ensureConv();
     setPanel(null);
     await startCall(c, kind);
   };
-  const pref = async (key: "is_favorite" | "is_muted") => {
-    if (!conv) return;
-    await convApi.setPrefs(conv.id, { [key]: !conv[key] });
+  const pref = async (key: "is_favorite" | "is_muted" | "is_pinned") => {
+    setMenu(false);
+    const c = await ensureConv();
+    await convApi.setPrefs(c.id, { [key]: !c[key] });
     refreshConvs();
   };
 
+  const menuItems: { icon: IconName; label: string; run: () => void }[] = [
+    { icon: "info", label: info ? "إخفاء المعلومات" : "معلومات الاتصال", run: () => { setMenu(false); setInfo((v) => !v); } },
+    { icon: "bookmark", label: conv?.is_favorite ? "إزالة من المفضلة" : "إضافة للمفضلة", run: () => pref("is_favorite") },
+    { icon: "pinned", label: conv?.is_pinned ? "إلغاء التثبيت" : "تثبيت المحادثة", run: () => pref("is_pinned") },
+  ];
+
   return (
-    <Panel title="جهة الاتصال" onClose={() => setPanel(null)}>
-      <div className="flex flex-col items-center pt-2 text-center">
-        <Avatar user={u} size={116} ring />
-        <h3 className="mt-3 flex items-center gap-1.5 text-2xl font-extrabold">{nameOf(u)}</h3>
-        <p className="text-sm font-bold" style={{ color: u.is_online ? "var(--online)" : "var(--muted)" }}>{lastSeenText(u)}</p>
+    <Panel title="جهة الاتصال" bare onClose={() => setPanel(null)} actions={
+      <div className="relative">
+        <IconButton icon="more" label="المزيد" onClick={() => setMenu((m) => !m)} plain size={38} />
+        {menu && (
+          <div className="w-strong w-shadow absolute left-0 top-11 z-20 w-56 rounded-2xl p-1.5" style={{ border: "1px solid var(--border)" }}>
+            {menuItems.map((it) => (
+              <button key={it.label} onClick={it.run} className="w-hover flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold">
+                <Icon name={it.icon} size={18} className="w-accent-text" />{it.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    }>
+      <div className="flex flex-col items-center text-center">
+        <Avatar user={u} size={112} />
+        <h3 className="mt-3 text-[24px] font-extrabold">{nameOf(u)}</h3>
+        <p className="w-muted mt-0.5 flex items-center gap-1.5 text-sm">
+          {u.is_online && <span className="h-2 w-2 rounded-full" style={{ background: "var(--online)" }} />}{lastSeenText(u)}
+        </p>
       </div>
       <div className="mt-5 flex gap-2">
-        <Action icon="chats" label="مراسلة" onClick={() => openWith(userId)} />
-        <Action icon="phone" label="مكالمة" onClick={() => call("audio")} />
-        <Action icon="video" label="فيديو" onClick={() => call("video")} />
-        <Action icon="star" label={conv?.is_favorite ? "بالمفضلة" : "المفضلة"} onClick={() => pref("is_favorite")} />
+        <Action icon="chats" label="مراسلة" active onClick={() => openWith(userId)} />
+        <Action icon="phone" label="مكالمة صوتية" onClick={() => call("audio")} />
+        <Action icon="video" label="مكالمة فيديو" onClick={() => call("video")} />
+        <Action icon={conv?.is_muted ? "bellOff" : "bell"} label={conv?.is_muted ? "إلغاء الكتم" : "كتم الإشعارات"} onClick={() => pref("is_muted")} />
       </div>
-      <Section title="معلومات الاتصال">
-        <div className="w-divide">
-          <InfoRow icon="user" label="اسم المستخدم" value={`@${u.username}`} />
-          {u.phone && <InfoRow icon="phone" label="رقم الهاتف" value={u.phone} href={`tel:${u.phone}`} />}
-          {u.city && <InfoRow icon="pin" label="الموقع الحالي" value={u.city} />}
-          {u.bio && <InfoRow icon="info" label="حول" value={u.bio} />}
-        </div>
-      </Section>
-      {conv && <MediaPreview convId={conv.id} onOpen={() => setPanel({ type: "media", convId: conv.id })} />}
-      {conv && (
-        <Section>
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-2 font-bold"><Icon name="bellOff" size={18} className="w-accent-text" />كتم الإشعارات</span>
-            <Toggle on={conv.is_muted} onChange={() => pref("is_muted")} label="كتم الإشعارات" />
+      {info && (
+        <Card>
+          <div className="w-divide">
+            <InfoRow icon="user" label="اسم المستخدم" value={`@${u.username}`} />
+            {u.phone && <InfoRow icon="phone" label="رقم الهاتف" value={u.phone} href={`tel:${u.phone}`} />}
+            {u.city && <InfoRow icon="pin" label="المدينة" value={u.city} />}
+            {u.bio && <InfoRow icon="info" label="حول" value={u.bio} />}
           </div>
-        </Section>
+        </Card>
       )}
+      {conv && <MediaCard convId={conv.id} />}
+      <Card>
+        <div className="w-divide">
+          <NavRow icon="pin" label="مشاركة الموقع" onClick={async () => setPanel({ type: "location", convId: (await ensureConv()).id })} />
+          <NavRow icon="lock" label="المحادثة السرية" onClick={() => notify("المحادثة السرية قريباً 🔒")}
+            extra={<span className="w-tint rounded-full px-2 py-0.5 text-[10px] font-bold">قريباً</span>} />
+        </div>
+      </Card>
+      {conv && (
+        <Card>
+          <NavRow icon="trash" label="حذف المحادثة" danger onClick={() => clearChat(conv.id)} />
+        </Card>
+      )}
+    </Panel>
+  );
+}
+
+// ------------------------------------------------------------ الرسائل المميزة ⭐
+export function StarredPanel({ convId }: { convId?: number }) {
+  const { setPanel, openConv, me } = useWasl();
+  const [list, setList] = useState<Message[] | null>(null);
+  useEffect(() => {
+    msgApi.starred(convId).then(setList).catch(() => setList([]));
+  }, [convId]);
+  const remove = async (m: Message) => {
+    await msgApi.unstar(m.id).catch(() => {});
+    setList((l) => l?.filter((x) => x.id !== m.id) ?? null);
+  };
+  return (
+    <Panel title="الرسائل المميزة" onClose={() => setPanel(null)}>
+      {list?.length === 0 && (
+        <div className="w-muted py-12 text-center text-sm">
+          <Icon name="star" size={36} className="mx-auto mb-3" />
+          ماكو رسائل مميزة. اضغط على أي رسالة واختار &quot;تمييز بنجمة&quot;.
+        </div>
+      )}
+      {list?.map((m) => {
+        const p = preview(m, me.id);
+        return (
+          <Card key={m.id}>
+            <div className="flex items-center gap-3 py-3">
+              <button className="flex min-w-0 flex-1 items-center gap-3 text-right" onClick={() => { setPanel(null); openConv(m.conversation); }}>
+                <Avatar user={m.sender} size={40} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="truncate text-sm font-bold">{m.sender.id === me.id ? "أنت" : nameOf(m.sender)}</span>
+                    <span className="w-muted shrink-0 text-[11px]" dir="ltr">{listTime(m.created_at)}</span>
+                  </span>
+                  <span className="w-muted mt-0.5 flex items-center gap-1 text-[13px]">
+                    {p.icon && <Icon name={p.icon} size={14} className="shrink-0" />}<span className="truncate">{p.text}</span>
+                  </span>
+                </span>
+              </button>
+              <IconButton icon="star" label="إلغاء التمييز" onClick={() => remove(m)} size={34} />
+            </div>
+          </Card>
+        );
+      })}
     </Panel>
   );
 }
@@ -132,6 +263,7 @@ export function GroupPanel({ convId }: { convId: number }) {
   const [editTitle, setEditTitle] = useState<string | null>(null);
   const [memberMenu, setMemberMenu] = useState<number | null>(null);
   const avatarPick = useRef<HTMLInputElement>(null);
+  const clearChat = useClearChat();
   const load = () => convApi.members(convId).then(setMembers).catch(() => {});
   useEffect(() => {
     convApi.members(convId).then(setMembers).catch(() => {});
@@ -167,15 +299,16 @@ export function GroupPanel({ convId }: { convId: number }) {
             {admin && <button onClick={() => setEditTitle(conv.title)} aria-label="تعديل الاسم" className="w-muted"><Icon name="edit" size={17} /></button>}
           </h3>
         )}
-        <p className="w-muted text-sm">مجموعة • {conv.member_count} أعضاء</p>
+        <p className="w-muted mt-0.5 text-sm">مجموعة • {conv.member_count} أعضاء</p>
         {conv.description && <p className="mt-2 text-sm">{conv.description}</p>}
       </div>
       <div className="mt-5 flex gap-2">
-        {admin && <Action icon="userPlus" label="إضافة" onClick={() => setAdding(true)} />}
-        <Action icon="image" label="الوسائط" onClick={() => setPanel({ type: "media", convId })} />
-        <Action icon={conv.is_muted ? "bell" : "bellOff"} label={conv.is_muted ? "إلغاء الكتم" : "كتم"} onClick={() => act(() => convApi.setPrefs(convId, { is_muted: !conv.is_muted }))} />
-        <Action icon="star" label={conv.is_favorite ? "بالمفضلة" : "المفضلة"} onClick={() => act(() => convApi.setPrefs(convId, { is_favorite: !conv.is_favorite }))} />
+        <Action icon="chats" label="مراسلة" active onClick={() => { setPanel(null); openConv(convId); }} />
+        {admin && <Action icon="userPlus" label="إضافة أعضاء" onClick={() => setAdding(true)} />}
+        <Action icon="pinned" label={conv.is_pinned ? "إلغاء التثبيت" : "تثبيت"} onClick={() => act(() => convApi.setPrefs(convId, { is_pinned: !conv.is_pinned }))} />
+        <Action icon={conv.is_muted ? "bellOff" : "bell"} label={conv.is_muted ? "إلغاء الكتم" : "كتم الإشعارات"} onClick={() => act(() => convApi.setPrefs(convId, { is_muted: !conv.is_muted }))} />
       </div>
+      <MediaCard convId={convId} />
       <Section title={`أعضاء المجموعة (${members.length})`}>
         {members.map((m) => (
           <div key={m.user.id} className="relative flex items-center gap-3 py-2">
@@ -201,10 +334,13 @@ export function GroupPanel({ convId }: { convId: number }) {
           </div>
         ))}
       </Section>
-      <button onClick={() => { if (confirm("تريد تغادر المجموعة؟")) act(async () => { await convApi.leave(convId); setPanel(null); openConv(null); }); }}
-        className="mt-4 w-full rounded-[18px] py-3 font-bold" style={{ background: "color-mix(in srgb, var(--danger) 14%, transparent)", color: "var(--danger)" }}>
-        مغادرة المجموعة
-      </button>
+      <Card>
+        <div className="w-divide">
+          <NavRow icon="trash" label="حذف المحادثة" danger onClick={() => clearChat(convId)} />
+          <NavRow icon="logout" label="مغادرة المجموعة" danger
+            onClick={() => { if (confirm("تريد تغادر المجموعة؟")) act(async () => { await convApi.leave(convId); setPanel(null); openConv(null); }); }} />
+        </div>
+      </Card>
       {adding && (
         <PickPeople title="إضافة أعضاء" exclude={members.map((m) => m.user.id)} confirmLabel="إضافة"
           onCancel={() => setAdding(false)} onConfirm={(ids) => act(() => convApi.addMembers(convId, ids)).then(() => setAdding(false))} />
@@ -223,7 +359,7 @@ function PickPeople({ title, exclude = [], confirmLabel, onConfirm, onCancel, ch
   const list = users.filter((u) => !exclude.includes(u.id) && (!q || nameOf(u).includes(q) || u.username.includes(q)));
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onCancel}>
-      <div className="w-strong w-shadow flex max-h-[85dvh] w-full max-w-md flex-col rounded-[28px] p-4" style={{ border: "1px solid var(--border)" }} onClick={(e) => e.stopPropagation()}>
+      <div className="w-strong w-shadow flex max-h-[85dvh] w-full max-w-md flex-col rounded-3xl p-4" style={{ border: "1px solid var(--border)" }} onClick={(e) => e.stopPropagation()}>
         <h3 className="mb-3 text-lg font-extrabold">{title}</h3>
         {children}
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="ابحث..." className="w-input mb-2 h-11 rounded-full px-4 text-base outline-none md:text-sm" />
@@ -283,9 +419,9 @@ const mediaTabs = [
   { id: "location", label: "مواقع" },
 ] as const;
 
-export function MediaPanel({ convId }: { convId: number }) {
+export function MediaPanel({ convId, initial = "media" }: { convId: number; initial?: MediaTab }) {
   const { setPanel } = useWasl();
-  const [tab, setTab] = useState<(typeof mediaTabs)[number]["id"]>("media");
+  const [tab, setTab] = useState<(typeof mediaTabs)[number]["id"]>(initial);
   const [data, setData] = useState<{ counts: Record<string, number>; results: Message[] } | null>(null);
   const [view, setView] = useState<string | null>(null);
   useEffect(() => {

@@ -54,10 +54,14 @@ class UserSerializer(serializers.ModelSerializer):
 class MeSerializer(UserSerializer):
     """معلوماتي أنا: نفس المستخدم + إعداداتي الخاصة."""
 
+    mode = serializers.SerializerMethodField()
     theme = serializers.SerializerMethodField()
 
     class Meta(UserSerializer.Meta):
-        fields = UserSerializer.Meta.fields + ['theme']
+        fields = UserSerializer.Meta.fields + ['mode', 'theme']
+
+    def get_mode(self, user):
+        return profile_of(user).mode
 
     def get_theme(self, user):
         return profile_of(user).theme
@@ -84,7 +88,7 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ['display_name', 'avatar', 'bio', 'phone', 'city', 'theme']
+        fields = ['display_name', 'avatar', 'bio', 'phone', 'city', 'mode', 'theme']
 
     def validate_display_name(self, value):
         return value.strip()

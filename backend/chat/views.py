@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Max, Q
+from django.db.models import Count, Exists, F, Max, OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -14,7 +14,7 @@ from accounts.serializers import profile_of
 
 from . import services
 from .media import guess_kind, validate_upload
-from .models import Conversation, Membership, Message
+from .models import Conversation, Membership, Message, Reaction, StarredMessage
 from .serializers import ConversationSerializer, MemberSerializer, MessageSerializer
 
 User = get_user_model()
@@ -57,7 +57,14 @@ def conversations(request):
             qs = qs.filter(
                 Q(title__icontains=q) | Q(memberships__user__username__icontains=q)
                 | Q(memberships__user__profile__display_name__icontains=q)).distinct()
-        qs = qs.annotate(last=Coalesce(Max('messages__created_at'), 'created_at')).order_by('-last')
+        my_row = Membership.objects.filter(conversation=OuterRef('pk'), user=request.user)
+        qs = qs.annotate(
+            last=Coalesce(Max('messages__created_at'), 'created_at'),
+            pinned=Exists(my_row.filter(is_pinned=True)),
+            cleared=Subquery(my_row.values('cleared_at')[:1]),
+        )
+        # "حذفت المحادثة" = تنخفي لحد ما توصل رسالة جديدة بعد الحذف
+        qs = qs.filter(Q(cleared__isnull=True) | Q(last__gt=F('cleared'))).order_by('-pinned', '-last')
         data = ConversationSerializer(qs, many=True, context={'request': request}).data
         if f == 'unread':
             data = [c for c in data if c['unread_count']]
@@ -120,7 +127,8 @@ def conversation_detail(request, pk):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     # PATCH: إعداداتي الخاصة (أي عضو)
-    prefs = {k: bool(request.data[k]) for k in ('is_favorite', 'is_muted', 'is_archived') if k in request.data}
+    prefs = {k: bool(request.data[k]) for k in ('is_favorite', 'is_muted', 'is_archived', 'is_pinned')
+             if k in request.data}
     if prefs:
         Membership.objects.filter(pk=m.pk).update(**prefs)
     # معلومات المجموعة (المشرف بس)
@@ -146,6 +154,16 @@ def conversation_detail(request, pk):
         services.send_to_users(services.member_ids(conv), {'type': 'conversation_updated', 'conversation_id': conv.id})
     conv = Conversation.objects.get(pk=conv.pk)
     return Response(conv_data(request, conv))
+
+
+@api_view(['POST'])
+def clear_conversation(request, pk):
+    """حذف المحادثة عندي بس: رسائلها تختفي من عندي، والطرف الثاني ما يتأثر."""
+    m = my_membership(request, pk)
+    last_id = m.conversation.messages.order_by('-id').values_list('id', flat=True).first() or 0
+    Membership.objects.filter(pk=m.pk).update(
+        cleared_at=timezone.now(), is_pinned=False, last_read_id=max(m.last_read_id, last_id))
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # ------------------------------------------------------------------ أعضاء المجموعة
@@ -214,7 +232,9 @@ def messages(request, pk):
     conv = m.conversation
     if request.method == 'GET':
         # آخر 50 رسالة. للأقدم: ?before=<id الرسالة الأقدم عندك>
-        qs = conv.messages.select_related('sender__profile', 'reply_to__sender__profile')
+        qs = conv.messages.select_related('sender__profile', 'reply_to__sender__profile').prefetch_related('reactions')
+        if m.cleared_at:
+            qs = qs.filter(created_at__gt=m.cleared_at)
         before = request.query_params.get('before')
         if before:
             qs = qs.filter(id__lt=before)
@@ -342,6 +362,8 @@ def shared_media(request, pk):
     """الوسائط المشتركة: ?type=media|image|video|voice|file|link|location و ?before=<id>"""
     m = my_membership(request, pk)
     base = m.conversation.messages.filter(deleted_at__isnull=True)
+    if m.cleared_at:
+        base = base.filter(created_at__gt=m.cleared_at)
     counts = base.aggregate(**{k: Count('id', filter=q) for k, q in MEDIA_TYPES.items()})
     kind = request.query_params.get('type', 'media')
     if kind not in MEDIA_TYPES:
@@ -350,3 +372,52 @@ def shared_media(request, pk):
     if request.query_params.get('before'):
         qs = qs.filter(id__lt=request.query_params['before'])
     return Response({'counts': counts, 'results': MessageSerializer(qs[:60], many=True).data})
+
+
+# ------------------------------------------------------------------ التفاعلات والرسائل المميزة
+
+def visible_message(request, message_id):
+    """أي رسالة بمحادثة أني عضو بيها (مو لازم رسالتي)."""
+    return get_object_or_404(Message.objects.select_related('conversation'), pk=message_id,
+                             conversation__memberships__user=request.user)
+
+
+@api_view(['POST'])
+def react(request, message_id):
+    """POST {"emoji": "❤️"}: نفس الإيموجي مرة ثانية = يشيله، إيموجي ثاني = يبدله، وفارغ = يشيل."""
+    msg = visible_message(request, message_id)
+    if msg.deleted_at or msg.kind in (Message.SYSTEM, Message.CALL):
+        raise ValidationError('ما تكدر تتفاعل على هاي الرسالة')
+    emoji = (request.data.get('emoji') or '').strip()
+    if len(emoji) > 16:
+        raise ValidationError({'emoji': 'إيموجي وحد بس'})
+    current = Reaction.objects.filter(message=msg, user=request.user).first()
+    if current and (not emoji or current.emoji == emoji):
+        current.delete()
+    elif emoji:
+        Reaction.objects.update_or_create(message=msg, user=request.user, defaults={'emoji': emoji})
+    return Response(services.message_changed(msg))
+
+
+@api_view(['POST', 'DELETE'])
+def star(request, message_id):
+    """POST = ميّز الرسالة ⭐، DELETE = شيل التمييز."""
+    msg = visible_message(request, message_id)
+    if request.method == 'DELETE':
+        StarredMessage.objects.filter(message=msg, user=request.user).delete()
+        return Response({'starred': False})
+    StarredMessage.objects.get_or_create(message=msg, user=request.user)
+    return Response({'starred': True})
+
+
+@api_view(['GET'])
+def starred(request):
+    """الرسائل المميزة عندي (?conversation=<id> لمحادثة وحدة)، الأحدث أول."""
+    qs = (Message.objects.filter(stars__user=request.user, deleted_at__isnull=True,
+                                 conversation__memberships__user=request.user)
+          .select_related('sender__profile', 'reply_to__sender__profile').prefetch_related('reactions')
+          .order_by('-stars__created_at'))
+    conv = request.query_params.get('conversation')
+    if conv:
+        qs = qs.filter(conversation_id=conv)
+    return Response(MessageSerializer(qs[:200], many=True).data)

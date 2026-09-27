@@ -3,16 +3,15 @@
  * هيكل التطبيق:
  *  - بالموبايل: شاشة وحدة بالوقت (القائمة ويا الشريط السفلي، أو المحادثة).
  *  - بالكمبيوتر: عمودين: القائمة يمين، والمحادثة يسار. والتفاصيل تطلع كلوحة جانبية.
- * الشكل (فاتح/داكن) يتحدد بـ data-theme، والألوان كلها بـ app/wasl.css
+ * الوضع (نهاري/ليلي) يتحدد بـ data-theme، والألوان كلها بـ app/wasl.css
  */
 import { CallOverlay, CallsView } from "./Calls";
 import { ChatList, NavBar } from "./ChatList";
 import { Conversation } from "./Conversation";
-import { GroupsView } from "./Groups";
 import { Icon } from "./icons";
 import { LocationPanel } from "./Location";
 import { PeopleView } from "./People";
-import { ContactPanel, GroupPanel, MediaPanel, NewGroupPanel } from "./Profiles";
+import { ContactPanel, GroupPanel, MediaPanel, NewGroupPanel, StarredPanel } from "./Profiles";
 import { SettingsView } from "./Settings";
 import { StoriesView, StoryComposer, StoryViewer } from "./Stories";
 import { useWasl, WaslProvider } from "./store";
@@ -27,9 +26,9 @@ export function WaslApp() {
 
 function Splash() {
   return (
-    <div className="grid h-dvh place-items-center bg-white dark:bg-[#0b141a]">
-      <div className="grid justify-items-center gap-3 text-[#1f7bff]">
-        <div className="grid h-20 w-20 animate-pulse place-items-center rounded-full bg-[#1f7bff] text-white"><Icon name="chats" size={38} filled /></div>
+    <div className="grid h-dvh place-items-center bg-[#f6f6fb] dark:bg-[#121726]">
+      <div className="grid justify-items-center gap-3 text-[#6c5ce7]">
+        <div className="grid h-20 w-20 animate-pulse place-items-center rounded-full bg-[#6c5ce7] text-white"><Icon name="chats" size={38} filled /></div>
         <p className="font-bold">وَصل</p>
       </div>
     </div>
@@ -47,7 +46,6 @@ function Shell() {
           <div className="min-h-0 flex-1">
             {tab === "chats" && <ChatList />}
             {tab === "calls" && <CallsView />}
-            {tab === "groups" && <GroupsView />}
             {tab === "people" && <PeopleView />}
             {tab === "stories" && <StoriesView />}
             {tab === "settings" && <SettingsView />}
@@ -61,7 +59,8 @@ function Shell() {
 
       {panel?.type === "contact" && <ContactPanel userId={panel.userId} />}
       {panel?.type === "group" && <GroupPanel convId={panel.convId} />}
-      {panel?.type === "media" && <MediaPanel convId={panel.convId} />}
+      {panel?.type === "media" && <MediaPanel convId={panel.convId} initial={panel.tab} />}
+      {panel?.type === "starred" && <StarredPanel convId={panel.convId} />}
       {panel?.type === "location" && <LocationPanel convId={panel.convId} />}
       {panel?.type === "newGroup" && <NewGroupPanel />}
       {panel?.type === "storyCompose" && <StoryComposer />}
@@ -79,7 +78,7 @@ function Welcome() {
     <div className="m-auto grid max-w-sm justify-items-center px-8 text-center">
       <div className="w-accent grid h-24 w-24 place-items-center rounded-full"><Icon name="chats" size={44} filled /></div>
       <h2 className="mt-6 text-2xl font-extrabold">وَصل للكمبيوتر</h2>
-      <p className="w-muted mt-2 text-sm leading-7">اختار محادثة من القائمة، أو اضغط ＋ وابدأ وحدة جديدة.</p>
+      <p className="w-muted mt-2 text-sm leading-7">اختار محادثة من القائمة، أو روح لجهات الاتصال وابدأ وحدة جديدة.</p>
       <p className="w-muted mt-8 flex items-center gap-1.5 text-xs"><Icon name="lock" size={13} />رسائلك محفوظة بحسابك</p>
     </div>
   );

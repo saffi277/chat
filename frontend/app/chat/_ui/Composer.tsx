@@ -31,6 +31,7 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent }: {
   const input = useRef<HTMLInputElement>(null);
   const mediaPick = useRef<HTMLInputElement>(null);
   const filePick = useRef<HTMLInputElement>(null);
+  const cameraPick = useRef<HTMLInputElement>(null);
   const lastTyping = useRef(0);
 
   // لما نبدي تعديل، نحط النص القديم بالخانة
@@ -142,7 +143,8 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent }: {
   const hasText = text.trim().length > 0;
 
   return (
-    <div className="w-line relative border-t px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2" style={{ background: "var(--panel)" }}>
+    <div className="relative rounded-t-[26px] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 md:rounded-none md:border-t md:w-line"
+      style={{ background: "var(--panel)", boxShadow: "0 -6px 24px rgba(40, 36, 90, .06)" }}>
       {(reply || editing) && (
         <div className="w-card mb-2 flex items-center gap-3 rounded-xl border-r-4 px-3 py-2" style={{ borderColor: "var(--accent)" }}>
           <Icon name={editing ? "edit" : "reply"} size={18} className="w-accent-text" />
@@ -155,20 +157,21 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent }: {
       )}
 
       {menu === "emoji" && (
-        <div className="w-strong w-shadow absolute bottom-full left-3 z-10 mb-2 grid w-[292px] grid-cols-8 gap-1 rounded-2xl p-2" style={{ border: "1px solid var(--border)" }}>
+        <div className="w-strong w-shadow absolute bottom-full left-16 z-10 mb-2 grid w-[292px] max-w-[calc(100vw-5rem)] grid-cols-8 gap-1 rounded-2xl p-2" style={{ border: "1px solid var(--border)" }}>
           {EMOJIS.map((e) => (
             <button key={e} className="rounded-lg p-1 text-xl hover:bg-black/5" onClick={() => { setText((t) => t + e); input.current?.focus(); }}>{e}</button>
           ))}
         </div>
       )}
       {menu === "attach" && (
-        <div className="w-strong w-shadow absolute bottom-full right-3 z-10 mb-2 grid w-56 gap-1 rounded-2xl p-2" style={{ border: "1px solid var(--border)" }}>
+        <div className="w-strong w-shadow absolute bottom-full left-3 z-10 mb-2 grid w-56 gap-1 rounded-2xl p-2" style={{ border: "1px solid var(--border)" }}>
           <AttachItem icon="image" label="صورة أو فيديو" onClick={() => mediaPick.current?.click()} />
           <AttachItem icon="file" label="ملف" onClick={() => filePick.current?.click()} />
           <AttachItem icon="pin" label="الموقع" onClick={() => { setMenu(null); setPanel({ type: "location", convId }); }} />
         </div>
       )}
       <input ref={mediaPick} type="file" accept="image/*,video/*" hidden onChange={(e) => { pickMedia(e.target.files?.[0]); e.target.value = ""; }} />
+      <input ref={cameraPick} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { pickMedia(e.target.files?.[0]); e.target.value = ""; }} />
       <input ref={filePick} type="file" hidden onChange={(e) => { const f = e.target.files?.[0]; setMenu(null); if (f) upload(f, { kind: "file" }); e.target.value = ""; }} />
 
       {rec ? (
@@ -179,24 +182,31 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent }: {
           <button onClick={() => stopRecording(false)} aria-label="إرسال التسجيل" className="w-accent grid h-12 w-12 place-items-center rounded-full"><Icon name="send" size={20} /></button>
         </div>
       ) : (
-        <form onSubmit={(e) => { e.preventDefault(); sendText(); }} className="flex items-center gap-1">
-          {!editing && (
-            <button type="button" aria-label="إرفاق" onClick={() => setMenu(menu === "attach" ? null : "attach")}
-              className="w-accent-text grid h-11 w-10 shrink-0 place-items-center rounded-full"><Icon name="plus" size={24} strokeWidth={2.2} /></button>
+        // من اليمين: المايك/الإرسال، خانة الكتابة ويا 🙂، المعرض، الكاميرا، ＋
+        <form onSubmit={(e) => { e.preventDefault(); sendText(); }} className="flex items-center gap-1.5">
+          {hasText || editing ? (
+            <button type="submit" disabled={busy || !hasText} aria-label={editing ? "حفظ التعديل" : "إرسال"}
+              className="w-accent grid h-12 w-12 shrink-0 place-items-center rounded-full disabled:opacity-50"><Icon name={editing ? "check" : "send"} size={21} /></button>
+          ) : (
+            <button type="button" onClick={startRecording} disabled={busy} aria-label="تسجيل رسالة صوتية"
+              className="w-accent grid h-12 w-12 shrink-0 place-items-center rounded-full disabled:opacity-50"><Icon name="mic" size={22} /></button>
           )}
-          <div className="w-input flex h-11 min-w-0 flex-1 items-center rounded-full pr-4">
+          <div className="w-input flex h-12 min-w-0 flex-1 items-center rounded-full pr-4">
             <input ref={input} value={text} onChange={(e) => onType(e.target.value)} onFocus={() => setMenu(null)}
               placeholder="اكتب رسالة..." enterKeyHint="send" aria-label="الرسالة" dir="auto"
               className="h-full min-w-0 flex-1 bg-transparent text-base outline-none md:text-sm" style={{ color: "var(--text)" }} />
             <button type="button" aria-label="إيموجي" onClick={() => setMenu(menu === "emoji" ? null : "emoji")}
-              className="w-muted grid h-10 w-10 shrink-0 place-items-center rounded-full"><Icon name="smile" size={21} /></button>
+              className="w-muted grid h-10 w-10 shrink-0 place-items-center rounded-full"><Icon name="smile" size={22} /></button>
           </div>
-          {hasText || editing ? (
-            <button type="submit" disabled={busy || !hasText} aria-label={editing ? "حفظ التعديل" : "إرسال"}
-              className="w-accent grid h-11 w-11 shrink-0 place-items-center rounded-full disabled:opacity-50"><Icon name={editing ? "check" : "send"} size={20} /></button>
-          ) : (
-            <button type="button" onClick={startRecording} disabled={busy} aria-label="تسجيل رسالة صوتية"
-              className="w-accent grid h-11 w-11 shrink-0 place-items-center rounded-full disabled:opacity-50"><Icon name="mic" size={20} /></button>
+          {!editing && (
+            <>
+              <button type="button" aria-label="صورة أو فيديو" onClick={() => { setMenu(null); mediaPick.current?.click(); }}
+                className="w-muted grid h-10 w-9 shrink-0 place-items-center rounded-full"><Icon name="image" size={22} /></button>
+              <button type="button" aria-label="الكاميرا" onClick={() => { setMenu(null); cameraPick.current?.click(); }}
+                className="w-muted grid h-10 w-9 shrink-0 place-items-center rounded-full"><Icon name="camera" size={22} /></button>
+              <button type="button" aria-label="إرفاق" onClick={() => setMenu(menu === "attach" ? null : "attach")}
+                className="w-accent grid h-11 w-11 shrink-0 place-items-center rounded-full"><Icon name="plus" size={22} strokeWidth={2.4} /></button>
+            </>
           )}
         </form>
       )}

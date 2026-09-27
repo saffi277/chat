@@ -12,6 +12,10 @@ urlpatterns = [
     path('conversations/<int:pk>/messages/', views.messages),
     path('conversations/<int:pk>/read/', views.mark_read),
     path('conversations/<int:pk>/media/', views.shared_media),
+    path('conversations/<int:pk>/clear/', views.clear_conversation),
     path('messages/<int:message_id>/', views.message_detail),
     path('messages/<int:message_id>/location/', views.live_location),
+    path('messages/<int:message_id>/react/', views.react),
+    path('messages/<int:message_id>/star/', views.star),
+    path('starred/', views.starred),
 ]
