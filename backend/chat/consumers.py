@@ -89,6 +89,31 @@ class PresenceConsumer(AsyncJsonWebsocketConsumer):
             'type': 'chat.event',
             'payload': {'type': 'presence', 'user_id': self.user.id, 'is_online': online}})
 
+    async def receive_json(self, content):
+        """
+        رسائل تعارف المكالمة (WebRTC signaling): offer / answer / ice candidate.
+        الواجهة تدز: {"type": "call.signal", "call_id": 3, "to": <user_id>, "data": {...}}
+        وإحنا نوصلها للطرف الثاني كما هي. السيرفر ما يفهمها ولا يحتاج يفهمها.
+        """
+        if content.get('type') == 'call.signal':
+            to = await self.signal_target(content.get('call_id'), content.get('to'))
+            if to:
+                await self.channel_layer.group_send(user_group(to), {'type': 'chat.event', 'payload': {
+                    'type': 'call.signal', 'call_id': content['call_id'], 'from': self.user.id,
+                    'data': content.get('data')}})
+
+    @database_sync_to_async
+    def signal_target(self, call_id, to):
+        """نتأكد إن الاثنين بنفس المكالمة، وإنها بعدها شغالة."""
+        from calls.models import Call
+        try:
+            call = Call.objects.get(pk=int(call_id), status__in=[Call.RINGING, Call.ONGOING])
+            to = int(to)
+        except (Call.DoesNotExist, TypeError, ValueError):
+            return None
+        members = Membership.objects.filter(conversation_id=call.conversation_id, user_id__in=[self.user.id, to])
+        return to if to != self.user.id and members.count() == 2 else None
+
     async def chat_event(self, event):
         payload = event['payload']
         await self.send_json(payload)

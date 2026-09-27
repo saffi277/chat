@@ -49,9 +49,10 @@ def message_upload_path(instance, filename):
 
 
 class Message(models.Model):
-    TEXT, IMAGE, VIDEO, VOICE, FILE, LOCATION, SYSTEM = 'text', 'image', 'video', 'voice', 'file', 'location', 'system'
+    TEXT, IMAGE, VIDEO, VOICE, FILE, LOCATION, SYSTEM, CALL = (
+        'text', 'image', 'video', 'voice', 'file', 'location', 'system', 'call')
     KINDS = [(TEXT, 'نص'), (IMAGE, 'صورة'), (VIDEO, 'فيديو'), (VOICE, 'رسالة صوتية'),
-             (FILE, 'ملف'), (LOCATION, 'موقع'), (SYSTEM, 'رسالة نظام')]
+             (FILE, 'ملف'), (LOCATION, 'موقع'), (SYSTEM, 'رسالة نظام'), (CALL, 'مكالمة')]
 
     # ForeignKey = كل رسالة تنتمي لمحادثة وحدة ومرسل واحد
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages')

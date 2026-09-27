@@ -15,6 +15,7 @@ PREVIEWS = {
     Message.FILE: '📎 ملف',
     Message.LOCATION: '📍 موقع',
 }
+QUIET = (Message.SYSTEM, Message.CALL)  # ما إلها إشعار Push
 
 
 def group_name(conversation_id):
@@ -40,6 +41,11 @@ def send_to_users(user_ids, payload):
         _send(user_group(user_id), payload)
 
 
+def send_to_everyone(payload):
+    """لكل المتصلين (مجموعة presence العامة)."""
+    _send('presence', payload)
+
+
 def member_ids(conversation):
     return list(conversation.memberships.values_list('user_id', flat=True))
 
@@ -50,6 +56,8 @@ def preview_text(message):
         return '🚫 تم حذف هذه الرسالة'
     if message.kind == Message.LOCATION and message.is_live:
         return '📍 موقع مباشر'
+    if message.kind == Message.CALL:
+        return f'📞 {message.content}'
     base = PREVIEWS.get(message.kind)
     if base and message.content:
         return f'{base}: {message.content}'
@@ -76,7 +84,7 @@ def create_message(conversation, sender, content='', **fields):
     broadcast(conversation.id, {'type': 'message', 'message': data})
     # لكل عضو على اتصاله العام: حتى تتحدث قائمته (وهذا يعلّم الرسالة "وصلت" لجهازه)
     send_to_users(member_ids(conversation), {'type': 'inbox', 'message': data})
-    if msg.kind != Message.SYSTEM:
+    if msg.kind not in QUIET:
         notify_new_message(msg, preview_text(msg))
     return data
 

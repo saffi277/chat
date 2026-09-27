@@ -45,6 +45,8 @@ INSTALLED_APPS = [
     "accounts",
     "chat",
     "notifications",
+    "stories",
+    "calls",
 ]
 
 MIDDLEWARE = [
@@ -159,3 +161,6 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 60 * 1024 * 1024
 
 # إشعارات Push: وسيلة تواصل وياك تنطيها لخدمات الإشعارات (Google/Apple) إذا صار مشكلة
 VAPID_CONTACT = 'mailto:admin@wasl.local'
+
+# المكالمات (WebRTC): خوادم STUN تساعد الأجهزة تلكى بعضها. بالإنتاج نضيف TURN للشبكات المقفولة
+ICE_SERVERS = [{'urls': ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302']}]

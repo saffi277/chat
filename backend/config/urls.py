@@ -8,6 +8,8 @@ urlpatterns = [
     path('api/', include('accounts.urls')),
     path('api/', include('chat.urls')),
     path('api/', include('notifications.urls')),
+    path('api/', include('stories.urls')),
+    path('api/', include('calls.urls')),
     # الملفات المرفوعة. بالإنتاج Nginx (أو خدمة تخزين) يقدمها قبل ما توصل لـ Django
     re_path(r'^media/(?P<path>.*)$', media),
 ]
