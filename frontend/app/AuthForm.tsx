@@ -128,7 +128,7 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
 }
 
 function Visual({ night }: { night: boolean }) {
-  const img = `url(/brand/campus-${night ? "night" : "day"}.svg)`;
+  const img = `url(/brand/campus-${night ? "night" : "day"}.jpg)`;
   const heading = (
     <>
       <h2 className="text-[26px] font-extrabold leading-[1.45] lg:text-[40px]">
