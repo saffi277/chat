@@ -34,6 +34,7 @@ cd ../frontend && npm install
 **الاختبارات:** `cd backend && python manage.py test`
 
 **📚 الملفات المهمة:**
+- `docs/report.html`: التقرير الشامل: المعمارية، وقاعدة البيانات، والتشفير، ومعالجة الضغط، ومكان كل ملف
 - `docs/API.md`: كل شاشة وشنو تستخدم من الـ API (للمصمم)
 - `docs/roadmap.html`: شنو عدنا وشنو الجاي
 - `docs/study-guide.html`: شرح كل المفاهيم مع أسئلة

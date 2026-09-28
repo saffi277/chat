@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>تقرير نظام وَصل</title>
+<meta name="description" content="تقرير مفصّل عن نظام المراسلة «وَصل» لكلية الأسباط الجامعة: المعمارية، وقاعدة البيانات، والتشفير، ومعالجة الضغط، ومواقع الملفات.">
+<style>
+  :root {
+    --bg: #f6f6fb; --panel: #ffffff; --card: #f0f0f8; --text: #1b1d2a; --muted: #62667a; --line: #e3e4ef;
+    --accent: #5b5cf0; --accent-soft: #ecebff; --good: #11845b; --good-soft: #e3f6ee; --warn: #a15c00; --warn-soft: #fff3df;
+    --bad: #c2333a; --code: #efeff7; --shadow: 0 1px 2px rgba(20, 20, 60, .06), 0 6px 24px rgba(20, 20, 60, .06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121726; --panel: #1a2033; --card: #222a40; --text: #e8eaf4; --muted: #9aa1b8; --line: #2c3450;
+      --accent: #8b8cff; --accent-soft: #2a2d5c; --good: #4fd19a; --good-soft: #173a2c; --warn: #f3b35b; --warn-soft: #3a2b12;
+      --bad: #ff7a80; --code: #262e46; --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121726; --panel: #1a2033; --card: #222a40; --text: #e8eaf4; --muted: #9aa1b8; --line: #2c3450;
+    --accent: #8b8cff; --accent-soft: #2a2d5c; --good: #4fd19a; --good-soft: #173a2c; --warn: #f3b35b; --warn-soft: #3a2b12;
+    --bad: #ff7a80; --code: #262e46; --shadow: none;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text); line-height: 1.9; font-size: 16px;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Arabic", "Segoe UI", Roboto, "Noto Sans Arabic", "Noto Sans", Tahoma, sans-serif;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 16px 80px; }
+  header.hero { padding: 40px 0 24px; }
+  .eyebrow { color: var(--accent); font-weight: 700; font-size: 14px; }
+  h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.35; margin: 6px 0 10px; }
+  .lead { color: var(--muted); font-size: 17px; max-width: 760px; margin: 0; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 10px; margin-top: 24px; }
+  .stat { background: var(--panel); border-radius: 18px; padding: 14px 16px; box-shadow: var(--shadow); border: 1px solid var(--line); }
+  .stat b { display: block; font-size: 19px; line-height: 1.4; color: var(--accent); text-align: right; unicode-bidi: plaintext; overflow-wrap: anywhere; }
+  .stat span { display: block; color: var(--muted); font-size: 13px; line-height: 1.6; margin-top: 4px; }
+  nav.toc { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; margin: 18px 0 8px; box-shadow: var(--shadow); }
+  nav.toc h2 { font-size: 16px; margin: 0 0 8px; }
+  nav.toc ol { margin: 0; padding-inline-start: 22px; columns: 2 240px; column-gap: 28px; }
+  nav.toc a { color: var(--text); text-decoration: none; }
+  nav.toc a:hover { color: var(--accent); }
+  section.part { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 22px 20px; margin-top: 18px; box-shadow: var(--shadow); }
+  section.part > h2 { font-size: 23px; margin: 0 0 6px; display: flex; gap: 10px; align-items: baseline; }
+  section.part > h2 .n { color: var(--accent); font-size: 15px; font-weight: 800; background: var(--accent-soft); border-radius: 999px; padding: 0 10px; }
+  h3 { font-size: 18px; margin: 22px 0 6px; }
+  p { margin: 8px 0; }
+  .muted { color: var(--muted); }
+  code, .path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .86em; background: var(--code); border-radius: 6px; padding: 1px 6px; direction: ltr; unicode-bidi: isolate; display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+  pre { background: var(--code); border-radius: 14px; padding: 12px 14px; overflow-x: auto; direction: ltr; text-align: left; font-size: 13.5px; line-height: 1.7; margin: 10px 0; }
+  pre code { background: none; padding: 0; display: inline; font-size: inherit; }
+  .table { width: 100%; overflow-x: auto; margin: 10px 0; border-radius: 14px; border: 1px solid var(--line); }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 560px; }
+  th, td { padding: 9px 12px; text-align: start; vertical-align: top; border-bottom: 1px solid var(--line); }
+  th { background: var(--card); font-weight: 800; }
+  tr:last-child td { border-bottom: 0; }
+  /* الهاتف: كل صف بطاقة، وعنوان العمود فوق قيمته (يُنسخ من <th> بالسكربت أسفل الصفحة) */
+  @media (max-width: 640px) {
+    .table { overflow: visible; border: 0; }
+    .table table { min-width: 0; }
+    .table thead { display: none; }
+    .table tr { display: block; background: var(--card); border-radius: 14px; padding: 8px 0; margin-bottom: 10px; }
+    .table td { display: block; border: 0; padding: 4px 14px; }
+    .table td[data-label]::before { content: attr(data-label); display: block; font-size: 12px; font-weight: 800; color: var(--muted); }
+  }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin: 12px 0; }
+  .box { background: var(--card); border-radius: 16px; padding: 14px 16px; }
+  .box h4 { margin: 0 0 4px; font-size: 16px; }
+  .box p { margin: 4px 0; font-size: 14.5px; }
+  .note { border-radius: 14px; padding: 12px 14px; margin: 12px 0; font-size: 15px; }
+  .note.good { background: var(--good-soft); }
+  .note.warn { background: var(--warn-soft); }
+  .note.info { background: var(--accent-soft); }
+  .note strong:first-child { display: block; margin-bottom: 2px; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 800; border-radius: 999px; padding: 0 9px; margin-inline-start: 4px; vertical-align: middle; }
+  .tag.good { background: var(--good-soft); color: var(--good); }
+  .tag.warn { background: var(--warn-soft); color: var(--warn); }
+  .tag.todo { background: var(--accent-soft); color: var(--accent); }
+  /* مخطط المعمارية */
+  .arch { display: grid; gap: 10px; margin: 14px 0; }
+  .arch .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+  .node { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; text-align: center; }
+  .node b { display: block; }
+  .node small { color: var(--muted); display: block; line-height: 1.6; }
+  .node.hl { border-color: var(--accent); background: var(--accent-soft); }
+  .down { text-align: center; color: var(--muted); font-size: 14px; }
+  .steps { counter-reset: s; list-style: none; padding: 0; margin: 10px 0; }
+  .steps li { counter-increment: s; position: relative; padding-inline-start: 40px; margin: 10px 0; }
+  .steps li::before { content: counter(s); position: absolute; inset-inline-start: 0; top: 2px; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 800; font-size: 14px; display: grid; place-items: center; }
+  details { background: var(--card); border-radius: 14px; padding: 10px 14px; margin: 8px 0; }
+  details summary { cursor: pointer; font-weight: 800; }
+  .theme-btn { position: fixed; inset-inline-end: 16px; bottom: 16px; border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 999px; padding: 8px 14px; font: inherit; font-size: 14px; box-shadow: var(--shadow); cursor: pointer; }
+  footer { color: var(--muted); font-size: 13px; text-align: center; margin-top: 30px; }
+  @media print { .theme-btn, nav.toc { display: none; } section.part { break-inside: avoid-page; box-shadow: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">كلية الأسباط الجامعة · نظام المراسلة</div>
+  <h1>تقرير نظام «وَصل»: كيف بُني، وأين تجد كل جزء منه</h1>
+  <p class="lead">يشرح هذا التقرير النظام كاملاً بلغة واضحة: اللغات والمحركات المستعملة، وقاعدة البيانات ونوعها وحجمها ومكانها، وDocker وWebSocket، والهاش والتشفير، وكيف يتحمّل الخادم آلاف الطلبات في اللحظة نفسها. ومع كل جزء مكانه الدقيق في المشروع، لتستطيع فتحه وشرحه بنفسك.</p>
+  <div class="stats">
+    <div class="stat"><b>Python + TypeScript</b><span>لغة الخادم ولغة الواجهة</span></div>
+    <div class="stat"><b>PostgreSQL 16</b><span>قاعدة بيانات التشغيل الفعلي (وSQLite للتطوير)</span></div>
+    <div class="stat"><b>AES-256-GCM</b><span>تشفير الرسائل والملفات المخزّنة</span></div>
+    <div class="stat"><b>Argon2</b><span>هاش كلمات المرور</span></div>
+    <div class="stat"><b>2000 / 2000</b><span>مستخدم متزامن اتصلوا في اختبار الضغط</span></div>
+    <div class="stat"><b>51 اختباراً</b><span>اختبارات الخادم الآلية، وكلها ناجحة</span></div>
+  </div>
+</header>
+
+<nav class="toc" aria-label="المحتويات">
+  <h2>المحتويات</h2>
+  <ol>
+    <li><a href="#overview">نظرة عامة والمعمارية</a></li>
+    <li><a href="#languages">لغات البرمجة</a></li>
+    <li><a href="#engines">المحركات والأطر (Django، Daphne، ...)</a></li>
+    <li><a href="#database">قاعدة البيانات: نوعها وحجمها ومكانها</a></li>
+    <li><a href="#docker">Docker: تشغيل النظام كاملاً بأمر واحد</a></li>
+    <li><a href="#websocket">WebSocket: الرسائل الفورية</a></li>
+    <li><a href="#security">الهاش والتشفير والأمان</a></li>
+    <li><a href="#load">معالجة الطلبات المتزامنة دون ضغط على الخادم</a></li>
+    <li><a href="#contacts">جهات الاتصال الخاصة (الجديد)</a></li>
+    <li><a href="#channels">القنوات (الجديد)</a></li>
+    <li><a href="#features">كل الميزات وأماكنها في المشروع</a></li>
+    <li><a href="#api">دليل الـ API كاملاً</a></li>
+    <li><a href="#map">خريطة الملفات: أين تجد كل شيء</a></li>
+    <li><a href="#run">التشغيل والاختبارات</a></li>
+    <li><a href="#next">ما الذي نحتاجه بعد ذلك</a></li>
+    <li><a href="#interview">أسئلة متوقعة في المقابلة</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ 1 -->
+<section class="part" id="overview">
+  <h2><span class="n">1</span>نظرة عامة والمعمارية</h2>
+  <p>«وَصل» تطبيق مراسلة لطلاب الكلية وتدريسييها وإدارييها، يشبه واتساب: محادثات ثنائية ومجموعات وقنوات، وصور وفيديو ورسائل صوتية وملفات ومواقع، وحالات تختفي بعد 24 ساعة، ومكالمات صوت وفيديو، وإشعارات تصل والتطبيق مغلق. يعمل من المتصفح في الحاسوب والهاتف، ويمكن تثبيته على الشاشة الرئيسية كتطبيق (PWA).</p>
+  <p>يتكوّن النظام من جزأين منفصلين يتحدثان عبر الشبكة:</p>
+  <div class="grid2">
+    <div class="box"><h4>الواجهة (Frontend)</h4><p>ما يراه المستخدم: الشاشات والأزرار. مكتوبة بـ TypeScript وReact داخل إطار Next.js، وموجودة في المجلد <span class="path">frontend/</span>.</p></div>
+    <div class="box"><h4>الخادم (Backend)</h4><p>العقل والذاكرة: يتحقق من الهوية، ويحفظ الرسائل ويشفّرها، ويبثّها فوراً. مكتوب بـ Python وإطار Django، وموجود في المجلد <span class="path">backend/</span>.</p></div>
+  </div>
+  <h3>مسار الطلب من الهاتف إلى قاعدة البيانات</h3>
+  <div class="arch" aria-label="مخطط المعمارية">
+    <div class="row"><div class="node hl"><b>المتصفح / الهاتف</b><small>Next.js + React، Service Worker للإشعارات</small></div></div>
+    <div class="down">↓ HTTPS و WSS (مشفّر أثناء النقل)</div>
+    <div class="row"><div class="node"><b>Caddy</b><small>البوابة: شهادة HTTPS، وتوزيع الطلبات، وضغط البيانات</small></div></div>
+    <div class="down">↓ بحسب المسار</div>
+    <div class="row">
+      <div class="node"><b>/ ← Next.js</b><small>صفحات الواجهة</small></div>
+      <div class="node"><b>/api ← Gunicorn</b><small>Django REST: عمليات × خيوط</small></div>
+      <div class="node"><b>/ws ← Uvicorn</b><small>Django Channels: الاتصالات المباشرة</small></div>
+    </div>
+    <div class="down">↓</div>
+    <div class="row">
+      <div class="node"><b>PostgreSQL</b><small>المستخدمون والمحادثات والرسائل (مشفّرة)</small></div>
+      <div class="node"><b>Redis</b><small>بثّ الأحداث بين العمال + الذاكرة المؤقتة + عدّادات الحدود</small></div>
+      <div class="node"><b>القرص (media)</b><small>الصور والملفات، مشفّرة</small></div>
+    </div>
+  </div>
+  <p class="muted">الصوت والصورة في المكالمات لا يمرّان عبر خادمنا: ينتقلان مباشرة بين الجهازين بتقنية WebRTC، والخادم يرنّ ويمرّر «رسائل التعارف» فقط.</p>
+</section>
+
+<!-- ============================================================ 2 -->
+<section class="part" id="languages">
+  <h2><span class="n">2</span>لغات البرمجة</h2>
+  <div class="table"><table>
+    <thead><tr><th>الجزء</th><th>اللغة</th><th>أين</th><th>ملاحظة</th></tr></thead>
+    <tbody>
+      <tr><td>الخادم (Backend)</td><td><b>Python 3.12</b> (في Docker)، و3.11 على جهاز التطوير</td><td><span class="path">backend/**/*.py</span></td><td>نحو 4,500 سطر (دون ملفات الترحيل migrations)، منها الاختبارات</td></tr>
+      <tr><td>الواجهة (Frontend)</td><td><b>TypeScript 5</b> مع <b>React 19</b> (ملفات ‎.tsx)</td><td><span class="path">frontend/app</span> و <span class="path">frontend/lib</span></td><td>نحو 6,000 سطر. TypeScript هي JavaScript مع أنواع تُكتشف بها الأخطاء قبل التشغيل</td></tr>
+      <tr><td>التنسيق</td><td><b>CSS</b> مع Tailwind CSS 4 ومتغيرات CSS للوضعين النهاري والليلي</td><td><span class="path">frontend/app/wasl.css</span> و <span class="path">globals.css</span></td><td>كل لون متغيّر (<code>--bg</code>، <code>--panel</code> ...) فيتبدّل الوضع دفعة واحدة</td></tr>
+      <tr><td>الإشعارات في الخلفية</td><td><b>JavaScript</b> (Service Worker)</td><td><span class="path">frontend/public/sw.js</span></td><td>يعمل حتى لو كان التطبيق مغلقاً</td></tr>
+      <tr><td>قاعدة البيانات</td><td><b>SQL</b> (يولّده Django تلقائياً من الـ Models)</td><td><span class="path">backend/*/models.py</span></td><td>لا نكتب SQL يدوياً غالباً؛ نكتب Python ويحوّله الـ ORM</td></tr>
+      <tr><td>التشغيل والنشر</td><td><b>Shell</b> و <b>YAML</b> و Caddyfile</td><td><span class="path">run-mobile.sh</span>، <span class="path">deploy/</span></td><td>أوامر تشغيل النظام وخدماته</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 3 -->
+<section class="part" id="engines">
+  <h2><span class="n">3</span>المحركات والأطر: ماذا يفعل كلٌّ منها؟</h2>
+  <p>«الإطار» (Framework) مكتبة جاهزة تنظّم الكود وتوفّر الأساسيات، و«خادم التشغيل» (Server) هو البرنامج الذي يستقبل الاتصالات فعلاً ويمرّرها إلى الكود.</p>
+  <div class="table"><table>
+    <thead><tr><th>الاسم والإصدار</th><th>ما هو</th><th>دوره عندنا</th><th>أين يُضبط</th></tr></thead>
+    <tbody>
+      <tr><td><b>Django 5.2</b></td><td>إطار ويب بلغة Python</td><td>الجداول (Models)، والتحقق من المستخدمين، ولوحة الإدارة <code>/admin</code>، والترجمة</td><td><span class="path">backend/config/settings.py</span></td></tr>
+      <tr><td><b>Django REST Framework 3.18</b></td><td>إضافة لبناء الـ API</td><td>تحويل البيانات إلى JSON، والتحقق من الطلبات، والهوية بالتوكن، وحدود الطلبات</td><td><code>REST_FRAMEWORK</code> في settings.py</td></tr>
+      <tr><td><b>Django Channels 4.3</b></td><td>إضافة تجعل Django يفهم WebSocket</td><td>الرسائل الفورية، و«يكتب الآن»، و«متصل الآن»، ورنين المكالمات</td><td><span class="path">backend/chat/consumers.py</span></td></tr>
+      <tr><td><b>ASGI</b></td><td>المعيار الحديث لربط الخادم بالكود، يدعم الاتصالات الطويلة</td><td>يوزّع: HTTP إلى Django، وWebSocket إلى Channels</td><td><span class="path">backend/config/asgi.py</span></td></tr>
+      <tr><td><b>Daphne 4.2</b></td><td>خادم ASGI من صنّاع Channels</td><td><b>خادم التطوير</b>: عند تشغيل <code>manage.py runserver</code> يعمل Daphne فيدعم HTTP وWebSocket معاً على منفذ 8000. هذا سبب وجوده أول القائمة في <code>INSTALLED_APPS</code></td><td>settings.py (<code>'daphne'</code>)</td></tr>
+      <tr><td><b>Uvicorn 0.54</b></td><td>خادم ASGI سريع</td><td><b>في التشغيل الفعلي</b>: يخدم اتصالات WebSocket بعدة عمّال (عامِلان لكل معالج)</td><td><span class="path">backend/entrypoint.sh</span> (الدور ws)</td></tr>
+      <tr><td><b>Gunicorn 26</b></td><td>خادم WSGI للطلبات العادية</td><td><b>في التشغيل الفعلي</b>: يخدم <code>/api</code> بعمليات متعددة، في كل عملية 16 خيطاً (thread)</td><td>entrypoint.sh (الدور web)</td></tr>
+      <tr><td><b>PostgreSQL 16</b></td><td>قاعدة بيانات علائقية قوية</td><td>تخزين كل شيء، وتتحمّل آلاف الكتابات المتزامنة</td><td><span class="path">deploy/docker-compose.yml</span> (خدمة db)</td></tr>
+      <tr><td><b>Redis 7</b></td><td>مخزن سريع في الذاكرة</td><td>(1) «لوحة إعلانات» يتبادل عبرها العمّال الأحداث (Channel Layer)، (2) ذاكرة مؤقتة، (3) عدّادات حدود الطلبات</td><td><code>CHANNEL_LAYERS</code> و <code>CACHES</code> في settings.py</td></tr>
+      <tr><td><b>Next.js 16</b></td><td>إطار للواجهات مبني على React</td><td>صفحات الدخول والتسجيل والتطبيق، وتمرير <code>/api</code> و<code>/ws</code> إلى Django عند التشغيل على جهاز واحد</td><td><span class="path">frontend/next.config.ts</span></td></tr>
+      <tr><td><b>React 19</b></td><td>مكتبة لبناء الواجهة من مكوّنات</td><td>كل شاشة مكوّن: قائمة المحادثات، والمحادثة، والإعدادات...</td><td><span class="path">frontend/app/chat/_ui/</span></td></tr>
+      <tr><td><b>Caddy 2</b></td><td>خادم بوابة (Reverse Proxy)</td><td>شهادة HTTPS تلقائية، وتوجيه كل مسار إلى خدمته، وترويسات أمان</td><td><span class="path">deploy/Caddyfile</span></td></tr>
+      <tr><td><b>cloudflared</b></td><td>نفق من Cloudflare</td><td>رابط https مؤقت لتجربة النظام من الهاتف دون نطاق (domain)</td><td><span class="path">run-mobile.sh</span> و docker-compose (profile tunnel)</td></tr>
+      <tr><td><b>WebRTC</b></td><td>تقنية مدمجة في المتصفحات</td><td>المكالمات: الصوت والصورة مباشرة بين الجهازين</td><td><span class="path">frontend/lib/call.ts</span></td></tr>
+      <tr><td><b>Web Push + VAPID</b></td><td>معيار الإشعارات في المتصفحات</td><td>إشعارات الرسائل والمكالمات والتطبيق مغلق (مكتبة pywebpush)</td><td><span class="path">backend/notifications/</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="note info"><strong>لماذا Daphne في التطوير وUvicorn/Gunicorn في التشغيل الفعلي؟</strong>Daphne مريح للتطوير: أمر واحد يشغّل HTTP وWebSocket. أما في التشغيل الفعلي فنفصل العملين: Gunicorn متخصص في الطلبات القصيرة الكثيرة (فتح قائمة، إرسال رسالة)، وUvicorn متخصص في آلاف الاتصالات المفتوحة طويلاً (WebSocket). وكلاهما يعمل بعدة عمّال، ويربطهم Redis ببعض.</div>
+</section>
+
+<!-- ============================================================ 4 -->
+<section class="part" id="database">
+  <h2><span class="n">4</span>قاعدة البيانات: نوعها وحجمها ومكانها</h2>
+  <h3>النوع</h3>
+  <div class="grid2">
+    <div class="box"><h4>التطوير: SQLite</h4><p>ملف واحد على جهازك، لا يحتاج تثبيتاً. مناسب للتجربة، لكنه يقفل الملف كله عند كل كتابة، فلا يصلح لآلاف المستخدمين.</p><p>المكان: <span class="path">backend/db.sqlite3</span></p></div>
+    <div class="box"><h4>التشغيل الفعلي: PostgreSQL 16</h4><p>قاعدة بيانات علائقية حقيقية تسمح بكتابات كثيرة متزامنة. تعمل داخل Docker، وبياناتها في «مجلد دائم» (volume) اسمه <code>pgdata</code> لا يضيع بإعادة التشغيل.</p><p>المكان على الخادم: <span class="path">/var/lib/docker/volumes/asbat-chat_pgdata/_data</span></p></div>
+  </div>
+  <p>الاختيار بينهما تلقائي: إن وُجد المتغير <code>DATABASE_URL</code> استُعمل PostgreSQL، وإلا فـ SQLite. انظر <code>DATABASES</code> في <span class="path">backend/config/settings.py</span>. ويُعاد استعمال الاتصال بقاعدة البيانات 60 ثانية (<code>conn_max_age</code>) بدل فتح اتصال جديد لكل طلب.</p>
+
+  <h3>الحجم</h3>
+  <div class="table"><table>
+    <thead><tr><th>ما يُخزَّن</th><th>أين</th><th>الحجم الآن (جهاز التطوير)</th></tr></thead>
+    <tbody>
+      <tr><td>قاعدة البيانات (نصوص الرسائل وكل الجداول)</td><td><span class="path">backend/db.sqlite3</span></td><td>نحو <b>0.5 ميغابايت</b> (146 مستخدماً تجريبياً، و257 رسالة)</td></tr>
+      <tr><td>الملفات (صور، فيديو، صوت، مستندات، حالات)</td><td><span class="path">backend/media/</span> (وفي Docker: volume اسمه <code>media</code>)</td><td>نحو <b>1.5 ميغابايت</b></td></tr>
+      <tr><td>مفتاح التشفير ومفاتيح الإشعارات</td><td><span class="path">backend/message_key</span> و <span class="path">backend/vapid_keys.json</span> (وفي Docker: volume اسمه <code>keys</code>)</td><td>بضعة بايتات، لكنها <b>أهم ما يجب نسخه احتياطياً</b></td></tr>
+    </tbody>
+  </table></div>
+  <div class="note warn"><strong>تقدير النمو (تقريبي، بافتراضات معلنة)</strong>قسنا رسالة من 101 حرف عربي: تُخزَّن مشفّرة في 293 بايتاً، ومع بيانات السطر والفهرس نحو نصف كيلوبايت. فلو أرسل 2000 طالب 30 رسالة يومياً: 60 ألف رسالة × 0.5 كيلوبايت ≈ <b>30 ميغابايت يومياً، أي نحو 11 غيغابايت سنوياً</b> للنصوص. أما الملفات فهي الأكبر عادة (حدودها: صورة 10، وصوت 10، ومستند 25، وفيديو 50 ميغابايت)، وتُحفظ على القرص لا في قاعدة البيانات.</div>
+
+  <h3>الجداول (كل جدول يُعرَّف كـ Model بلغة Python)</h3>
+  <div class="table"><table>
+    <thead><tr><th>الجدول</th><th>ماذا يحفظ</th><th>الملف</th></tr></thead>
+    <tbody>
+      <tr><td><code>auth_user</code></td><td>الحساب: اسم المستخدم، والبريد، وهاش كلمة المرور (من Django نفسه)</td><td>Django</td></tr>
+      <tr><td><code>accounts_profile</code></td><td>الاسم الظاهر، والصورة، والهاتف، والدور (طالب/تدريسي/إداري)، والرقم الجامعي، واللغة، والوضع الليلي، و«متصل الآن»</td><td><span class="path">backend/accounts/models.py</span></td></tr>
+      <tr><td><code>accounts_authtoken</code></td><td>جلسات الدخول: <b>هاش</b> التوكن فقط، لكل جهاز صفّ</td><td><span class="path">backend/accounts/models.py</span></td></tr>
+      <tr><td><code>accounts_contact</code></td><td>جهات الاتصال: من أضاف من (جديد)</td><td><span class="path">backend/accounts/models.py</span></td></tr>
+      <tr><td><code>accounts_supportrequest</code></td><td>طلبات «نسيت كلمة المرور» والدعم الفني</td><td><span class="path">backend/accounts/models.py</span></td></tr>
+      <tr><td><code>chat_conversation</code></td><td>المحادثة: ثنائية، أو مجموعة، أو قناة، أو الرسائل المحفوظة</td><td><span class="path">backend/chat/models.py</span></td></tr>
+      <tr><td><code>chat_membership</code></td><td>عضوية كل شخص في كل محادثة: دوره (مشرف/عضو)، والمفضلة، والكتم، والأرشفة، والتثبيت، وآخر رسالة وصلته وقرأها</td><td><span class="path">backend/chat/models.py</span></td></tr>
+      <tr><td><code>chat_message</code></td><td>الرسالة: النص (<b>مشفّر</b>)، ونوعها، والملف، والموقع، والرد، والتعديل والحذف</td><td><span class="path">backend/chat/models.py</span></td></tr>
+      <tr><td><code>chat_reaction</code></td><td>التفاعلات ❤️ 👍</td><td><span class="path">backend/chat/models.py</span></td></tr>
+      <tr><td><code>chat_starredmessage</code></td><td>الرسائل المميزة ⭐</td><td><span class="path">backend/chat/models.py</span></td></tr>
+      <tr><td><code>stories_story</code> و <code>stories_storyview</code></td><td>الحالات (24 ساعة) ومن شاهدها</td><td><span class="path">backend/stories/models.py</span></td></tr>
+      <tr><td><code>calls_call</code></td><td>سجل المكالمات: من اتصل، ونوعها، ومدتها، وحالتها</td><td><span class="path">backend/calls/models.py</span></td></tr>
+      <tr><td><code>notifications_pushsubscription</code></td><td>«عنوان» كل متصفح لإرسال الإشعارات إليه</td><td><span class="path">backend/notifications/models.py</span></td></tr>
+    </tbody>
+  </table></div>
+  <p>كل تغيير في الجداول يُسجَّل في ملف «ترحيل» (migration) داخل مجلد <span class="path">migrations/</span> لكل تطبيق، ويُطبَّق بالأمر <code>python manage.py migrate</code>. وأهم فهرس: <code>msg_conv_id_desc</code> على (المحادثة، رقم الرسالة تنازلياً)، فيجلب «آخر 50 رسالة» فوراً حتى مع ملايين الرسائل.</p>
+</section>
+
+<!-- ============================================================ 5 -->
+<section class="part" id="docker">
+  <h2><span class="n">5</span>Docker: تشغيل النظام كاملاً بأمر واحد</h2>
+  <p><b>Docker</b> يضع كل برنامج مع كل ما يحتاجه في «حاوية» (container) معزولة، فيعمل بالطريقة نفسها على أي خادم. و<b>Docker Compose</b> يشغّل عدة حاويات معاً ويربطها بشبكة داخلية. بدلاً من تثبيت Python وPostgreSQL وRedis وNode يدوياً، يكفي:</p>
+  <pre><code>cd deploy
+./start.sh          # يولّد كلمات السر، ويبني ويشغّل كل شيء، ويطبع رابط https
+# أو يدوياً:
+docker compose up -d --build</code></pre>
+  <h3>الخدمات السبع</h3>
+  <div class="table"><table>
+    <thead><tr><th>الخدمة</th><th>ماذا تشغّل</th><th>ملاحظة</th></tr></thead>
+    <tbody>
+      <tr><td><code>db</code></td><td>PostgreSQL 16</td><td>حتى 300 اتصال، وبياناتها في volume اسمه <code>pgdata</code></td></tr>
+      <tr><td><code>redis</code></td><td>Redis 7</td><td>في الذاكرة فقط (لا يحفظ شيئاً مهماً)</td></tr>
+      <tr><td><code>web</code></td><td>Django عبر Gunicorn على المنفذ 8001</td><td>يطبّق الترحيلات تلقائياً عند التشغيل</td></tr>
+      <tr><td><code>ws</code></td><td>Django Channels عبر Uvicorn على المنفذ 8000</td><td>الصورة نفسها بدور مختلف</td></tr>
+      <tr><td><code>frontend</code></td><td>Next.js (نسخة standalone صغيرة)</td><td>المنفذ 3000</td></tr>
+      <tr><td><code>caddy</code></td><td>البوابة على 80 و443</td><td>يوزّع: <code>/ws</code> ← ws، و<code>/api /media /admin</code> ← web، والباقي ← frontend</td></tr>
+      <tr><td><code>tunnel</code></td><td>cloudflared (اختيارية)</td><td>رابط https مؤقت للتجربة من الهاتف</td></tr>
+    </tbody>
+  </table></div>
+  <p>الملفات: <span class="path">deploy/docker-compose.yml</span>، <span class="path">deploy/Caddyfile</span>، <span class="path">deploy/start.sh</span>، <span class="path">deploy/.env.example</span>، <span class="path">backend/Dockerfile</span>، <span class="path">backend/entrypoint.sh</span>، <span class="path">frontend/Dockerfile</span>. والشرح الكامل في <span class="path">docs/DEPLOY.md</span>.</p>
+  <div class="note info"><strong>والتشغيل على حاسوبك دون Docker؟</strong>السكربت <span class="path">run-mobile.sh</span> يشغّل Django (Daphne) وNext.js ونفق cloudflared، ويطبع رابط https تفتحه من الهاتف. هذا ما استعملناه في التجارب.</div>
+</section>
+
+<!-- ============================================================ 6 -->
+<section class="part" id="websocket">
+  <h2><span class="n">6</span>WebSocket: كيف تصل الرسالة فوراً؟</h2>
+  <p>في <b>HTTP</b> العادي يسأل المتصفح والخادم يجيب ثم ينقطع الاتصال؛ فلو اعتمدنا عليه وحده لما عرف الهاتف بوصول رسالة جديدة إلا إذا سأل كل ثانية (هدر كبير). أما <b>WebSocket</b> فاتصال يبقى مفتوحاً، ويستطيع الخادم أن يرسل عبره في أي لحظة.</p>
+  <h3>اتصالان لكل مستخدم</h3>
+  <div class="grid2">
+    <div class="box"><h4><code>/ws/presence/</code>: الاتصال العام</h4><p>مفتوح ما دام التطبيق مفتوحاً: «متصل الآن»، وتحديث قائمة المحادثات، والحالات الجديدة، ورنين المكالمات ورسائل التعارف (WebRTC).</p></div>
+    <div class="box"><h4><code>/ws/chat/&lt;رقم المحادثة&gt;/</code>: اتصال المحادثة المفتوحة</h4><p>الرسائل الجديدة، والتعديل والحذف، و«يكتب الآن»، وعلامات ✓✓ الرمادية والزرقاء.</p></div>
+  </div>
+  <h3>رحلة رسالة واحدة</h3>
+  <ol class="steps">
+    <li>تكتب «مرحباً» فترسلها الواجهة عبر WebSocket: <code>{"type":"message","content":"مرحباً"}</code> (<span class="path">frontend/app/chat/_ui/Composer.tsx</span>).</li>
+    <li>يستقبلها <code>ChatConsumer.receive_json</code> في <span class="path">backend/chat/consumers.py</span>، ويتحقق من العضوية ومن حدّ الإرسال (20 رسالة كل 10 ثوانٍ).</li>
+    <li><code>create_message</code> في <span class="path">backend/chat/services.py</span> تحفظها <b>مشفّرة</b> في قاعدة البيانات، وتسجّل «وصلت ✓✓» لكل عضو متصل باستعلام واحد.</li>
+    <li>تُبثّ عبر الـ Channel Layer (Redis) إلى «غرفة» المحادثة <code>chat_&lt;id&gt;</code> وإلى غرفة كل عضو <code>user_&lt;id&gt;</code>، فتصل مهما كان العامل الذي يخدم كل مستخدم.</li>
+    <li>يُرسَل إشعار Push في الخلفية لمن ليس داخل التطبيق.</li>
+  </ol>
+  <h3>الهوية والاتصال المنقطع</h3>
+  <p>المتصفح لا يستطيع إضافة ترويسة إلى WebSocket، فيُرسَل التوكن في الرابط <code>?token=...</code>، ويقارن الخادم <b>هاشه</b> بما في قاعدة البيانات (<span class="path">backend/chat/auth.py</span>). وإن انقطع الاتصال (ضعف الشبكة، أو إعادة تشغيل الخادم) يعيد <span class="path">frontend/lib/socket.ts</span> الاتصال وحده بانتظار متزايد: 1 ثم 2 ثم 4 ثوانٍ حتى 30 ثانية، ثم يجلب ما فاته عبر HTTP. وقائمة كل الأحداث في الملف نفسه.</p>
+</section>
+
+<!-- ============================================================ 7 -->
+<section class="part" id="security">
+  <h2><span class="n">7</span>الهاش والتشفير والأمان</h2>
+  <p>الفرق بين المفهومين: <b>الهاش</b> طريق باتجاه واحد (لا يمكن استرجاع الأصل منه، ويصلح للتحقق فقط)، و<b>التشفير</b> باتجاهين (يُفك بالمفتاح الصحيح).</p>
+  <div class="table"><table>
+    <thead><tr><th>ما نحميه</th><th>الطريقة</th><th>كيف تعمل ببساطة</th><th>أين في الكود</th></tr></thead>
+    <tbody>
+      <tr><td><b>كلمات المرور</b></td><td>هاش <b>Argon2</b> <span class="tag good">مُطبَّق</span></td><td>خوارزمية بطيئة عمداً وتحتاج ذاكرة، مع «ملح» (salt) عشوائي لكل حساب، فالتخمين مكلف جداً حتى لو سُرقت القاعدة. والحسابات القديمة (PBKDF2) تتحوّل إليها تلقائياً عند الدخول</td><td><code>PASSWORD_HASHERS</code> في <span class="path">backend/config/settings.py</span></td></tr>
+      <tr><td><b>توكن الدخول</b></td><td>هاش <b>SHA-256</b> <span class="tag good">مُطبَّق</span></td><td>توكن عشوائي 160 بت يُعطى للجهاز مرة واحدة، ونحفظ هاشه فقط. سريع لأنه يُفحص مع كل طلب، وآمن لأن التوكن عشوائي طويل لا يُخمَّن. تسجيل الخروج يحذفه من الخادم</td><td><span class="path">backend/accounts/tokens.py</span> و <span class="path">authentication.py</span></td></tr>
+      <tr><td><b>نصوص الرسائل</b></td><td>تشفير <b>AES-256-GCM</b> <span class="tag good">مُطبَّق</span></td><td>تُشفَّر قبل الحفظ وتُفك عند القراءة تلقائياً. لكل رسالة رقم عشوائي (nonce)، فالنص نفسه يُخزَّن بشكلين مختلفين. وGCM يكشف أي عبث: لو تغيّر حرف واحد فشل الفك. في القاعدة يظهر النص هكذا: <code>enc1:...</code></td><td><span class="path">backend/chat/crypto.py</span> و <code>EncryptedTextField</code> في <span class="path">chat/fields.py</span></td></tr>
+      <tr><td><b>الملفات</b> (صور، صوت، فيديو، مستندات، حالات)</td><td>تشفير AES-256-GCM على القرص <span class="tag good">مُطبَّق</span></td><td>يُشفَّر الملف قطعاً كل منها 64 كيلوبايت، ورقم القطعة داخل في التشفير فلا يمكن تبديل ترتيبها. يُفك عند الطلب فقط، وجزئياً (Range) ليعمل تقديم الفيديو في الآيفون</td><td><code>EncryptedFileStorage</code> في <span class="path">chat/fields.py</span>، والفك في <span class="path">config/media.py</span></td></tr>
+      <tr><td><b>روابط الملفات</b></td><td>توقيع <b>HMAC-SHA256</b> مع وقت انتهاء <span class="tag good">مُطبَّق</span></td><td>رابط ملف الرسالة لا يُفتح إلا بتوقيع يصدره الخادم لمن يرى الرسالة، ويصلح ساعات محدودة. معرفة المسار وحدها لا تكفي</td><td><code>signed_url</code> في <span class="path">backend/config/media.py</span></td></tr>
+      <tr><td><b>الإشعارات</b></td><td>مفاتيح <b>VAPID</b> + تشفير لكل متصفح <span class="tag good">مُطبَّق</span></td><td>نوقّع كل إشعار بمفتاحنا الخاص فلا يرسل أحد باسمنا، ويُشفَّر المحتوى بمفاتيح المتصفح (p256dh/auth) فلا تقرؤه Google أو Apple. ويمكن إخفاء نص الرسالة من الإشعار</td><td><span class="path">backend/notifications/vapid.py</span> و <span class="path">push.py</span></td></tr>
+      <tr><td><b>النقل عبر الشبكة</b></td><td><b>HTTPS / WSS</b> (TLS) <span class="tag good">مُطبَّق</span></td><td>كل ما يمر بين الهاتف والخادم مشفّر، مع ترويسات أمان: HSTS، ومنع التضمين في إطارات، و nosniff</td><td><span class="path">deploy/Caddyfile</span></td></tr>
+      <tr><td><b>المكالمات</b></td><td><b>DTLS-SRTP</b> (من WebRTC نفسه)</td><td>الصوت والصورة مشفّران بين الجهازين، ولا يمرّان عبر خادمنا</td><td><span class="path">frontend/lib/call.ts</span></td></tr>
+    </tbody>
+  </table></div>
+  <h3>حمايات أخرى</h3>
+  <ul>
+    <li><b>حدود الطلبات (Throttling)</b>: الدخول 20 محاولة في الدقيقة لكل IP ضد تخمين كلمات المرور، والبحث عن حساب 30 في الدقيقة. التفاصيل في القسم 8. <span class="path">backend/config/throttles.py</span></li>
+    <li><b>الخصوصية</b>: لا أحد يرى قائمة حسابات الجامعة؛ جهات الاتصال والمراسلة والحالات لمن تعرفهم فقط (القسم 9). وأي محاولة للوصول إلى محادثة لست عضواً فيها تُرجع 404 فلا يُكشف وجودها.</li>
+    <li><b>فحص الملفات المرفوعة</b>: الصورة تُفتح بمكتبة Pillow للتأكد أنها صورة حقيقية، ولكل نوع حد أقصى، وما ليس صورة أو صوتاً أو فيديو يُنزَّل ولا يُفتح في المتصفح. <span class="path">backend/chat/media.py</span></li>
+    <li><b>الأسرار في متغيرات البيئة</b> لا في الكود: <code>SECRET_KEY</code>، و<code>MESSAGE_KEY</code>، وكلمة سر قاعدة البيانات، في ملف <code>.env</code> على الخادم.</li>
+  </ul>
+  <div class="note warn"><strong>تصريح صادق: هذا ليس تشفيراً «طرفاً لطرف» (E2EE)</strong>ما طبّقناه «تشفير أثناء التخزين» (at rest): إن سُرقت قاعدة البيانات أو القرص فلا يُقرأ منها شيء دون المفتاح. لكن الخادم نفسه يملك المفتاح (<span class="path">backend/message_key</span>)، فهو يستطيع الفك؛ وهذا ما يسمح بالإشعارات بنص الرسالة وتعدد الأجهزة. أما E2EE كما في واتساب فالمفاتيح فيه على أجهزة المستخدمين فقط، وهو مرحلة لاحقة (القسم 15). <b>ويجب نسخ ملف المفتاح احتياطياً</b>: إن ضاع لا يمكن قراءة الرسائل المشفّرة.</div>
+</section>
+
+<!-- ============================================================ 8 -->
+<section class="part" id="load">
+  <h2><span class="n">8</span>معالجة الطلبات المتزامنة دون ضغط على الخادم</h2>
+  <p>قد يفتح ألفا طالب التطبيق في اللحظة نفسها (بعد إعلان مثلاً). عالجنا ذلك على أربعة مستويات:</p>
+
+  <h3>أولاً: توزيع العمل على عمّال كثيرين</h3>
+  <ul>
+    <li><b>Gunicorn للـ API</b>: عمليتان لكل معالج، وفي كل عملية 16 خيطاً. على خادم بـ 8 معالجات: 16 عملية × 16 خيطاً = 256 طلباً في اللحظة نفسها. <span class="path">backend/entrypoint.sh</span> (المتغيرات <code>WEB_WORKERS</code> و<code>WEB_THREADS</code>)</li>
+    <li><b>Uvicorn للـ WebSocket</b>: عدة عمّال، كل عامل يحمل آلاف الاتصالات المفتوحة لأنه غير متزامن (async): لا يحجز خيطاً لكل اتصال ينتظر.</li>
+    <li><b>Redis يربط العمّال</b>: الطالب «أ» متصل بالعامل 1 و«ب» بالعامل 3؛ الرسالة تُنشر في Redis فتصل إلى الاثنين. ونستعمل نمط Pub/Sub الأخف، فالرسالة تُبث ولا تُخزَّن. <code>CHANNEL_LAYERS</code> في settings.py</li>
+    <li><b>التوسع الأفقي</b>: عند الحاجة نشغّل نسخاً أكثر بأمر واحد: <code>docker compose up -d --scale web=3 --scale ws=3</code>.</li>
+    <li><b>المكالمات لا تمر بالخادم</b>: الصوت والصورة بين الجهازين مباشرة، فمكالمة مدتها ساعة لا تكلّف الخادم إلا رسائل التعارف في أولها.</li>
+  </ul>
+
+  <h3>ثانياً: جعل كل طلب رخيصاً</h3>
+  <ul>
+    <li><b>قائمة المحادثات باستعلام واحد</b>: كانت تسأل القاعدة مرتين لكل محادثة (مشكلة N+1)، فصارت تحسب آخر رسالة وعدد غير المقروء والتثبيت داخل الاستعلام نفسه (<code>annotate</code> و<code>Subquery</code>). عدد الاستعلامات ثابت مهما كثرت المحادثات. <code>conversations()</code> في <span class="path">backend/chat/views.py</span></li>
+    <li><b>فهرس مركّب</b> على الرسائل: «آخر 50 رسالة» فورية مع ملايين الرسائل.</li>
+    <li><b>الصفحات</b>: الرسائل 50 في كل مرة، والقديمة عند التمرير للأعلى فقط.</li>
+    <li><b>«وصلت ✓✓» بعملية واحدة</b> لكل الأعضاء المتصلين، بدل أن يكتب كل جهاز لنفسه (مجموعة من 40 كانت تكلّف 80 عملية لكل رسالة).</li>
+    <li><b>«متصل الآن» لمن يهمه فقط</b>: يُبث لمن يشاركك محادثة أو جهة اتصال، لا لكل الجامعة. كان سيعني 2000 × 2000 = 4 ملايين رسالة عند دخول الجميع. والقائمة محفوظة في الذاكرة المؤقتة دقيقة كاملة. <code>contact_ids</code> في <span class="path">chat/services.py</span></li>
+    <li><b>القنوات خفيفة</b>: لا نحمّل قائمة المشتركين (قد يكونون آلافاً) ولا نحسب علامات القراءة فيها.</li>
+    <li><b>إعادة استعمال الاتصال بقاعدة البيانات</b> 60 ثانية بدل فتح اتصال لكل طلب.</li>
+  </ul>
+
+  <h3>ثالثاً: الأعمال الثقيلة في الخلفية</h3>
+  <ul>
+    <li><b>الإشعارات في طابور</b>: 8 عمّال ثابتون (<code>ThreadPoolExecutor</code>) يرسلون الإشعارات، فلا تنتظر الرسالة ردّ Google أو Apple، ولا يُفتح خيط جديد لكل رسالة. <span class="path">backend/notifications/push.py</span></li>
+    <li>تحديث «آخر استخدام» للتوكن مرة كل ساعة فقط، لا مع كل طلب.</li>
+  </ul>
+
+  <h3>رابعاً: منع الإغراق (Throttling)</h3>
+  <div class="table"><table>
+    <thead><tr><th>ما يُحدّ</th><th>الحد</th></tr></thead>
+    <tbody>
+      <tr><td>كل طلبات المستخدم المسجّل</td><td>600 في الدقيقة</td></tr>
+      <tr><td>الطلبات قبل الدخول (لكل IP)</td><td>120 في الدقيقة</td></tr>
+      <tr><td>محاولات الدخول والتسجيل</td><td>20 في الدقيقة</td></tr>
+      <tr><td>إرسال الرسائل عبر HTTP</td><td>120 في الدقيقة</td></tr>
+      <tr><td>البحث عن حساب / إضافة جهة اتصال</td><td>30 في الدقيقة</td></tr>
+      <tr><td>إرسال الرسائل عبر WebSocket <span class="tag good">جديد</span></td><td>20 رسالة كل 10 ثوانٍ لكل اتصال، و«يكتب الآن» مرة في الثانية</td></tr>
+    </tbody>
+  </table></div>
+  <p>عند تجاوز حدود HTTP يرد الخادم <code>429 Too Many Requests</code>، والعدّادات في Redis مشتركة بين كل العمّال. وعند تجاوز حد WebSocket تُهمل الرسائل الزائدة ويظهر للمستخدم «أرسلت رسائل كثيرة بسرعة». الملفان: <span class="path">backend/config/throttles.py</span> و <span class="path">backend/chat/consumers.py</span>.</p>
+  <p>والواجهة نفسها تخفّف الضغط: البحث يُرسَل بعد توقف الكتابة ربع ثانية، وتحديث القائمة يُجمَع إن وصلت أحداث كثيرة متتالية، وإعادة الاتصال تنتظر مدة متزايدة حتى لا يهجم الجميع على الخادم فور عودته.</p>
+
+  <h3>النتيجة المقيسة: اختبار ضغط بـ 2000 مستخدم متزامن</h3>
+  <div class="table"><table>
+    <thead><tr><th></th><th>قبل (SQLite وعملية واحدة)</th><th>بعد (PostgreSQL وRedis وعدة عمّال)</th></tr></thead>
+    <tbody>
+      <tr><td>اتصلوا عبر WebSocket</td><td>99 من 2000</td><td><b>2000 من 2000</b></td></tr>
+      <tr><td>جلبوا قائمة محادثاتهم</td><td>36</td><td><b>2000</b></td></tr>
+      <tr><td>رسائل أُرسلت</td><td>0</td><td><b>7,974</b></td></tr>
+      <tr><td>وقت الاتصال (الوسيط)</td><td>4.8 ثانية</td><td><b>0.9 ثانية</b></td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted">قيس على جهاز واحد بـ 4 معالجات يشغّل النظام ومولّد الضغط معاً، فالأرقام على خادم حقيقي أفضل. أدوات الاختبار: <span class="path">loadtest/run.py</span> و <code>python manage.py loadtest_users --count 2000</code>، والنتائج في <span class="path">loadtest/results/</span>. أُجري الاختبار قبل إضافة جهات الاتصال والقنوات؛ والإضافتان لا تزيدان عمل الطلبات الأساسية، لكن إعادة القياس على الخادم النهائي خطوة مستحسنة.</p>
+</section>
+
+<!-- ============================================================ 9 -->
+<section class="part" id="contacts">
+  <h2><span class="n">9</span>جهات الاتصال الخاصة <span class="tag good">جديد</span></h2>
+  <p>كان كل حساب يُسجَّل يظهر لكل المستخدمين، وهذا غير منطقي لجامعة فيها آلاف الطلاب. الآن يعمل النظام كواتساب:</p>
+  <ul>
+    <li>تبويب «جهات الاتصال» يعرض <b>من أضفتهم أنت فقط</b>. والحساب الجديد يبدأ بقائمة فارغة.</li>
+    <li>تضيف الشخص بمعرّف <b>كامل</b> تعرفه عنه: الرقم الجامعي، أو البريد الجامعي، أو اسم المستخدم، أو رقم الهاتف (<code>07701234567</code> و<code>+9647701234567</code> الرقم نفسه). جزء من المعرّف لا يجد أحداً، فلا يمكن تصفّح الحسابات بكتابة حرفين.</li>
+    <li>يظهر لك الشخص (صورته واسمه ودوره) لتتأكد أنه هو، ثم «إضافة إلى جهات الاتصال» و«مراسلة».</li>
+    <li>من راسلك وليس في جهاتك يظهر فوق المحادثة شريط «ليس ضمن جهات اتصالك» وزر «إضافة».</li>
+    <li>المراسلة، والإضافة إلى مجموعة، وملف الشخص، والحالات، و«متصل الآن»: كلها <b>لمن تعرفهم فقط</b> (جهات اتصالك، ومن يشاركك محادثة أو مجموعة، ومن أضافك). والخادم يفرض هذا، لا الواجهة فقط.</li>
+    <li>عند التحديث أصبح كل شخصين بينهما محادثة سابقة جهتَي اتصال لبعضهما تلقائياً، فلم تفرغ قائمة أحد.</li>
+  </ul>
+  <p><b>الأماكن:</b> الجدول <code>Contact</code> في <span class="path">backend/accounts/models.py</span>؛ والـ API (<code>find</code>، <code>contacts</code>، <code>contact_detail</code>) في <span class="path">backend/accounts/views.py</span>؛ و«من أعرفهم» (<code>known_ids</code>) في <span class="path">backend/chat/services.py</span>؛ وترحيل البيانات في <span class="path">backend/chat/migrations/0008_existing_chats_become_contacts.py</span>؛ والواجهة في <span class="path">frontend/app/chat/_ui/People.tsx</span> (<code>PeopleView</code> و<code>AddContactPanel</code>).</p>
+</section>
+
+<!-- ============================================================ 10 -->
+<section class="part" id="channels">
+  <h2><span class="n">10</span>القنوات <span class="tag good">جديد</span></h2>
+  <p>القناة للإعلانات، وتختلف عن المجموعة:</p>
+  <div class="table"><table>
+    <thead><tr><th></th><th>المجموعة</th><th>القناة</th></tr></thead>
+    <tbody>
+      <tr><td>من ينشئها</td><td>أي مستخدم</td><td><b>التدريسي والإداري فقط</b> (والطالب يرد عليه الخادم 403)</td></tr>
+      <tr><td>من يرسل</td><td>كل الأعضاء</td><td><b>مشرفو القناة فقط</b>، والمشرف لا يكون إلا تدريسياً أو إدارياً</td></tr>
+      <tr><td>الانضمام</td><td>يضيفك المشرف</td><td>تكتشفها في «استكشاف القنوات» وتشترك بنفسك، أو يضيفك المشرف</td></tr>
+      <tr><td>قائمة الأعضاء</td><td>يراها الجميع</td><td>المشترك يرى المشرفين فقط، والمشرف يرى المشتركين</td></tr>
+      <tr><td>ما يفعله العضو العادي</td><td>يرسل ويرد ويتفاعل</td><td>يقرأ ويتفاعل (❤️) ويكتم، ولا خانة كتابة عنده</td></tr>
+      <tr><td>علامات القراءة ✓✓</td><td>نعم</td><td>لا (قد يكون المشتركون آلافاً)</td></tr>
+      <tr><td>الإشعار</td><td>باسم المجموعة واسم المرسل</td><td>باسم القناة</td></tr>
+      <tr><td>المكالمات</td><td>—</td><td>ممنوعة (وإلا رنّ هاتف كل مشترك)</td></tr>
+      <tr><td>إن غادر آخر مشرف</td><td>أقدم عضو يصبح مشرفاً</td><td>أقدم <b>تدريسي أو إداري</b> فقط؛ ولا يرث الطالب الإشراف</td></tr>
+    </tbody>
+  </table></div>
+  <p>والمنع مطبّق في الخادم عبر HTTP وعبر WebSocket معاً، فلا يمكن تجاوزه ببرنامج غير الواجهة.</p>
+  <p><b>الأماكن:</b> النوع <code>CHANNEL</code> في <span class="path">backend/chat/models.py</span>؛ و<code>channels</code> و<code>subscribe</code> و<code>require_can_post</code> في <span class="path">backend/chat/views.py</span>؛ و<code>can_broadcast</code> في <span class="path">chat/services.py</span>؛ ومنع الإرسال عبر WebSocket في <span class="path">chat/consumers.py</span>؛ والواجهة: <code>NewChannelPanel</code> و<code>ChannelsPanel</code> و<code>GroupPanel</code> في <span class="path">frontend/app/chat/_ui/Profiles.tsx</span>، وشريط «النشر لمشرفيها فقط» في <span class="path">Conversation.tsx</span>، وتصفية «القنوات» في <span class="path">ChatList.tsx</span>. والاختبارات: <code>ChannelTests</code> في <span class="path">backend/chat/test_features.py</span>.</p>
+</section>
+
+<!-- ============================================================ 11 -->
+<section class="part" id="features">
+  <h2><span class="n">11</span>كل الميزات وأماكنها في المشروع</h2>
+  <p class="muted">الواجهة كلها تحت <span class="path">frontend/app/chat/_ui/</span> ما لم يُذكر غير ذلك.</p>
+  <div class="table"><table>
+    <thead><tr><th>الميزة</th><th>في الخادم</th><th>في الواجهة</th></tr></thead>
+    <tbody>
+      <tr><td>بوابة الدخول والتسجيل بالدور (طالب/تدريسي/إداري) والرقم الجامعي، و«تذكرني»، و«نسيت كلمة المرور»</td><td><span class="path">accounts/views.py</span> (<code>login</code>، <code>register</code>، <code>help_request</code>)</td><td><span class="path">frontend/app/AuthForm.tsx</span></td></tr>
+      <tr><td>جهات الاتصال الخاصة</td><td><span class="path">accounts/views.py</span></td><td><span class="path">People.tsx</span></td></tr>
+      <tr><td>المحادثات الثنائية والقائمة والتصفية (الكل، غير المقروءة، المجموعات، القنوات)</td><td><code>conversations()</code> في <span class="path">chat/views.py</span></td><td><span class="path">ChatList.tsx</span></td></tr>
+      <tr><td>الرسائل: نص، صورة، فيديو، صوت، ملف، موقع (ومباشر)؛ رد، تعديل، حذف للجميع</td><td><code>send_message</code> في <span class="path">chat/views.py</span>، و<span class="path">chat/services.py</span></td><td><span class="path">Composer.tsx</span>، <span class="path">Bubbles.tsx</span>، <span class="path">Location.tsx</span></td></tr>
+      <tr><td>✓ أُرسلت، ✓✓ وصلت، ✓✓ أزرق قُرئت، و«يكتب الآن»</td><td><code>mark_read</code> و<code>mark_delivered</code> في <span class="path">chat/services.py</span></td><td><span class="path">Conversation.tsx</span></td></tr>
+      <tr><td>التفاعلات، والمميزة ⭐، والتثبيت، والمفضلة، والكتم، والأرشفة، والحذف لديّ فقط، والرسائل المحفوظة</td><td><span class="path">chat/views.py</span></td><td><span class="path">Conversation.tsx</span>، <span class="path">Profiles.tsx</span></td></tr>
+      <tr><td>المجموعات: الإنشاء، والأعضاء، والمشرفون، والاسم والصورة، والمغادرة</td><td><code>create_group</code> و<code>members</code> في <span class="path">chat/views.py</span></td><td><code>GroupPanel</code> و<code>NewGroupPanel</code> في <span class="path">Profiles.tsx</span></td></tr>
+      <tr><td>القنوات</td><td><span class="path">chat/views.py</span></td><td><span class="path">Profiles.tsx</span>، <span class="path">Conversation.tsx</span></td></tr>
+      <tr><td>الوسائط المشتركة (صور، مستندات، صوتيات، روابط، مواقع)</td><td><code>shared_media</code> في <span class="path">chat/views.py</span></td><td><code>MediaPanel</code> في <span class="path">Profiles.tsx</span></td></tr>
+      <tr><td>الحالات 24 ساعة، ومن شاهدها</td><td><span class="path">backend/stories/</span></td><td><span class="path">Stories.tsx</span></td></tr>
+      <tr><td>مكالمات صوت وفيديو، والتحويل من صوت إلى فيديو، والرد من الإشعار، وخادم TURN اختياري</td><td><span class="path">backend/calls/views.py</span>، وتمرير الإشارات في <code>PresenceConsumer</code></td><td><span class="path">Calls.tsx</span>، <span class="path">frontend/lib/call.ts</span></td></tr>
+      <tr><td>إشعارات Push (رسائل ومكالمات)، وإخفاء المحتوى، والإشعار التجريبي، والعدّاد على الأيقونة</td><td><span class="path">backend/notifications/</span></td><td><span class="path">frontend/public/sw.js</span>، <span class="path">frontend/lib/push.ts</span></td></tr>
+      <tr><td>الإعدادات مقسّمة صفحات: معلوماتي، المظهر، اللغة، الإشعارات، الأذونات</td><td><code>me</code> في <span class="path">accounts/views.py</span></td><td><span class="path">Settings.tsx</span></td></tr>
+      <tr><td>العربية والإنجليزية مع قلب اتجاه الواجهة (RTL/LTR)</td><td><span class="path">backend/locale/en/LC_MESSAGES/django.po</span></td><td><span class="path">frontend/lib/i18n.ts</span> و <span class="path">i18n-en.ts</span></td></tr>
+      <tr><td>الوضع النهاري والليلي والتلقائي، وخط الهاتف نفسه</td><td><code>Profile.mode</code></td><td><span class="path">wasl.css</span>، <span class="path">globals.css</span></td></tr>
+      <tr><td>التثبيت كتطبيق (PWA) وأيقونته</td><td>—</td><td><span class="path">frontend/app/manifest.ts</span></td></tr>
+      <tr><td>مركز الأذونات (المايكروفون، والكاميرا، والإشعارات، والموقع)</td><td>—</td><td><span class="path">frontend/lib/permissions.ts</span></td></tr>
+      <tr><td>لوحة الإدارة: الحسابات، وتغيير كلمات المرور، وطلبات الدعم، وجهات الاتصال</td><td><code>/admin</code>، و<span class="path">accounts/admin.py</span></td><td>—</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 12 -->
+<section class="part" id="api">
+  <h2><span class="n">12</span>دليل الـ API كاملاً</h2>
+  <p>كل الروابط تبدأ بـ <code>/api/</code>، وكل طلب (عدا الدخول والتسجيل) يحمل الترويسة <code>Authorization: Token &lt;التوكن&gt;</code>. الروابط معرّفة في ملفات <span class="path">urls.py</span> لكل تطبيق، والدوال الجاهزة لها في الواجهة في <span class="path">frontend/lib/endpoints.ts</span>، والشرح المفصّل في <span class="path">docs/API.md</span>.</p>
+  <details open><summary>الحساب وجهات الاتصال: <span class="path">backend/accounts/urls.py</span></summary>
+    <pre><code>POST   auth/register/          إنشاء حساب
+POST   auth/login/             دخول (اسم المستخدم أو البريد أو الرقم الجامعي)
+POST   auth/logout/            خروج (يحذف توكن هذا الجهاز، أو كل الأجهزة)
+GET    auth/me/   PATCH        بياناتي / تعديلها (الاسم، الصورة، البريد، اللغة، الوضع ...)
+POST   auth/help/              نسيت كلمة المرور / دعم فني
+GET    users/?q=               من أعرفهم فقط
+GET    users/find/?q=          بحث بمعرّف كامل
+GET    users/&lt;id&gt;/            ملف شخص أعرفه
+GET    contacts/   POST        جهات اتصالي / إضافة
+DELETE contacts/&lt;id&gt;/         إزالة</code></pre></details>
+  <details><summary>المحادثات والقنوات والرسائل: <span class="path">backend/chat/urls.py</span></summary>
+    <pre><code>GET    conversations/?filter=all|groups|channels|favorites|unread|archived&amp;q=
+POST   conversations/                   فتح محادثة ثنائية {user_id}
+GET    conversations/saved/             الرسائل المحفوظة
+POST   conversations/groups/            مجموعة جديدة
+GET    channels/?q=   POST              دليل القنوات / قناة جديدة (تدريسي وإداري)
+POST   channels/&lt;id&gt;/subscribe/  DELETE   اشتراك / إلغاء
+GET    conversations/&lt;id&gt;/  PATCH  DELETE
+GET    conversations/&lt;id&gt;/members/  POST
+PATCH  conversations/&lt;id&gt;/members/&lt;uid&gt;/  DELETE
+GET    conversations/&lt;id&gt;/messages/?before=  POST
+PATCH  conversations/&lt;id&gt;/read/
+GET    conversations/&lt;id&gt;/media/?type=
+POST   conversations/&lt;id&gt;/clear/
+PATCH  messages/&lt;id&gt;/  DELETE          تعديل / حذف للجميع
+PATCH  messages/&lt;id&gt;/location/         تحديث الموقع المباشر أو إيقافه
+POST   messages/&lt;id&gt;/react/            تفاعل
+POST   messages/&lt;id&gt;/star/  DELETE      تمييز بنجمة
+GET    starred/</code></pre></details>
+  <details><summary>الحالات والمكالمات والإشعارات</summary>
+    <pre><code>GET  stories/  POST            backend/stories/urls.py
+DELETE stories/&lt;id&gt;/   POST stories/&lt;id&gt;/view/   GET stories/&lt;id&gt;/viewers/
+
+GET  calls/   POST             backend/calls/urls.py
+GET  calls/ice/                خوادم STUN/TURN
+GET  calls/ringing/            مكالمة ترنّ لي الآن
+POST calls/&lt;id&gt;/answer/  decline/  end/  video/
+
+GET  push/key/                 backend/notifications/urls.py
+POST push/subscribe/  DELETE
+POST push/test/</code></pre></details>
+  <details><summary>WebSocket: <span class="path">backend/chat/routing.py</span></summary>
+    <pre><code>ws/presence/?token=...         الاتصال العام
+ws/chat/&lt;id&gt;/?token=...        اتصال المحادثة المفتوحة</code></pre></details>
+</section>
+
+<!-- ============================================================ 13 -->
+<section class="part" id="map">
+  <h2><span class="n">13</span>خريطة الملفات: أين تجد كل شيء</h2>
+  <div class="grid2">
+    <div class="box"><h4>أين الـ API؟</h4><p>الروابط في <span class="path">backend/*/urls.py</span>، ومنطق كل رابط في <span class="path">backend/*/views.py</span>. وأكبرها <span class="path">backend/chat/views.py</span>.</p></div>
+    <div class="box"><h4>أين الهاش؟</h4><p>كلمات المرور: <code>PASSWORD_HASHERS</code> في <span class="path">backend/config/settings.py</span>. التوكنات: <span class="path">backend/accounts/tokens.py</span>.</p></div>
+    <div class="box"><h4>أين التشفير؟</h4><p><span class="path">backend/chat/crypto.py</span> (الخوارزمية)، و<span class="path">backend/chat/fields.py</span> (ربطها بالجداول)، و<span class="path">backend/config/media.py</span> (فك الملفات وتوقيع الروابط).</p></div>
+    <div class="box"><h4>أين الإعدادات؟</h4><p>الخادم: <span class="path">backend/config/settings.py</span>. التشغيل الفعلي: <span class="path">deploy/.env.example</span> و <span class="path">deploy/docker-compose.yml</span>. الواجهة: <span class="path">frontend/next.config.ts</span>.</p></div>
+    <div class="box"><h4>أين الواجهة؟</h4><p>الشاشات في <span class="path">frontend/app/chat/_ui/</span>، والاتصال بالخادم في <span class="path">frontend/lib/</span>، وصفحتا الدخول والتسجيل في <span class="path">frontend/app/AuthForm.tsx</span>.</p></div>
+    <div class="box"><h4>أين قاعدة البيانات؟</h4><p>تعريف الجداول: <span class="path">backend/*/models.py</span>. الملف في التطوير: <span class="path">backend/db.sqlite3</span>. وفي Docker: volume اسمه <code>pgdata</code>.</p></div>
+    <div class="box"><h4>أين WebSocket؟</h4><p>الخادم: <span class="path">backend/chat/consumers.py</span> و <span class="path">routing.py</span>. الواجهة: <span class="path">frontend/lib/socket.ts</span>.</p></div>
+    <div class="box"><h4>أين الاختبارات؟</h4><p>في كل تطبيق: <span class="path">tests.py</span>، وأكبرها <span class="path">backend/chat/test_features.py</span>. والتشغيل: <code>python manage.py test</code>.</p></div>
+  </div>
+  <pre><code>chat/
+├── run-mobile.sh              تشغيل النظام على حاسوبك مع رابط https للهاتف
+├── backend/                   الخادم (Python / Django)
+│   ├── config/                settings.py · urls.py · asgi.py · media.py · throttles.py
+│   ├── accounts/              الحسابات، الدخول، التوكنات، جهات الاتصال، لوحة الإدارة
+│   ├── chat/                  المحادثات، الرسائل، القنوات، WebSocket، التشفير
+│   ├── stories/               الحالات
+│   ├── calls/                 المكالمات (WebRTC signaling، TURN)
+│   ├── notifications/         إشعارات Push (VAPID)
+│   ├── locale/en/             الترجمة الإنجليزية لرسائل الخادم
+│   ├── Dockerfile · entrypoint.sh · requirements.txt
+├── frontend/                  الواجهة (TypeScript / React / Next.js)
+│   ├── app/                   الصفحات: login · register · chat · AuthForm.tsx · wasl.css
+│   │   └── chat/_ui/          الشاشات: ChatList · Conversation · Composer · People · Profiles · Settings · Calls · Stories
+│   ├── lib/                   api.ts · endpoints.ts · socket.ts · call.ts · push.ts · i18n.ts · permissions.ts
+│   └── public/                sw.js · الأيقونات · صور الحرم
+├── deploy/                    docker-compose.yml · Caddyfile · start.sh · .env.example
+├── loadtest/                  أداة اختبار الضغط ونتائجه
+└── docs/                      API.md · DEPLOY.md · LEARN.md · study-guide.html · report.html (هذا الملف)</code></pre>
+</section>
+
+<!-- ============================================================ 14 -->
+<section class="part" id="run">
+  <h2><span class="n">14</span>التشغيل والاختبارات</h2>
+  <h3>على حاسوبك (للتجربة من الهاتف)</h3>
+  <pre><code>git pull
+cd backend &amp;&amp; pip install -r requirements.txt &amp;&amp; python manage.py migrate &amp;&amp; cd ..
+./run-mobile.sh        # يطبع رابط https تفتحه من الهاتف</code></pre>
+  <h3>على خادم حقيقي</h3>
+  <pre><code>cd deploy &amp;&amp; ./start.sh</code></pre>
+  <h3>الاختبارات</h3>
+  <ul>
+    <li><b>51 اختباراً آلياً للخادم</b>، كلها ناجحة: <code>cd backend &amp;&amp; python manage.py test</code>. تغطي الدخول والهاش، والتشفير في القاعدة والقرص، والمجموعات والقنوات وصلاحياتها، وجهات الاتصال والخصوصية، والمكالمات، والإشعارات، وحدود الإرسال عبر WebSocket.</li>
+    <li><b>فحوص الواجهة</b>: <code>npx tsc --noEmit</code> (الأنواع)، و<code>npx eslint app lib</code>، و<code>npm run i18n:check</code> (كل نص عربي له ترجمة)، و<code>npm run build</code>.</li>
+    <li><b>اختبارات المتصفح الكاملة</b> (Playwright، على شاشة هاتف 390×844): سيناريو من 23 خطوة يغطي الرسائل والمكالمات والحالات والمجموعات، وسيناريو جهات الاتصال والقنوات من 9 خطوات، وفحوص الإنجليزية والإعدادات والأذونات. شُغّلت كلها بنجاح أثناء التطوير، لكنها <b>ليست محفوظة في المستودع بعد</b> (انظر القسم 15).</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 15 -->
+<section class="part" id="next">
+  <h2><span class="n">15</span>ما الذي نحتاجه بعد ذلك</h2>
+  <p>مرتّبة بحسب الأهمية للتشغيل الفعلي في الكلية:</p>
+  <div class="table"><table>
+    <thead><tr><th>الخطوة</th><th>لماذا</th><th>الأولوية</th></tr></thead>
+    <tbody>
+      <tr><td><b>خادم دائم ونطاق</b> (مثل <code>chat.asbat.edu.iq</code>)</td><td>الرابط المؤقت يتغيّر مع كل تشغيل، فتضيع اشتراكات الإشعارات ويُعاد تثبيت التطبيق. مع النطاق يصدر Caddy شهادة HTTPS دائمة تلقائياً</td><td><span class="tag warn">عاجل</span></td></tr>
+      <tr><td><b>خادم TURN</b> (Cloudflare Calls أو coturn)</td><td>بدونه تعمل المكالمات على الشبكة نفسها فقط، وقد تفشل بين الواي فاي وبيانات الهاتف. النظام جاهز له: يكفي ضبط المتغيرات</td><td><span class="tag warn">عاجل</span></td></tr>
+      <tr><td><b>نسخ احتياطي تلقائي</b> لقاعدة البيانات ومجلد الملفات <b>ومفتاح التشفير</b></td><td>ضياع المفتاح يعني ضياع كل الرسائل المشفّرة</td><td><span class="tag warn">عاجل</span></td></tr>
+      <tr><td>ربط حسابات الجامعة (استيراد الطلاب وشعبهم، أو دخول موحّد SSO)</td><td>بدل التسجيل اليدوي، وإنشاء قناة ومجموعة لكل شعبة تلقائياً</td><td><span class="tag todo">مهم</span></td></tr>
+      <tr><td>حفظ اختبارات المتصفح في المستودع وتشغيلها آلياً (GitHub Actions)</td><td>كل تعديل يُفحص تلقائياً قبل دمجه</td><td><span class="tag todo">مهم</span></td></tr>
+      <tr><td>مراقبة الأخطاء والأداء (Sentry، وPrometheus/Grafana)</td><td>نعرف بالمشكلة قبل أن يبلّغ عنها المستخدمون</td><td><span class="tag todo">مهم</span></td></tr>
+      <tr><td>تخزين الملفات في خدمة تخزين (S3 أو MinIO)</td><td>الملفات أكبر ما يُخزَّن، والقرص الواحد يمتلئ</td><td><span class="tag todo">مهم</span></td></tr>
+      <tr><td>إعادة اختبار الضغط على الخادم النهائي، وإضافة PgBouncer عند الحاجة</td><td>التأكد من الأرقام على العتاد الحقيقي</td><td><span class="tag todo">مهم</span></td></tr>
+      <tr><td>تشفير طرف لطرف (E2EE)</td><td>حتى الخادم لا يستطيع قراءة الرسائل</td><td>لاحقاً</td></tr>
+      <tr><td>مكالمات جماعية (خادم SFU مثل LiveKit)</td><td>WebRTC المباشر يناسب شخصين</td><td>لاحقاً</td></tr>
+      <tr><td>ميزات للقنوات: عدد مشاهدات المنشور، وجدولة النشر، وتثبيت منشور</td><td>تحسين الإعلانات</td><td>لاحقاً</td></tr>
+      <tr><td>تطبيق أصلي للآيفون (Capacitor)</td><td>لإخفاء شريط ˄ ˅ ✓ فوق لوحة المفاتيح، وهو من النظام ولا يُخفى من موقع ويب</td><td>لاحقاً</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 16 -->
+<section class="part" id="interview">
+  <h2><span class="n">16</span>أسئلة متوقعة في المقابلة</h2>
+  <details><summary>لماذا Django ولماذا Next.js؟</summary><p>Django يعطي جاهزاً ما يحتاجه أي نظام: الحسابات، والجداول وترحيلها، ولوحة الإدارة، والحماية من الثغرات الشائعة، ومعه Channels للـ WebSocket. وNext.js مع React وTypeScript يعطي واجهة سريعة مقسّمة إلى مكوّنات، مع فحص الأنواع قبل التشغيل.</p></details>
+  <details><summary>ما الفرق بين الهاش والتشفير؟ ولماذا Argon2 لكلمات المرور وSHA-256 للتوكن؟</summary><p>الهاش باتجاه واحد، والتشفير يُفك بالمفتاح. كلمة المرور قصيرة ويمكن تخمينها، فنحتاج هاشاً بطيئاً مكلفاً (Argon2) مع ملح. أما التوكن فعشوائي طوله 160 بت لا يُخمَّن، ويُفحص مع كل طلب، فيكفيه هاش سريع (SHA-256).</p></details>
+  <details><summary>ماذا يحدث لو سُرقت قاعدة البيانات؟</summary><p>كلمات المرور هاش Argon2، والتوكنات هاش، ونصوص الرسائل والملفات مشفّرة بـ AES-256-GCM، والمفتاح خارج القاعدة. فالسارق لا يدخل بحساب أحد ولا يقرأ رسالة. لكن إن سُرق الخادم كاملاً مع المفتاح فالحل هو E2EE.</p></details>
+  <details><summary>كيف تصل الرسالة فوراً؟ وكيف يعمل ذلك مع عدة عمّال؟</summary><p>عبر WebSocket. كل عامل Uvicorn يحمل آلاف الاتصالات، والعمّال يتبادلون الأحداث عبر Redis (Channel Layer)، فتصل الرسالة إلى المستلم مهما كان العامل الذي يخدمه.</p></details>
+  <details><summary>كيف يتحمّل الخادم 2000 مستخدم في اللحظة نفسها؟</summary><p>PostgreSQL بدل SQLite، وعدة عمّال مربوطين بـ Redis، واستعلام واحد لقائمة المحادثات بدل N+1، وفهرس للرسائل، وبثّ «متصل الآن» لمن يهمه فقط، والإشعارات في طابور خلفي، وحدود للطلبات. قسناه: من 99 اتصالاً ناجحاً إلى 2000 من 2000.</p></details>
+  <details><summary>لماذا لا تظهر كل حسابات الجامعة للمستخدم؟</summary><p>للخصوصية ولتقليل الحمل. جهات الاتصال تُضاف بمعرّف كامل، والخادم يفرض أن المراسلة والملفات الشخصية والحالات لمن تعرفهم فقط، وعمليات البحث محدودة بـ 30 في الدقيقة ضد التخمين.</p></details>
+  <details><summary>ما الفرق بين المجموعة والقناة في نظامكم؟</summary><p>القناة للإعلانات: ينشئها وينشر فيها التدريسيون والإداريون فقط، والطلاب يشتركون ويقرؤون ويتفاعلون، وقائمة المشتركين خاصة، ولا علامات قراءة ولا مكالمات فيها. والمنع مطبّق في الخادم عبر HTTP وWebSocket.</p></details>
+  <details><summary>لماذا Docker؟</summary><p>ليعمل النظام بالطريقة نفسها على أي خادم، ويُشغَّل بخدماته السبع (قاعدة البيانات، وRedis، والـ API، والـ WebSocket، والواجهة، والبوابة، والنفق) بأمر واحد، ويُوسَّع بأمر واحد.</p></details>
+</section>
+
+<footer>
+  تقرير نظام «وَصل» · كلية الأسباط الجامعة · أيلول 2026 · الفرع <code>claude/great-franklin-cegs7b</code>
+</footer>
+</div>
+
+<button class="theme-btn" type="button" id="theme" aria-label="تبديل الوضع الليلي">🌓 الوضع</button>
+<script>
+  // عنوان كل عمود يُنسخ إلى خلاياه، ليظهر فوق القيمة حين يصبح الصف بطاقة في الهاتف
+  document.querySelectorAll(".table table").forEach(function (table) {
+    var heads = Array.prototype.map.call(table.querySelectorAll("thead th"), function (th) { return th.textContent.trim(); });
+    table.querySelectorAll("tbody tr").forEach(function (tr) {
+      Array.prototype.forEach.call(tr.children, function (td, i) { if (heads[i]) td.setAttribute("data-label", heads[i]); });
+    });
+  });
+  (function () {
+    var root = document.documentElement, key = "report-theme";
+    try { var saved = localStorage.getItem(key); if (saved) root.dataset.theme = saved; } catch (e) {}
+    document.getElementById("theme").addEventListener("click", function () {
+      var dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+      root.dataset.theme = dark ? "light" : "dark";
+      try { localStorage.setItem(key, root.dataset.theme); } catch (e) {}
+    });
+  })();
+</script>
+</body>
+</html>
