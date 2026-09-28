@@ -1,7 +1,7 @@
 "use client";
 /**
  * بوابة الدخول (كلية الأسباط الجامعة): تسجيل الدخول وإنشاء حساب.
- * لابتوب: عمودين (البطاقة يمين وصورة الحرم يسار). موبايل: الصورة شريط فوك والبطاقة تحتها.
+ * لابتوب: صورة الحرم تملي الشاشة والبطاقة الزجاجية يمين. موبايل: البطاقة بالنص على خلفية ناعمة.
  * الوضع (نهاري/ليلي) يتبع الجهاز، ويتبدل من زر ☀/🌙 (ينحفظ بالمتصفح).
  */
 import Link from "next/link";
@@ -82,193 +82,103 @@ function Logo({ size, night }: { size: number; night: boolean }) {
 // ------------------------------------------------------------ الصفحة
 export default function AuthForm({ mode }: { mode: "login" | "register" }) {
   const theme = useSyncExternalStore(subscribeMode, readMode, () => "light" as const);
-  const [modal, setModal] = useState<"password" | "support" | "faq" | null>(null);
+  const [modal, setModal] = useState<"password" | "support" | "faq" | "guide" | null>(null);
   const isLogin = mode === "login";
   const night = theme === "dark";
 
   return (
-    <main className="portal relative min-h-dvh overflow-x-hidden lg:h-dvh lg:overflow-hidden" data-theme={theme}>
-      <Backdrop />
+    <main className="portal relative min-h-dvh overflow-x-hidden" data-theme={theme}>
+      {/* صورة الحرم تملي الشاشة (باللابتوب)، وبالموبايل خلفية غامقة/فاتحة ناعمة */}
+      <div className="portal-photo pointer-events-none fixed inset-0 hidden lg:block"
+        style={{ backgroundImage: `url(/brand/campus-${night ? "night" : "day"}.jpg)` }} aria-hidden="true" />
+      <svg className="pointer-events-none fixed right-0 top-0 hidden h-[70vh] w-[45vw] lg:block" viewBox="0 0 600 700" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M600 40 C 420 60 300 200 290 700" fill="none" stroke="var(--p-gold)" strokeWidth="1.2" opacity=".35" />
+        <path d="M600 110 C 460 130 360 250 350 700" fill="none" stroke="var(--p-gold)" strokeWidth="1" opacity=".22" />
+      </svg>
+
       <button onClick={() => setMode(night ? "light" : "dark")} aria-label={night ? "الوضع النهاري" : "الوضع الليلي"}
         className="p-card absolute left-4 top-4 z-20 grid h-10 w-10 place-items-center rounded-full lg:left-6 lg:top-6">
         <Icon name={night ? "sun" : "moon"} size={18} />
       </button>
 
-      {/* لابتوب: نصين يملون الشاشة كلها (البطاقة يمين والصورة يسار) بدون فراغات حول. موبايل: عمود واحد */}
-      <div className="relative grid min-h-dvh lg:h-full lg:grid-cols-2">
-        {/* البطاقة (يمين باللابتوب) */}
-        <section className="relative z-10 order-2 -mt-6 px-4 pb-8 lg:order-1 lg:mt-0 lg:flex lg:overflow-y-auto lg:px-10 lg:py-4 xl:px-16">
-          <div className="p-card p-fit m-auto w-full max-w-[560px] rounded-[28px] px-5 py-6 sm:px-9 sm:py-7">
-            <Logo size={isLogin ? 132 : 92} night={night} />
-            <h1 className={`text-center font-extrabold ${isLogin ? "mt-3 text-[30px]" : "mt-2 text-[26px]"} p-green`}>
-              <span className="p-title-accent" style={night ? { color: "var(--p-text)" } : undefined}>{isLogin ? "تسجيل الدخول" : "إنشاء حساب"}</span>
-            </h1>
-            <p className="p-muted mt-1 text-center text-[15px]">
-              {isLogin ? "الوصول إلى خدمات الجامعة والأنظمة الأكاديمية" : "حساب جديد لمنسوبي الجامعة: طلبة وتدريسيين وإداريين"}
-            </p>
-            {isLogin ? <LoginForm onForgot={() => setModal("password")} /> : <RegisterForm />}
+      {/* البطاقة: يمين الشاشة باللابتوب، وبالنص بالموبايل */}
+      <div className="relative z-10 flex min-h-dvh items-center justify-center px-4 pb-8 pt-16 lg:justify-start lg:px-[5vw] lg:py-8">
+        <section className="p-card p-fit w-full max-w-[540px] rounded-[30px] px-5 py-7 sm:px-10 sm:py-8">
+          <Logo size={isLogin ? 176 : 118} night={night} />
+          <h1 className={`p-welcome text-center font-extrabold ${isLogin ? "mt-5 text-[40px]" : "mt-3 text-[32px]"} leading-tight`}>
+            {isLogin ? "مرحباً بكم" : "حساب جديد"}
+          </h1>
+          <p className="p-muted mx-auto mt-2 max-w-sm text-center text-[16px] leading-7">
+            {isLogin ? "سجل الدخول للوصول إلى خدمات الجامعة والأنظمة الأكاديمية" : "لمنسوبي الجامعة: طلبة وتدريسيين وإداريين"}
+          </p>
+          {isLogin ? <LoginForm onForgot={() => setModal("password")} /> : <RegisterForm />}
 
-            <div className="my-4 flex items-center gap-3 text-sm">
-              <span className="h-px flex-1" style={{ background: "var(--p-input-border)" }} />
-              <span className="p-muted">أو</span>
-              <span className="h-px flex-1" style={{ background: "var(--p-input-border)" }} />
-            </div>
-            {isLogin ? (
-              <p className="p-muted mb-3 text-center text-sm">
-                ما عندك حساب؟ <Link href="/register" className="p-link font-bold">أنشئ حساب جديد</Link>
-              </p>
-            ) : (
-              <p className="p-muted mb-3 text-center text-sm">
-                عندك حساب؟ <Link href="/login" className="p-link font-bold">سجّل دخولك</Link>
-              </p>
-            )}
-            <div className="p-soft grid grid-cols-2 rounded-2xl">
-              <HelpItem icon="help" title="مساعدة البوابة" text="دليل الاستخدام والأسئلة الشائعة" onClick={() => setModal("faq")} />
-              <HelpItem icon="headset" title="الدعم الفني" text="للمساعدة في حل المشكلات" onClick={() => setModal("support")} divider />
-            </div>
+          <div className="my-5 flex items-center gap-4 text-sm">
+            <span className="h-px flex-1" style={{ background: "var(--p-input-border)" }} />
+            <span className="p-muted">أو</span>
+            <span className="h-px flex-1" style={{ background: "var(--p-input-border)" }} />
           </div>
+          <div className="grid grid-cols-3 gap-2.5">
+            <HelpTile icon="help" label="الأسئلة الشائعة" onClick={() => setModal("faq")} />
+            <HelpTile icon="book" label="دليل الاستخدام" onClick={() => setModal("guide")} />
+            <HelpTile icon="headset" label="الدعم الفني" onClick={() => setModal("support")} />
+          </div>
+          <p className="p-muted mt-5 text-center text-[13px]">
+            {isLogin ? "ما عندك حساب؟ " : "عندك حساب؟ "}
+            <Link href={isLogin ? "/register" : "/login"} className="p-link font-bold">{isLogin ? "أنشئ حساب" : "سجّل دخولك"}</Link>
+          </p>
         </section>
-
-        {/* صورة الحرم والعبارة (يسار باللابتوب، وفوك بالموبايل) */}
-        <Visual night={night} />
       </div>
 
       {modal === "faq" && <FaqModal onClose={() => setModal(null)} onSupport={() => setModal("support")} />}
+      {modal === "guide" && <GuideModal onClose={() => setModal(null)} />}
       {(modal === "password" || modal === "support") && <HelpModal kind={modal} onClose={() => setModal(null)} />}
     </main>
   );
 }
 
-// شكل إطار الصورة (بإحداثيات 0..100 وتتمدد ويا المساحة): منحنى فوك ومنحنى جوه، مثل التصميم
-const TOP = "M0,43 C26,36 60,34 100,35";
-const BOTTOM_START = "M100,76";
-const BOTTOM = `${BOTTOM_START} C62,74 30,78 0,86`;
-const frame = `url("data:image/svg+xml,${encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="${TOP} L100,76 ${BOTTOM.replace(BOTTOM_START, "")} Z"/></svg>`,
-)}")`;
-
-/** أقواس كبيرة خفيفة بخلفية الصفحة (مثل التصميم) */
-function Backdrop() {
+function HelpTile({ icon, label, onClick }: { icon: IconName; label: string; onClick: () => void }) {
   return (
-    <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
-      <path d="M1000,0 V330 C860,250 760,110 780,0 Z" fill="var(--p-arc)" />
-      <path d="M1000,0 V200 C900,150 850,70 870,0 Z" fill="var(--p-arc)" />
-      <path d="M0,1000 V720 C150,760 300,880 330,1000 Z" fill="var(--p-arc)" />
-    </svg>
-  );
-}
-
-function Visual({ night }: { night: boolean }) {
-  const img = `url(/brand/campus-${night ? "night" : "day"}.jpg)`;
-  const heading = (
-    <>
-      <h2 className="text-[26px] font-extrabold leading-[1.45] lg:text-[clamp(30px,2.9vw,46px)]">
-        <span className="p-green" style={night ? { color: "var(--p-text)" } : undefined}>معاً نحو</span><br />
-        <span className="p-green" style={night ? { color: "var(--p-gold)" } : undefined}>مستقبل معرفيٍّ أكثر إشراقاً</span>
-      </h2>
-      <span className="mx-auto mt-3 block h-[3px] w-16 rounded-full lg:mt-5 lg:w-24" style={{ background: "var(--p-gold)" }} />
-      <p className="p-muted mx-auto mt-3 max-w-xs text-[14px] leading-7 lg:mt-5 lg:max-w-md lg:text-[clamp(16px,1.3vw,20px)] lg:leading-8">
-        بيئة جامعية ملهمة .. وخدمات رقمية<br />تدعم رحلتك الأكاديمية
-      </p>
-    </>
-  );
-  // الصورة بألوانها الأصلية، بس حوافها تتلاشى (mask) فتندمج ويا خلفية الصفحة
-  const masked = (...masks: string[]) => ({
-    backgroundImage: img, backgroundSize: "cover",
-    maskImage: masks.join(", "), WebkitMaskImage: masks.join(", "),
-    maskSize: "100% 100%", WebkitMaskSize: "100% 100%",
-    maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
-    maskComposite: "intersect", WebkitMaskComposite: "source-in",
-  }) as React.CSSProperties;
-  return (
-    <section className="relative order-1 lg:order-2 lg:h-full">
-      {/* موبايل: العبارة فوك، وتحتها شريط الصورة */}
-      <div className="lg:hidden">
-        <div className="px-6 pt-16 text-center">{heading}</div>
-        <div className="-mt-2 h-[210px]" style={{ ...masked("linear-gradient(180deg, transparent, #000 28%, #000 72%, transparent)"), backgroundPosition: "center 62%" }} />
-      </div>
-
-      {/* لابتوب: يملي النص الأيسر كله. العبارة فوك، الصورة بإطار منحني، والمميزات تحت */}
-      <div className="absolute inset-0 hidden lg:block">
-        <div className="absolute inset-0" style={{
-          ...masked(frame, "linear-gradient(180deg, transparent 22%, #000 46%)", "linear-gradient(90deg, #000 78%, transparent 100%)"),
-          backgroundPosition: "center 62%",
-        }} />
-        <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          <path d={TOP} fill="none" stroke="var(--p-gold)" strokeWidth="2" vectorEffect="non-scaling-stroke" opacity=".75" />
-          <path d={BOTTOM} fill="none" stroke="var(--p-gold)" strokeWidth="2" vectorEffect="non-scaling-stroke" opacity=".75" />
-        </svg>
-        <div className="relative px-10 pt-[6vh] text-center">{heading}</div>
-        <div className="absolute inset-x-0 bottom-[2.5vh] flex justify-center">
-          <Feature icon="users" label="لجميع منسوبي الجامعة" />
-          <Feature icon="book" label="بيئة تعليمية داعمة" divider />
-          <Feature icon="cap" label="خدمات أكاديمية متكاملة" divider />
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Feature({ icon, label, divider }: { icon: IconName; label: string; divider?: boolean }) {
-  return (
-    <div className="grid w-40 justify-items-center gap-2 px-3 text-center text-[15px] font-bold"
-      style={divider ? { borderInlineStart: "1px solid color-mix(in srgb, var(--p-muted) 35%, transparent)" } : undefined}>
-      <span className="p-feature grid h-14 w-14 place-items-center rounded-full"><Icon name={icon} size={26} filled={icon === "cap" || icon === "users"} /></span>
+    <button onClick={onClick} className="p-tile grid justify-items-center gap-2 whitespace-nowrap rounded-2xl px-1 py-4 text-[13px] font-semibold transition hover:-translate-y-0.5 sm:text-[14px]">
+      <span className="p-tile-icon"><Icon name={icon} size={26} /></span>
       {label}
-    </div>
-  );
-}
-
-function HelpItem({ icon, title, text, onClick, divider }: { icon: IconName; title: string; text: string; onClick: () => void; divider?: boolean }) {
-  return (
-    <button onClick={onClick} className="flex items-center gap-3 px-4 py-4 text-right transition hover:opacity-80"
-      style={divider ? { borderInlineStart: "1px solid var(--p-input-border)" } : undefined}>
-      <span className="p-green shrink-0" style={{ color: "var(--p-text)" }}><Icon name={icon} size={24} /></span>
-      <span className="min-w-0">
-        <span className="block text-[14px] font-bold">{title}</span>
-        <span className="p-muted block text-[11.5px] leading-5">{text}</span>
-      </span>
     </button>
   );
 }
 
 // ------------------------------------------------------------ الحقول
-function Field({ icon, children, end }: { icon: IconName; children: React.ReactNode; end?: React.ReactNode }) {
+/** الأيقونة الأساسية على اليسار (مثل التصميم)، وزر إضافي (مثل 👁) يمين */
+function Field({ icon, children, start }: { icon: IconName; children: React.ReactNode; start?: React.ReactNode }) {
   return (
-    <label className="p-field flex h-[50px] items-center gap-3 rounded-2xl px-4">
-      <span className="p-muted shrink-0"><Icon name={icon} size={21} /></span>
+    <label className="p-field flex h-[56px] items-center gap-3 rounded-2xl px-4">
+      {start}
       {children}
-      {end}
+      <span className="p-muted shrink-0"><Icon name={icon} size={22} /></span>
     </label>
   );
 }
 
-function RolePicker({ role, setRole }: { role: Role | ""; setRole: (r: Role) => void }) {
+const ROLE_ICONS: Record<Role, IconName> = { student: "cap", faculty: "user", staff: "users" };
+
+function RolePicker({ role, setRole }: { role: Role; setRole: (r: Role) => void }) {
   return (
-    <>
-      <Field icon="user" end={<span className="p-muted pointer-events-none shrink-0"><Icon name="chevronDown" size={20} /></span>}>
-        <select value={role} onChange={(e) => setRole(e.target.value as Role)} aria-label="اختر الدور"
-          className="h-full min-w-0 flex-1 appearance-none text-[15px]" style={{ color: role ? "var(--p-text)" : "var(--p-muted)" }}>
-          <option value="" disabled>اختر الدور</option>
-          {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-        </select>
-      </Field>
-      <div className="p-seg mt-2 grid grid-cols-3 rounded-xl p-0.5" role="group" aria-label="الدور">
-        {ROLES.map((r) => (
-          <button key={r} type="button" aria-pressed={role === r} onClick={() => setRole(r)}
-            className="h-10 text-[15px] font-bold transition">{ROLE_LABELS[r]}</button>
-        ))}
-      </div>
-    </>
+    <div className="p-seg grid grid-cols-3 rounded-2xl p-1" role="radiogroup" aria-label="الدور">
+      {ROLES.map((r) => (
+        <button key={r} type="button" role="radio" aria-checked={role === r} onClick={() => setRole(r)}
+          className="flex h-12 items-center justify-center gap-2 text-[16px] font-bold transition">
+          <Icon name={ROLE_ICONS[r]} size={20} filled={role === r && r === "student"} />{ROLE_LABELS[r]}
+        </button>
+      ))}
+    </div>
   );
 }
 
 function PasswordField({ value, onChange, autoComplete }: { value: string; onChange: (v: string) => void; autoComplete: string }) {
   const [show, setShow] = useState(false);
   return (
-    <Field icon="lock" end={
+    <Field icon="lock" start={
       <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"} className="p-muted shrink-0">
-        <Icon name={show ? "eyeOff" : "eye"} size={21} />
+        <Icon name={show ? "eye" : "eyeOff"} size={22} />
       </button>
     }>
       <input type={show ? "text" : "password"} value={value} onChange={(e) => onChange(e.target.value)} placeholder="كلمة المرور"
@@ -279,13 +189,13 @@ function PasswordField({ value, onChange, autoComplete }: { value: string; onCha
 
 function ErrorBox({ text }: { text: string }) {
   return text ? (
-    <p className="rounded-xl px-3 py-2 text-sm font-bold" role="alert" style={{ background: "color-mix(in srgb, #dc2626 12%, transparent)", color: "#dc2626" }}>{text}</p>
+    <p className="rounded-xl px-3 py-2 text-sm font-bold" role="alert" style={{ background: "color-mix(in srgb, #dc2626 14%, transparent)", color: "#f87171" }}>{text}</p>
   ) : null;
 }
 
 function LoginForm({ onForgot }: { onForgot: () => void }) {
   const router = useRouter();
-  const [role, setRole] = useState<Role | "">("student");
+  const [role, setRole] = useState<Role>("student");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
@@ -294,7 +204,6 @@ function LoginForm({ onForgot }: { onForgot: () => void }) {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!role) return setError("اختار الدور أول");
     setError("");
     setBusy(true);
     try {
@@ -309,24 +218,24 @@ function LoginForm({ onForgot }: { onForgot: () => void }) {
   }
 
   return (
-    <form onSubmit={submit} className="mt-5 space-y-3">
+    <form onSubmit={submit} className="mt-6 space-y-4">
       <RolePicker role={role} setRole={setRole} />
       <Field icon="mail">
         <input value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder="البريد الجامعي أو الرقم الجامعي"
           autoComplete="username" autoCapitalize="none" dir="auto" required className="h-full min-w-0 flex-1 text-base" aria-label="البريد الجامعي أو الرقم الجامعي" />
       </Field>
       <PasswordField value={password} onChange={setPassword} autoComplete="current-password" />
-      <div className="flex items-center justify-between pt-0.5 text-[15px]">
-        <label className="flex cursor-pointer items-center gap-2 font-semibold">
+      <div className="flex items-center justify-between text-[15px]">
+        <label className="flex cursor-pointer items-center gap-2.5">
           <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="p-checkbox h-5 w-5 rounded" />
           تذكرني
         </label>
-        <button type="button" onClick={onForgot} className="p-link font-bold">نسيت كلمة المرور؟</button>
+        <button type="button" onClick={onForgot} className="p-forgot">نسيت كلمة المرور؟</button>
       </div>
       <ErrorBox text={error} />
-      <button disabled={busy} className="p-btn flex h-[52px] w-full items-center justify-center gap-3 rounded-2xl text-lg font-extrabold transition active:scale-[.99] disabled:opacity-70">
-        {busy ? "جاري الدخول..." : "دخول"}
-        <span className="-scale-x-100"><Icon name="logIn" size={22} /></span>
+      <button disabled={busy} className="p-btn flex h-[58px] w-full items-center justify-center gap-3 rounded-2xl text-[19px] font-bold transition active:scale-[.99] disabled:opacity-70">
+        {busy ? "جاري الدخول..." : "تسجيل الدخول"}
+        <span className="-scale-x-100"><Icon name="logIn" size={23} /></span>
       </button>
     </form>
   );
@@ -334,7 +243,7 @@ function LoginForm({ onForgot }: { onForgot: () => void }) {
 
 function RegisterForm() {
   const router = useRouter();
-  const [role, setRole] = useState<Role | "">("student");
+  const [role, setRole] = useState<Role>("student");
   const [form, setForm] = useState({ display_name: "", username: "", email: "", university_id: "", password: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -342,7 +251,6 @@ function RegisterForm() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!role) return setError("اختار الدور أول");
     setError("");
     setBusy(true);
     try {
@@ -375,7 +283,7 @@ function RegisterForm() {
       </div>
       <PasswordField value={form.password} onChange={(v) => setForm({ ...form, password: v })} autoComplete="new-password" />
       <ErrorBox text={error} />
-      <button disabled={busy} className="p-btn flex h-[52px] w-full items-center justify-center gap-3 rounded-2xl text-lg font-extrabold transition active:scale-[.99] disabled:opacity-70">
+      <button disabled={busy} className="p-btn flex h-[56px] w-full items-center justify-center gap-3 rounded-2xl text-lg font-bold transition active:scale-[.99] disabled:opacity-70">
         {busy ? "جاري إنشاء الحساب..." : "إنشاء الحساب"}
       </button>
     </form>
@@ -473,6 +381,29 @@ function FaqModal({ onClose, onSupport }: { onClose: () => void; onSupport: () =
         ))}
       </div>
       <button onClick={onSupport} className="p-link mt-4 text-sm font-bold">ما لگيت جوابك؟ راسل الدعم الفني</button>
+    </Modal>
+  );
+}
+
+const GUIDE = [
+  ["١", "اختار دورك", "طالب أو تدريسي أو إداري، حسب حسابك."],
+  ["٢", "ادخل بياناتك", "البريد الجامعي أو الرقم الجامعي (أو اسم المستخدم) وكلمة المرور."],
+  ["٣", "ابدأ المراسلة", "من جهات الاتصال اختار أي شخص، أو سوّي مجموعة لشعبتك."],
+  ["٤", "فعّل الإشعارات", "من الإعدادات، حتى توصلك الرسائل والمكالمات حتى لو التطبيق مسدود."],
+  ["٥", "على الموبايل", "من المتصفح اختار \"إضافة إلى الشاشة الرئيسية\" حتى يصير مثل تطبيق."],
+];
+
+function GuideModal({ onClose }: { onClose: () => void }) {
+  return (
+    <Modal title="دليل الاستخدام" onClose={onClose}>
+      <ol className="space-y-3">
+        {GUIDE.map(([n, t, d]) => (
+          <li key={n} className="flex gap-3">
+            <span className="p-btn grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-bold">{n}</span>
+            <span><span className="block font-bold">{t}</span><span className="p-muted text-sm leading-6">{d}</span></span>
+          </li>
+        ))}
+      </ol>
     </Modal>
   );
 }

@@ -1,6 +1,20 @@
 // كل الاتصال بالـ Backend يمر من هنا: Request → API → Response (JSON)
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-export const WS_URL = API_URL.replace(/^http/, "ws");
+/**
+ * عنوان السيرفر:
+ *  - إذا محدد NEXT_PUBLIC_API_URL نستخدمه.
+ *  - التطوير (الواجهة على 3000): نفس الجهاز على 8000، حتى لو فاتح من الموبايل بالـ IP (192.168.x.x:3000).
+ *  - الإنتاج/الرابط المؤقت (خلف Caddy): نفس العنوان اللي فاتحه، والبروكسي يوصل /api و /ws للباك اند.
+ */
+export function apiBase() {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (typeof window === "undefined") return "http://localhost:8000";
+  const { protocol, hostname, port, origin } = window.location;
+  return port === "3000" ? `${protocol}//${hostname}:8000` : origin;
+}
+/** نفس عنوان السيرفر بس ws:// أو wss:// (https ← wss تلقائياً) */
+export function wsBase() {
+  return apiBase().replace(/^http/, "ws");
+}
 
 export type User = {
   id: number;
@@ -134,7 +148,8 @@ export function saveSession(token: string, user: User, remember = true) {
 
 // الصور تنخدم من سيرفر الـ Backend، فنضيف عنوانه على المسار
 export function mediaUrl(path: string | null) {
-  return path ? `${API_URL}${path}` : null;
+  if (!path) return null;
+  return /^https?:\/\//.test(path) ? path : `${apiBase()}${path}`;
 }
 
 export function saveMe(user: User) {
@@ -165,7 +180,7 @@ export async function api<T>(path: string, method = "GET", body?: unknown): Prom
   const token = getToken();
   let res: Response;
   try {
-    res = await fetch(`${API_URL}/api${path}`, {
+    res = await fetch(`${apiBase()}/api${path}`, {
     method,
     headers: {
       // FormData (رفع ملفات) المتصفح يحط نوعه بنفسه، والباقي JSON

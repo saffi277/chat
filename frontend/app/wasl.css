@@ -132,73 +132,79 @@
 .wasl[data-theme="dark"] .w-map { background-color: #16232b; background-image: linear-gradient(#22333d 1px, transparent 1px), linear-gradient(90deg, #22333d 1px, transparent 1px); }
 
 /* ================= بوابة الدخول (كلية الأسباط الجامعة) ================= */
-.portal {
-  color: var(--p-text);
-  background: var(--p-bg);
+.portal { color: var(--p-text); background: var(--p-bg); }
+.portal[data-theme="dark"] {
+  --p-bg: radial-gradient(900px 700px at 50% 30%, #13201c, #070d0b);
+  --p-page: #0b1311;
+  --p-card: rgba(12, 20, 18, .74);
+  --p-card-border: rgba(214, 178, 106, .55);
+  --p-card-shadow: 0 0 0 1px rgba(214, 178, 106, .12), 0 0 45px rgba(214, 178, 106, .16), 0 30px 80px rgba(0, 0, 0, .55);
+  --p-text: #f1f0ea;
+  --p-muted: #aeb3ad;
+  --p-green: #1f9a6a;
+  --p-btn: linear-gradient(180deg, #16825a, #0d5f41);
+  --p-btn-border: rgba(80, 200, 150, .35);
+  --p-gold: #d6b26a;
+  --p-input: rgba(255, 255, 255, .025);
+  --p-input-border: rgba(255, 255, 255, .13);
+  --p-seg: rgba(255, 255, 255, .025);
+  --p-seg-line: rgba(255, 255, 255, .12);
+  --p-tile: rgba(255, 255, 255, .03);
+  --p-tile-icon: #e9d4a4;
+  --p-welcome: linear-gradient(180deg, #ffffff 10%, #e8cf94 95%);
+  --p-photo-shade: linear-gradient(90deg, rgba(0, 0, 0, .05) 30%, rgba(0, 0, 0, .35));
 }
 .portal[data-theme="light"] {
-  --p-bg: radial-gradient(1200px 600px at 100% 0%, #fbfaf6, transparent), radial-gradient(900px 700px at 0% 100%, #f1ede2, transparent), #f7f5ef;
+  --p-bg: radial-gradient(900px 700px at 50% 30%, #fbfaf6, #efece3);
   --p-page: #f7f5ef;
-  --p-card: #ffffff;
-  --p-card-border: #ece8de;
-  --p-card-shadow: 0 30px 70px rgba(40, 52, 40, .12);
+  --p-card: rgba(255, 255, 255, .86);
+  --p-card-border: rgba(194, 154, 78, .55);
+  --p-card-shadow: 0 0 0 1px rgba(194, 154, 78, .1), 0 0 40px rgba(194, 154, 78, .14), 0 30px 70px rgba(30, 40, 30, .22);
   --p-text: #14261f;
-  --p-muted: #6a746f;
+  --p-muted: #5f6a64;
   --p-green: #0f5c45;
-  --p-green-2: #0b4535;
-  --p-btn: linear-gradient(180deg, #13654c, #0d5040);
-  --p-gold: #c29a4e;
+  --p-btn: linear-gradient(180deg, #13704f, #0c5139);
+  --p-btn-border: rgba(15, 92, 69, .4);
+  --p-gold: #b88c3c;
   --p-input: #ffffff;
-  --p-input-border: #e3e0d7;
-  --p-seg: #f2f0ea;
-  --p-seg-line: #e2ded4;
-  --p-soft: #f6f4ee;
-  --p-feature: #efe7d6;
-  --p-feature-icon: #9a7534;
-  --p-arc: rgba(255, 255, 255, .7);
+  --p-input-border: #ddd8cc;
+  --p-seg: #f4f2ec;
+  --p-seg-line: #e2ddd1;
+  --p-tile: #faf8f3;
+  --p-tile-icon: #0f5c45;
+  --p-welcome: linear-gradient(180deg, #0f5c45 20%, #9a7534 100%);
+  --p-photo-shade: linear-gradient(90deg, rgba(255, 255, 255, 0) 30%, rgba(255, 255, 255, .25));
 }
-.portal[data-theme="dark"] {
-  --p-bg: radial-gradient(900px 600px at 100% 0%, rgba(38, 92, 72, .35), transparent), radial-gradient(900px 700px at 0% 100%, rgba(20, 60, 48, .5), transparent), #0a1c17;
-  --p-page: #0a1c17;
-  --p-card: rgba(22, 44, 37, .78);
-  --p-card-border: rgba(255, 255, 255, .09);
-  --p-card-shadow: 0 30px 80px rgba(0, 0, 0, .5);
-  --p-text: #eef3ef;
-  --p-muted: #a3b2ab;
-  --p-green: #1f8a66;
-  --p-green-2: #d8b56b;
-  --p-btn: linear-gradient(180deg, #1c7d5d, #10604a);
-  --p-gold: #d8b56b;
-  --p-input: rgba(255, 255, 255, .03);
-  --p-input-border: rgba(255, 255, 255, .13);
-  --p-seg: rgba(255, 255, 255, .03);
-  --p-seg-line: rgba(255, 255, 255, .12);
-  --p-soft: rgba(255, 255, 255, .04);
-  --p-feature: rgba(216, 181, 107, .14);
-  --p-feature-icon: #d8b56b;
-  --p-arc: rgba(120, 190, 160, .05);
-}
-.p-card { background: var(--p-card); border: 1px solid var(--p-card-border); box-shadow: var(--p-card-shadow); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+.portal-photo { background-size: cover; background-position: center 60%; }
+.portal-photo::after { content: ""; position: absolute; inset: 0; background: var(--p-photo-shade); }
+.p-card { background: var(--p-card); border: 1px solid var(--p-card-border); box-shadow: var(--p-card-shadow); backdrop-filter: blur(22px) saturate(120%); -webkit-backdrop-filter: blur(22px) saturate(120%); }
+.p-welcome { background: var(--p-welcome); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .p-muted { color: var(--p-muted); }
 .p-green { color: var(--p-green); }
 .p-gold { color: var(--p-gold); }
 .p-field { background: var(--p-input); border: 1px solid var(--p-input-border); color: var(--p-text); transition: border-color .15s, box-shadow .15s; }
-.p-field:focus-within { border-color: var(--p-green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-green) 18%, transparent); }
+.p-field:focus-within { border-color: var(--p-green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-green) 20%, transparent); }
 .p-field input, .p-field select { background: transparent; color: var(--p-text); outline: none; }
 .p-field input::placeholder { color: var(--p-muted); }
-.p-btn { background: var(--p-btn); color: #fff; box-shadow: 0 10px 24px color-mix(in srgb, var(--p-green) 35%, transparent); }
+.p-btn { background: var(--p-btn); color: #fff; border: 1px solid var(--p-btn-border); box-shadow: 0 10px 26px color-mix(in srgb, var(--p-green) 28%, transparent), inset 0 1px 0 rgba(255, 255, 255, .12); }
 .p-seg { background: var(--p-seg); border: 1px solid var(--p-seg-line); }
-.p-seg > button + button { border-inline-start: 1px solid var(--p-seg-line); }
-.p-seg > button[aria-pressed="true"] { background: var(--p-btn); color: #fff; border-color: transparent; border-radius: 10px; }
-.p-soft { background: var(--p-soft); border: 1px solid var(--p-card-border); }
-.p-feature { background: var(--p-feature); color: var(--p-feature-icon); }
-.p-link { color: var(--p-green); text-decoration: underline; text-underline-offset: 4px; text-decoration-color: color-mix(in srgb, var(--p-green) 45%, transparent); }
-.portal[data-theme="dark"] .p-link { color: var(--p-gold); text-decoration-color: color-mix(in srgb, var(--p-gold) 45%, transparent); }
-.portal[data-theme="dark"] .p-title-accent { color: var(--p-gold); }
-.p-checkbox { accent-color: var(--p-green); }
-/* البطاقة تتكبر/تتصغر حسب طول شاشة اللابتوب، حتى تملي الشاشة بدون فراغات وبدون سكرول */
-@media (min-width: 1024px) and (max-height: 860px) { .p-fit { zoom: .94; } }
-@media (min-width: 1024px) and (max-height: 780px) { .p-fit { zoom: .86; } }
-@media (min-width: 1024px) and (max-height: 700px) { .p-fit { zoom: .78; } }
-@media (min-width: 1500px) and (min-height: 940px) { .p-fit { zoom: 1.12; } }
-@media (min-width: 1800px) and (min-height: 1040px) { .p-fit { zoom: 1.2; } }
+.p-seg > button { color: var(--p-text); border-radius: 12px; }
+.p-seg > button + button { border-inline-start: 1px solid var(--p-seg-line); border-radius: 0; }
+.p-seg > button[aria-checked="true"] { background: var(--p-btn); color: #fff; border-radius: 12px; box-shadow: 0 0 0 1px var(--p-btn-border), 0 6px 16px color-mix(in srgb, var(--p-green) 30%, transparent); }
+.p-seg > button[aria-checked="true"] + button { border-inline-start-color: transparent; }
+.p-tile { background: var(--p-tile); border: 1px solid var(--p-input-border); color: var(--p-text); }
+.p-tile-icon { color: var(--p-tile-icon); }
+.p-forgot { color: var(--p-text); opacity: .9; }
+.p-forgot:hover { text-decoration: underline; text-underline-offset: 4px; }
+.p-link { color: var(--p-green); text-decoration: underline; text-underline-offset: 4px; }
+.portal[data-theme="dark"] .p-link { color: var(--p-gold); }
+.p-checkbox { appearance: none; -webkit-appearance: none; border: 1.5px solid var(--p-muted); border-radius: 6px; background: transparent; display: grid; place-items: center; cursor: pointer; }
+.p-checkbox:checked { background: var(--p-green); border-color: var(--p-green); }
+.p-checkbox:checked::after { content: ""; width: 5px; height: 10px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px, -1px); }
+.p-soft { background: var(--p-tile); border: 1px solid var(--p-input-border); }
+/* البطاقة تتصغر على الشاشات القصيرة حتى تبين كاملة بدون سكرول */
+@media (min-width: 1024px) and (max-height: 980px) { .p-fit { zoom: .92; } }
+@media (min-width: 1024px) and (max-height: 900px) { .p-fit { zoom: .86; } }
+@media (min-width: 1024px) and (max-height: 840px) { .p-fit { zoom: .8; } }
+@media (min-width: 1024px) and (max-height: 780px) { .p-fit { zoom: .75; } }
+@media (min-width: 1024px) and (max-height: 730px) { .p-fit { zoom: .7; } }

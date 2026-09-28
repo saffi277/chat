@@ -10,7 +10,10 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
+
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -19,13 +22,24 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-y^i6o=t0-q12wed%@^3w-4cth*&@%!c&1&5u*4=p)g^kqnndz1"
+# كل الإعدادات الحساسة تجي من متغيرات البيئة (ملف .env بالسيرفر)، والقيم هنا للتطوير بس
+def env_bool(name, default):
+    return os.environ.get(name, str(default)).lower() in ('1', 'true', 'yes', 'on')
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
 
-ALLOWED_HOSTS = []
+def env_list(name, default=''):
+    return [x.strip() for x in os.environ.get(name, default).split(',') if x.strip()]
+
+
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-y^i6o=t0-q12wed%@^3w-4cth*&@%!c&1&5u*4=p)g^kqnndz1')
+DEBUG = env_bool('DEBUG', True)
+# بالتطوير نقبل أي عنوان (حتى نفتح من الموبايل بالـ IP أو من رابط النفق)
+ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', '*' if DEBUG else 'localhost')
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS')
+# خلف Caddy/Nginx: البروكسي يگلنا إذا الطلب الأصلي كان https
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+if not DEBUG:
+    SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = True
 
 
 # Application definition
@@ -83,11 +97,14 @@ WSGI_APPLICATION = "config.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# PostgreSQL بالإنتاج (يتحمل آلاف الكتابات بنفس اللحظة)، وSQLite للتطوير إذا ما محدد
+# مثال: DATABASE_URL=postgres://wasl:secret@db:5432/wasl
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-    }
+    'default': dj_database_url.config(
+        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+        conn_max_age=int(os.environ.get('DB_CONN_MAX_AGE', '60')),  # نعيد استخدام الاتصال بدل ما نفتح واحد لكل طلب
+        conn_health_checks=True,
+    )
 }
 
 
@@ -126,6 +143,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / 'staticfiles'  # collectstatic (صفحات /admin) بالإنتاج
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -138,8 +156,16 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 ASGI_APPLICATION = 'config.asgi.application'
 
 # Channel layer: "البريد" اللي يوصل الرسائل بين اتصالات WebSocket.
-# InMemory يكفي للتطوير؛ بالإنتاج نستخدم Redis.
-CHANNEL_LAYERS = {'default': {'BACKEND': 'channels.layers.InMemoryChannelLayer'}}
+# InMemory يشتغل بعملية وحدة بس (تطوير). Redis يخلي عدة عمال (workers) يوصلون لنفس الاتصالات.
+REDIS_URL = os.environ.get('REDIS_URL')
+if REDIS_URL:
+    CHANNEL_LAYERS = {'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {'hosts': [REDIS_URL], 'capacity': 1500, 'expiry': 30},
+    }}
+    CACHES = {'default': {'BACKEND': 'django.core.cache.backends.redis.RedisCache', 'LOCATION': REDIS_URL}}
+else:
+    CHANNEL_LAYERS = {'default': {'BACKEND': 'channels.layers.InMemoryChannelLayer'}}
 
 REST_FRAMEWORK = {
     # كل Request لازم يحمل Header:  Authorization: Token <token>
@@ -149,13 +175,14 @@ REST_FRAMEWORK = {
 
 # نسمح لواجهة Next.js تحچي ويا الـ API.
 # بالتطوير نقبل أي بورت على جهازنا، لأن Next.js ينتقل لـ 3001 إذا 3000 محجوز.
-CORS_ALLOWED_ORIGINS = ['http://localhost:3000', 'http://127.0.0.1:3000']
+# خلف البروكسي الواجهة والـ API بنفس العنوان فما نحتاج CORS. بالتطوير نقبل أي جهاز بالشبكة (الموبايل بالـ IP)
+CORS_ALLOWED_ORIGINS = env_list('CORS_ALLOWED_ORIGINS', 'http://localhost:3000,http://127.0.0.1:3000')
 if DEBUG:
-    CORS_ALLOWED_ORIGIN_REGEXES = [r'^http://(localhost|127\.0\.0\.1):\d+$']
+    CORS_ALLOWED_ORIGIN_REGEXES = [r'^https?://(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.\d+\.\d+\.\d+)(:\d+)?$']
 
 # الملفات اللي يرفعها المستخدمين (الصور الشخصية)
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', BASE_DIR / 'media'))
 # أكبر ملف نقبله بالطلب (الفيديو 50 ميگا + شوية)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 60 * 1024 * 1024
 

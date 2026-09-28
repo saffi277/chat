@@ -1,5 +1,5 @@
 // WebSocket: اتصال يبقى مفتوح، السيرفر يكدر يدزلنا رسائل بدون ما نطلب (بدون Refresh)
-import { getToken, WS_URL, type Call, type Message } from "./api";
+import { getToken, wsBase, type Call, type Message } from "./api";
 
 // كل الأحداث اللي ممكن السيرفر يدزها
 // (بالتفصيل بـ docs/API.md)
@@ -50,7 +50,7 @@ export function openSocket(
 
   const connect = () => {
     opts.onStatus?.("connecting");
-    ws = new WebSocket(`${WS_URL}${path}?token=${getToken()}`);
+    ws = new WebSocket(`${wsBase()}${path}?token=${getToken()}`);
     ws.onopen = () => {
       attempt = 0;
       opts.onStatus?.("open");
