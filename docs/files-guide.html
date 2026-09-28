@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>دليل ملفات وَصل</title>
+<meta name="description" content="شرح كل ملف في مشروع «وَصل» كما يظهر في VS Code: عمله ومحتواه ولغته، وكيف تعرف اللغة وإطار العمل، وماذا يحتوي ملف الإعدادات.">
+<style>
+  :root {
+    --bg: #f6f6fb; --panel: #ffffff; --card: #f0f0f8; --text: #1b1d2a; --muted: #62667a; --line: #e3e4ef;
+    --accent: #5b5cf0; --accent-soft: #ecebff; --good: #11845b; --good-soft: #e3f6ee; --warn: #a15c00; --warn-soft: #fff3df;
+    --py: #2f6fb0; --py-soft: #e4effa; --ts: #2563eb; --ts-soft: #e5edff; --code: #efeff7; --shadow: 0 1px 2px rgba(20, 20, 60, .06), 0 6px 24px rgba(20, 20, 60, .06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121726; --panel: #1a2033; --card: #222a40; --text: #e8eaf4; --muted: #9aa1b8; --line: #2c3450;
+      --accent: #8b8cff; --accent-soft: #2a2d5c; --good: #4fd19a; --good-soft: #173a2c; --warn: #f3b35b; --warn-soft: #3a2b12;
+      --py: #7fb2ea; --py-soft: #1d2d45; --ts: #8fb0ff; --ts-soft: #1f2a4d; --code: #262e46; --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121726; --panel: #1a2033; --card: #222a40; --text: #e8eaf4; --muted: #9aa1b8; --line: #2c3450;
+    --accent: #8b8cff; --accent-soft: #2a2d5c; --good: #4fd19a; --good-soft: #173a2c; --warn: #f3b35b; --warn-soft: #3a2b12;
+    --py: #7fb2ea; --py-soft: #1d2d45; --ts: #8fb0ff; --ts-soft: #1f2a4d; --code: #262e46; --shadow: none;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.9; font-size: 16px;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Arabic", "Segoe UI", Roboto, "Noto Sans Arabic", "Noto Sans", Tahoma, sans-serif; }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: 0 16px 80px; }
+  header.hero { padding: 40px 0 20px; }
+  .eyebrow { color: var(--accent); font-weight: 700; font-size: 14px; }
+  h1 { font-size: clamp(27px, 5vw, 38px); line-height: 1.35; margin: 6px 0 10px; }
+  .lead { color: var(--muted); font-size: 17px; max-width: 780px; margin: 0; }
+  nav.toc { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; margin: 18px 0 8px; box-shadow: var(--shadow); }
+  nav.toc h2 { font-size: 16px; margin: 0 0 8px; }
+  nav.toc ol { margin: 0; padding-inline-start: 22px; columns: 2 240px; column-gap: 28px; }
+  nav.toc a { color: var(--text); text-decoration: none; }
+  nav.toc a:hover { color: var(--accent); }
+  section.part { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 22px 20px; margin-top: 18px; box-shadow: var(--shadow); }
+  section.part > h2 { font-size: 23px; margin: 0 0 6px; display: flex; gap: 10px; align-items: baseline; }
+  section.part > h2 .n { color: var(--accent); font-size: 15px; font-weight: 800; background: var(--accent-soft); border-radius: 999px; padding: 0 10px; }
+  h3 { font-size: 18px; margin: 22px 0 6px; }
+  h3 .n { color: var(--accent); font-size: 14px; margin-inline-end: 6px; }
+  h2 .path, h3 .path { overflow-wrap: normal; white-space: nowrap; }
+  p { margin: 8px 0; }
+  .muted { color: var(--muted); }
+  code, .path { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .86em; background: var(--code); border-radius: 6px; padding: 1px 6px; direction: ltr; unicode-bidi: isolate; display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+  pre { background: var(--code); border-radius: 14px; padding: 12px 14px; overflow-x: auto; direction: ltr; text-align: left; font-size: 13.5px; line-height: 1.7; margin: 10px 0; }
+  pre code { background: none; padding: 0; display: inline; font-size: inherit; }
+  .table { width: 100%; overflow-x: auto; margin: 10px 0; border-radius: 14px; border: 1px solid var(--line); }
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; min-width: 560px; }
+  th, td { padding: 9px 12px; text-align: start; vertical-align: top; border-bottom: 1px solid var(--line); }
+  th { background: var(--card); font-weight: 800; }
+  tr:last-child td { border-bottom: 0; }
+  td:first-child { white-space: nowrap; }
+  @media (max-width: 640px) {
+    .table { overflow: visible; border: 0; }
+    .table table { min-width: 0; }
+    .table thead { display: none; }
+    .table tr { display: block; background: var(--card); border-radius: 14px; padding: 8px 0; margin-bottom: 10px; }
+    .table td { display: block; border: 0; padding: 4px 14px; white-space: normal; }
+    .table td[data-label]::before { content: attr(data-label); display: block; font-size: 12px; font-weight: 800; color: var(--muted); }
+  }
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin: 12px 0; }
+  .box { background: var(--card); border-radius: 16px; padding: 14px 16px; }
+  .box h4 { margin: 0 0 4px; font-size: 16px; }
+  .box p { margin: 4px 0; font-size: 14.5px; }
+  .note { border-radius: 14px; padding: 12px 14px; margin: 12px 0; font-size: 15px; }
+  .note.good { background: var(--good-soft); }
+  .note.warn { background: var(--warn-soft); }
+  .note.info { background: var(--accent-soft); }
+  .note strong:first-child { display: block; margin-bottom: 2px; }
+  .lang { display: inline-block; font-size: 12px; font-weight: 800; border-radius: 999px; padding: 0 9px; white-space: nowrap; }
+  .lang.py { background: var(--py-soft); color: var(--py); }
+  .lang.ts { background: var(--ts-soft); color: var(--ts); }
+  .lang.other { background: var(--card); color: var(--muted); }
+  .steps { counter-reset: s; list-style: none; padding: 0; margin: 10px 0; }
+  .steps li { counter-increment: s; position: relative; padding-inline-start: 40px; margin: 10px 0; }
+  .steps li::before { content: counter(s); position: absolute; inset-inline-start: 0; top: 2px; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 800; font-size: 14px; display: grid; place-items: center; }
+  .say { border-inline-start: 4px solid var(--accent); background: var(--accent-soft); border-radius: 12px; padding: 10px 14px; margin: 10px 0; font-weight: 600; }
+  details { background: var(--card); border-radius: 14px; padding: 10px 14px; margin: 8px 0; }
+  details summary { cursor: pointer; font-weight: 800; }
+  .theme-btn { position: fixed; inset-inline-end: 16px; bottom: 16px; border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 999px; padding: 8px 14px; font: inherit; font-size: 14px; box-shadow: var(--shadow); cursor: pointer; }
+  footer { color: var(--muted); font-size: 13px; text-align: center; margin-top: 30px; }
+  @media print { .theme-btn, nav.toc { display: none; } section.part { box-shadow: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">مشروع «وَصل» · دليل الملفات</div>
+  <h1>كل ملف في المشروع: عمله، ومحتواه، ولغته</h1>
+  <p class="lead">افتح المشروع في VS Code وهذا الدليل بجانبه. ستجد فيه لكل ملف ما يفعله وما في داخله، وكيف تعرف اللغة وإطار العمل بنفسك، وماذا تقول للمدير إن سألك، وشرح ملف الإعدادات سطراً بسطر. الأقسام والعناوين مرقّمة؛ فإن لم تفهم نقطة فأخبرني برقمها، مثلاً: «لم أفهم 6.3».</p>
+</header>
+
+<nav class="toc" aria-label="المحتويات">
+  <h2>المحتويات</h2>
+  <ol>
+    <li><a href="#big">الصورة الكبيرة: ثلاثة أجزاء</a></li>
+    <li><a href="#lang">كيف تعرف لغة أي ملف؟</a></li>
+    <li><a href="#fw">كيف تعرف إطار العمل؟</a></li>
+    <li><a href="#manager">ماذا تقول للمدير، وكيف تُثبت له</a></li>
+    <li><a href="#settings">ملف الإعدادات: ماذا فيه؟</a></li>
+    <li><a href="#backend">ملفات الخادم (backend)</a></li>
+    <li><a href="#frontend">ملفات الواجهة (frontend)</a></li>
+    <li><a href="#other">ملفات التشغيل والتوثيق</a></li>
+    <li><a href="#generated">ما تراه في VS Code ولم نكتبه نحن</a></li>
+    <li><a href="#qa">أسئلة المدير المتوقعة وأجوبتها</a></li>
+  </ol>
+</nav>
+
+<!-- ============================================================ 1 -->
+<section class="part" id="big">
+  <h2><span class="n">1</span>الصورة الكبيرة: ثلاثة أجزاء</h2>
+  <p>حين تفتح المجلد <span class="path">chat/</span> في VS Code ترى في الشريط الجانبي هذه المجلدات الرئيسية:</p>
+  <pre><code>chat/
+├── backend/        الخادم: العقل والذاكرة (Python + Django)
+├── frontend/       الواجهة: ما يراه المستخدم (TypeScript + Next.js)
+├── deploy/         تشغيل النظام على خادم حقيقي (Docker)
+├── docs/           التوثيق والتقارير (منها هذا الملف)
+├── loadtest/       اختبار الضغط بألفي مستخدم
+├── run-mobile.sh   تشغيل النظام على حاسوبك مع رابط للهاتف
+└── README.md       التعريف بالمشروع</code></pre>
+  <div class="grid2">
+    <div class="box"><h4>الخادم <span class="lang py">Python</span></h4><p>يستقبل الطلبات، ويتحقق من هوية المستخدم، ويحفظ الرسائل مشفّرة في قاعدة البيانات، ويبثّها فوراً. <b>إطاره: Django.</b></p></div>
+    <div class="box"><h4>الواجهة <span class="lang ts">TypeScript</span></h4><p>الشاشات والأزرار التي يراها الطالب في المتصفح أو الهاتف، وتطلب البيانات من الخادم. <b>إطارها: Next.js مع React.</b></p></div>
+  </div>
+  <p>الجزءان منفصلان تماماً ويتحدثان عبر الشبكة بطريقتين: <b>HTTP</b> (سؤال وجواب، مثل «أعطني محادثاتي») و<b>WebSocket</b> (خط مفتوح دائماً للرسائل الفورية).</p>
+</section>
+
+<!-- ============================================================ 2 -->
+<section class="part" id="lang">
+  <h2><span class="n">2</span>كيف تعرف لغة أي ملف؟</h2>
+  <h3><span class="n">2.1</span>الطريقة الأولى: امتداد الملف (الأسهل)</h3>
+  <p>الامتداد هو ما بعد النقطة في اسم الملف. هذا جدول كل الامتدادات في مشروعنا:</p>
+  <div class="table"><table>
+    <thead><tr><th>الامتداد</th><th>اللغة</th><th>مثال من مشروعنا</th></tr></thead>
+    <tbody>
+      <tr><td><code>.py</code></td><td><span class="lang py">Python</span></td><td><span class="path">backend/chat/views.py</span></td></tr>
+      <tr><td><code>.tsx</code></td><td><span class="lang ts">TypeScript</span> مع JSX (شاشات React)</td><td><span class="path">frontend/app/chat/_ui/ChatList.tsx</span></td></tr>
+      <tr><td><code>.ts</code></td><td><span class="lang ts">TypeScript</span> (منطق بلا شاشات)</td><td><span class="path">frontend/lib/api.ts</span></td></tr>
+      <tr><td><code>.js</code> و <code>.mjs</code></td><td>JavaScript</td><td><span class="path">frontend/public/sw.js</span>، <span class="path">eslint.config.mjs</span></td></tr>
+      <tr><td><code>.css</code></td><td>CSS (الألوان والتنسيق)</td><td><span class="path">frontend/app/wasl.css</span></td></tr>
+      <tr><td><code>.json</code></td><td>JSON (بيانات وإعدادات، ليست لغة برمجة)</td><td><span class="path">frontend/package.json</span></td></tr>
+      <tr><td><code>.yml</code></td><td>YAML (إعدادات)</td><td><span class="path">deploy/docker-compose.yml</span></td></tr>
+      <tr><td><code>.sh</code></td><td>Shell / Bash (أوامر الطرفية)</td><td><span class="path">run-mobile.sh</span></td></tr>
+      <tr><td><code>.html</code></td><td>HTML (صفحات)</td><td><span class="path">docs/report.html</span></td></tr>
+      <tr><td><code>.md</code></td><td>Markdown (نص منسّق للتوثيق)</td><td><span class="path">README.md</span></td></tr>
+      <tr><td><code>.po</code></td><td>ملف ترجمة (gettext)</td><td><span class="path">backend/locale/en/LC_MESSAGES/django.po</span></td></tr>
+      <tr><td>بلا امتداد: <code>Dockerfile</code>، <code>Caddyfile</code></td><td>صيغ خاصة بأدواتها</td><td><span class="path">backend/Dockerfile</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3><span class="n">2.2</span>الطريقة الثانية: VS Code يخبرك بنفسه</h3>
+  <p>افتح أي ملف، وانظر إلى <b>الشريط السفلي في VS Code، في الزاوية اليمنى</b>. ستجد اسم اللغة مكتوباً: <code>Python</code> عند فتح ملف ‎.py، و<code>TypeScript JSX</code> عند فتح ملف ‎.tsx، و<code>TypeScript</code> عند فتح ملف ‎.ts. وأيقونة الملف في الشريط الجانبي تدل عليها أيضاً: ثعبان أزرق وأصفر لـ Python، ومربع أزرق مكتوب فيه TS لـ TypeScript.</p>
+
+  <h3><span class="n">2.3</span>الطريقة الثالثة: شكل الكود نفسه</h3>
+  <p>الدالة نفسها من مشروعنا بالطريقتين:</p>
+  <div class="grid2">
+    <div class="box"><h4><span class="lang py">Python</span> من <span class="path">backend/chat/views.py</span></h4>
+<pre><code>def name_of(user):
+    return profile_of(user).display_name or user.username</code></pre>
+      <p>• تبدأ الدالة بـ <code>def</code><br>• لا أقواس معقوفة <code>{ }</code>؛ الإزاحة (المسافات) هي التي تحدد الكتلة<br>• التعليق يبدأ بـ <code>#</code><br>• الاستيراد: <code>from django.db import models</code></p></div>
+    <div class="box"><h4><span class="lang ts">TypeScript</span> من <span class="path">frontend/app/chat/_ui/bits.tsx</span></h4>
+<pre><code>export const nameOf = (u: Pick&lt;User, "display_name" | "username"&gt;) =&gt;
+  u.display_name || u.username;</code></pre>
+      <p>• <code>const</code> و<code>=&gt;</code> والأقواس المعقوفة<br>• التعليق يبدأ بـ <code>//</code><br>• الاستيراد: <code>import { x } from "y"</code><br>• <b>وعلامة TypeScript تحديداً: الأنواع بعد النقطتين</b> <code>u: User</code></p></div>
+  </div>
+
+  <h3><span class="n">2.4</span>كيف تفرّق TypeScript عن JavaScript؟</h3>
+  <p>هما متشابهتان جداً، لأن TypeScript هي JavaScript مع «الأنواع». أربع علامات تكفي:</p>
+  <ol class="steps">
+    <li><b>الامتداد</b>: <code>.ts</code> أو <code>.tsx</code> تعني TypeScript، و<code>.js</code> أو <code>.jsx</code> تعني JavaScript.</li>
+    <li><b>الأنواع بعد النقطتين</b>: <code>name: string</code>، <code>id: number</code>، <code>user: User</code>. هذه غير موجودة في JavaScript.</li>
+    <li><b>تعريف الأنواع</b> بكلمتَي <code>type</code> أو <code>interface</code>. مثال من <span class="path">frontend/lib/api.ts</span>: <code>export type User = { id: number; username: string; ... }</code>.</li>
+    <li><b>وجود الملف <span class="path">frontend/tsconfig.json</span></b>، وهو إعدادات TypeScript، وكلمة <code>"typescript"</code> داخل <span class="path">frontend/package.json</span>.</li>
+  </ol>
+</section>
+
+<!-- ============================================================ 3 -->
+<section class="part" id="fw">
+  <h2><span class="n">3</span>كيف تعرف إطار العمل؟</h2>
+  <p>تذكير: <b>اللغة</b> هي ما نكتب به (Python، TypeScript)، و<b>إطار العمل</b> هيكل جاهز مكتوب بتلك اللغة نبني داخله (Django، Next.js). ولكل إطار «بصمات» في الملفات:</p>
+  <h3><span class="n">3.1</span>بصمات Django في الخادم</h3>
+  <ul>
+    <li>الملف <span class="path">backend/manage.py</span>: موجود في كل مشروع Django، وبه نشغّل الأوامر (<code>python manage.py runserver</code>).</li>
+    <li>الملف <span class="path">backend/config/settings.py</span> وفيه <code>INSTALLED_APPS</code> و<code>MIDDLEWARE</code>: أسماء خاصة بـ Django.</li>
+    <li>في <span class="path">backend/requirements.txt</span> (قائمة المكتبات): <code>Django==5.2.17</code> و<code>djangorestframework</code> و<code>channels</code>.</li>
+    <li>في أول كل ملف: <code>from django.db import models</code>، و<code>from rest_framework ...</code> (وهو Django REST Framework)، و<code>from channels ...</code> (وهو Django Channels).</li>
+    <li>كل «تطبيق» مجلد فيه الملفات نفسها: <code>models.py</code>، <code>views.py</code>، <code>urls.py</code>، <code>admin.py</code>، <code>apps.py</code>، <code>migrations/</code>. هذا تنظيم Django المعروف.</li>
+  </ul>
+  <h3><span class="n">3.2</span>بصمات Next.js وReact في الواجهة</h3>
+  <ul>
+    <li>في <span class="path">frontend/package.json</span>: <code>"next": "16.3.6"</code> و<code>"react": "19.2.8"</code>، والأوامر <code>next dev</code> و<code>next build</code>.</li>
+    <li>الملف <span class="path">frontend/next.config.ts</span>: إعدادات Next.js.</li>
+    <li>المجلد <span class="path">frontend/app/</span> وفيه ملفات بأسماء ثابتة: <code>layout.tsx</code> و<code>page.tsx</code>. هذا «App Router» في Next.js: كل مجلد فيه <code>page.tsx</code> يصبح صفحة. فالمجلد <code>app/login/</code> هو الصفحة <code>/login</code>.</li>
+    <li>في الكود: <code>import ... from "next/navigation"</code> (Next.js)، و<code>useState</code> و<code>useEffect</code> والوسوم مثل <code>&lt;div className="..."&gt;</code> (React).</li>
+    <li><b>Tailwind CSS</b> (للتنسيق): الأسماء القصيرة في <code>className</code> مثل <code>"flex items-center gap-3"</code>، والملف <span class="path">postcss.config.mjs</span>.</li>
+  </ul>
+</section>
+
+<!-- ============================================================ 4 -->
+<section class="part" id="manager">
+  <h2><span class="n">4</span>ماذا تقول للمدير، وكيف تُثبت له</h2>
+  <h3><span class="n">4.1</span>الجواب في جملتين</h3>
+  <div class="say">«الخادم مكتوب بلغة Python بإطار Django، ومعه Django REST Framework للـ API وDjango Channels للرسائل الفورية. والواجهة مكتوبة بلغة TypeScript بإطار Next.js مع React.»</div>
+  <h3><span class="n">4.2</span>إن سألك: «كيف عرفتَ أنها TypeScript؟»</h3>
+  <p>افتح VS Code وأره هذه الأدلة الخمسة بالترتيب:</p>
+  <ol class="steps">
+    <li><b>امتداد الملفات</b>: افتح <span class="path">frontend/app/chat/_ui/</span> وأشر إلى الأسماء: <code>ChatList.tsx</code>، <code>Conversation.tsx</code>. والامتداد <code>.tsx</code> يعني TypeScript.</li>
+    <li><b>الشريط السفلي في VS Code</b>: افتح أي واحد منها، وسيظهر في الزاوية اليمنى السفلى <code>TypeScript JSX</code>.</li>
+    <li><b>الأنواع في الكود</b>: افتح <span class="path">frontend/lib/api.ts</span> وأره <code>export type User = { id: number; username: string; ... }</code>، وقل: «هذا تعريف نوع، ولا يوجد في JavaScript».</li>
+    <li><b>ملف إعدادات TypeScript</b>: <span class="path">frontend/tsconfig.json</span>، وفيه <code>"strict": true</code> أي الفحص الصارم للأنواع.</li>
+    <li><b>قائمة المكتبات</b>: <span class="path">frontend/package.json</span>، وفيه <code>"typescript": "^5"</code> و<code>"next": "16.3.6"</code>.</li>
+  </ol>
+  <h3><span class="n">4.3</span>وإن سألك: «ولماذا TypeScript لا JavaScript؟»</h3>
+  <div class="say">«لأنها تكشف الأخطاء قبل التشغيل؛ فلو كتبتُ اسم حقل خطأ أو مرّرتُ رقماً مكان نص، تنبّهني فوراً. وهي الخيار الافتراضي الذي يقترحه Next.js نفسه، وعند البناء تتحول إلى JavaScript عادية يفهمها المتصفح.»</div>
+  <h3><span class="n">4.4</span>وإن سألك عن الخادم: «كيف عرفتَ أنه Django؟»</h3>
+  <p>أره <span class="path">backend/manage.py</span>، ثم <span class="path">backend/requirements.txt</span> وفيه <code>Django==5.2.17</code>، ثم أول سطر في <span class="path">backend/chat/models.py</span>: <code>from django.db import models</code>.</p>
+</section>
+
+<!-- ============================================================ 5 -->
+<section class="part" id="settings">
+  <h2><span class="n">5</span>ملف الإعدادات: ماذا فيه؟</h2>
+  <p>حين يُقال «ملف الإعدادات» في مشروع Django فالمقصود <span class="path">backend/config/settings.py</span> (233 سطراً، بلغة Python). هو المكان الذي يقرر كيف يعمل الخادم كله. هذه محتوياته بالترتيب نفسه الذي تراه حين تفتحه:</p>
+  <h3><span class="n">5.1</span>الأمان والعناوين</h3>
+  <div class="table"><table>
+    <thead><tr><th>الإعداد</th><th>معناه</th></tr></thead>
+    <tbody>
+      <tr><td><code>SECRET_KEY</code></td><td>مفتاح سري يستعمله Django لتوقيع البيانات (ومنها روابط الملفات الموقّعة). في التشغيل الفعلي يأتي من ملف <code>.env</code> لا من الكود.</td></tr>
+      <tr><td><code>DEBUG</code></td><td>وضع التطوير: يُظهر تفاصيل الأخطاء. يجب أن يكون <code>false</code> في التشغيل الفعلي حتى لا تُكشف التفاصيل للناس.</td></tr>
+      <tr><td><code>ALLOWED_HOSTS</code></td><td>العناوين (النطاقات) التي يقبل الخادم أن يُفتح منها.</td></tr>
+      <tr><td><code>CSRF_TRUSTED_ORIGINS</code></td><td>المواقع الموثوقة لطلبات النماذج (حماية من هجمات CSRF)، ومنها رابط النفق المؤقت.</td></tr>
+      <tr><td><code>SECURE_PROXY_SSL_HEADER</code></td><td>يخبر Django أن الطلب الأصلي كان https حين يمرّ عبر البوابة (Caddy).</td></tr>
+    </tbody>
+  </table></div>
+  <h3><span class="n">5.2</span>مكوّنات النظام</h3>
+  <div class="table"><table>
+    <thead><tr><th>الإعداد</th><th>معناه</th></tr></thead>
+    <tbody>
+      <tr><td><code>INSTALLED_APPS</code></td><td>قائمة «التطبيقات» المفعّلة: أدوات Django الجاهزة (لوحة الإدارة، والحسابات...)، ثم <code>rest_framework</code> (الـ API)، و<code>channels</code> (WebSocket)، و<code>corsheaders</code>، ثم تطبيقاتنا الخمسة: <code>accounts</code>، <code>chat</code>، <code>notifications</code>، <code>stories</code>، <code>calls</code>. و<code>daphne</code> أولها لأنه خادم التطوير الذي يشغّل HTTP وWebSocket معاً.</td></tr>
+      <tr><td><code>MIDDLEWARE</code></td><td>«محطات» يمرّ بها كل طلب قبل الوصول إلى الكود: الأمان، والسماح للواجهة بالاتصال (CORS)، واللغة (العربية أو الإنجليزية من ترويسة <code>Accept-Language</code>)، والحماية من CSRF، والتعرف على المستخدم.</td></tr>
+      <tr><td><code>ROOT_URLCONF</code></td><td>ملف الروابط الرئيسي: <span class="path">config/urls.py</span>.</td></tr>
+      <tr><td><code>TEMPLATES</code> و<code>WSGI_APPLICATION</code></td><td>إعدادات Django الافتراضية للقوالب (نستعملها للوحة الإدارة فقط) ولخادم WSGI.</td></tr>
+      <tr><td><code>ASGI_APPLICATION</code></td><td>نقطة الدخول التي تدعم WebSocket: <span class="path">config/asgi.py</span>.</td></tr>
+    </tbody>
+  </table></div>
+  <h3><span class="n">5.3</span>قاعدة البيانات وكلمات المرور</h3>
+  <div class="table"><table>
+    <thead><tr><th>الإعداد</th><th>معناه</th></tr></thead>
+    <tbody>
+      <tr><td><code>DATABASES</code></td><td>أي قاعدة بيانات نستعمل: PostgreSQL إن وُجد المتغير <code>DATABASE_URL</code>، وإلا فملف SQLite <span class="path">backend/db.sqlite3</span>. ويُعاد استعمال الاتصال 60 ثانية (<code>conn_max_age</code>).</td></tr>
+      <tr><td><code>PASSWORD_HASHERS</code></td><td>كيف تُحفظ كلمات المرور: هاش <b>Argon2</b> أولاً، والباقي للحسابات القديمة فقط.</td></tr>
+      <tr><td><code>AUTH_PASSWORD_VALIDATORS</code></td><td>قواعد كلمة المرور: ألا تشبه اسم المستخدم، وألا تكون قصيرة، ولا شائعة، ولا أرقاماً فقط.</td></tr>
+    </tbody>
+  </table></div>
+  <h3><span class="n">5.4</span>اللغة والوقت والملفات</h3>
+  <div class="table"><table>
+    <thead><tr><th>الإعداد</th><th>معناه</th></tr></thead>
+    <tbody>
+      <tr><td><code>LANGUAGE_CODE</code> و<code>LANGUAGES</code> و<code>LOCALE_PATHS</code></td><td>العربية افتراضياً، والإنجليزية لغة ثانية، وملف الترجمة في <span class="path">backend/locale/</span>.</td></tr>
+      <tr><td><code>TIME_ZONE</code> و<code>USE_TZ</code></td><td>الخادم يحفظ الأوقات بتوقيت عالمي (UTC)، والواجهة تعرضها بتوقيت هاتف المستخدم.</td></tr>
+      <tr><td><code>STATIC_URL</code> و<code>STATIC_ROOT</code></td><td>ملفات لوحة الإدارة الثابتة (تنسيقها وصورها).</td></tr>
+      <tr><td><code>MEDIA_URL</code> و<code>MEDIA_ROOT</code></td><td>أين تُحفظ الملفات المرفوعة (الصور والصوت والمستندات): <span class="path">backend/media/</span>.</td></tr>
+      <tr><td><code>KEYS_DIR</code></td><td>أين يوجد مفتاح التشفير ومفاتيح الإشعارات.</td></tr>
+      <tr><td><code>DATA_UPLOAD_MAX_MEMORY_SIZE</code></td><td>أكبر طلب مقبول: 60 ميغابايت (الفيديو حتى 50).</td></tr>
+      <tr><td><code>DEFAULT_AUTO_FIELD</code></td><td>نوع رقم التعريف (id) في الجداول: رقم كبير يكفي لمليارات الصفوف.</td></tr>
+    </tbody>
+  </table></div>
+  <h3><span class="n">5.5</span>السرعة والحماية من الضغط</h3>
+  <div class="table"><table>
+    <thead><tr><th>الإعداد</th><th>معناه</th></tr></thead>
+    <tbody>
+      <tr><td><code>REDIS_URL</code> و<code>CHANNEL_LAYERS</code> و<code>CACHES</code></td><td>إن وُجد Redis فهو «لوحة الإعلانات» التي يتبادل عبرها العمّال الرسائل الفورية، والذاكرة المؤقتة. وإلا فنسخة في الذاكرة تكفي للتطوير.</td></tr>
+      <tr><td><code>REST_FRAMEWORK</code></td><td>إعدادات الـ API: الهوية بالتوكن (هاشه فقط محفوظ)، وكل الروابط تتطلب الدخول، وحدود الطلبات في الدقيقة: 600 للمستخدم، و120 لغير المسجّل، و20 لمحاولات الدخول، و120 لإرسال الرسائل.</td></tr>
+      <tr><td><code>THROTTLING_ENABLED</code></td><td>تشغيل حدود الطلبات (وتُطفأ أثناء الاختبارات الآلية فقط).</td></tr>
+      <tr><td><code>CORS_ALLOWED_ORIGINS</code></td><td>المواقع المسموح لها أن تتصل بالـ API (الواجهة على المنفذ 3000).</td></tr>
+    </tbody>
+  </table></div>
+  <h3><span class="n">5.6</span>الإشعارات والمكالمات والسجلات</h3>
+  <div class="table"><table>
+    <thead><tr><th>الإعداد</th><th>معناه</th></tr></thead>
+    <tbody>
+      <tr><td><code>VAPID_CONTACT</code></td><td>عنوان تواصل يُرسَل إلى خدمات الإشعارات. يجب أن يكون حقيقياً، وإلا ترفضه Apple فلا تصل الإشعارات إلى الآيفون.</td></tr>
+      <tr><td><code>LOGGING</code></td><td>طباعة تحذيرات الإشعارات في الطرفية لمعرفة سبب أي فشل.</td></tr>
+      <tr><td><code>ICE_SERVERS</code></td><td>خوادم STUN التي تساعد الجهازين على إيجاد بعضهما في المكالمات (وخادم TURN يُضاف من متغيرات البيئة).</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note info"><strong>لماذا تبدأ قيم كثيرة بـ <code>os.environ.get(...)</code>؟</strong>معناها: «اقرأ القيمة من متغيرات البيئة (ملف <code>.env</code> على الخادم)، وإن لم توجد فاستعمل القيمة الافتراضية للتطوير». هكذا لا تُكتب الأسرار (كلمات السر والمفاتيح) داخل الكود، ولا تُرفع إلى GitHub.</div>
+  <h3><span class="n">5.7</span>ملفات إعدادات أخرى قد يُسأل عنها</h3>
+  <div class="table"><table>
+    <thead><tr><th>الملف</th><th>ماذا يضبط</th></tr></thead>
+    <tbody>
+      <tr><td><span class="path">frontend/package.json</span></td><td>مكتبات الواجهة وإصداراتها، وأوامرها (<code>dev</code>، <code>build</code>، <code>start</code>).</td></tr>
+      <tr><td><span class="path">frontend/tsconfig.json</span></td><td>إعدادات TypeScript: الفحص الصارم، واختصار <code>@/</code> لمسار مجلد الواجهة.</td></tr>
+      <tr><td><span class="path">frontend/next.config.ts</span></td><td>إعدادات Next.js: تمرير <code>/api</code> و<code>/ws</code> و<code>/media</code> إلى Django، وترويسات الأذونات، وإعدادات Service Worker.</td></tr>
+      <tr><td><span class="path">backend/requirements.txt</span></td><td>مكتبات الخادم وإصداراتها (14 مكتبة).</td></tr>
+      <tr><td><span class="path">deploy/.env.example</span></td><td>نموذج للأسرار والإعدادات على الخادم الحقيقي (يُنسخ باسم <code>.env</code>).</td></tr>
+      <tr><td><span class="path">deploy/docker-compose.yml</span></td><td>الخدمات السبع التي تعمل في Docker وكيف ترتبط.</td></tr>
+      <tr><td><span class="path">deploy/Caddyfile</span></td><td>البوابة: أي مسار يذهب إلى أي خدمة، وترويسات الأمان، وشهادة HTTPS.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 6 -->
+<section class="part" id="backend">
+  <h2><span class="n">6</span>ملفات الخادم: مجلد <span class="path">backend</span></h2>
+  <div class="note info"><strong>قاعدة تختصر عليك نصف الملفات</strong>الخادم مقسّم إلى «تطبيقات» Django، وكل تطبيق مجلد له الملفات نفسها بالمعنى نفسه:<br>
+  • <code>__init__.py</code>: ملف فارغ يجعل المجلد «حزمة» Python يمكن الاستيراد منها. لا تعدّله.<br>
+  • <code>apps.py</code>: تسجيل التطبيق في Django (سطور قليلة ثابتة).<br>
+  • <code>models.py</code>: <b>الجداول</b> في قاعدة البيانات.<br>
+  • <code>views.py</code>: <b>منطق الـ API</b>: ماذا يحدث عند كل طلب.<br>
+  • <code>urls.py</code>: <b>الروابط</b>: أي رابط يذهب إلى أي دالة في views.py.<br>
+  • <code>serializers.py</code>: تحويل البيانات بين Python وJSON.<br>
+  • <code>admin.py</code>: ما يظهر في لوحة الإدارة <code>/admin</code>.<br>
+  • <code>tests.py</code>: الاختبارات الآلية.<br>
+  • <code>migrations/</code>: سجلّ تغييرات الجداول، يولّده Django (القسم 9).<br>
+  • <code>management/commands/</code>: أوامر إضافية تُشغَّل بـ <code>python manage.py اسم_الأمر</code>.</div>
+
+  <h3><span class="n">6.1</span>ملفات في جذر <span class="path">backend/</span></h3>
+  <div class="table"><table>
+    <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
+    <tbody>
+      <tr><td><span class="path">manage.py</span></td><td><span class="lang py">Python</span></td><td>بوابة أوامر Django: <code>runserver</code> للتشغيل، <code>migrate</code> لتحديث الجداول، <code>test</code> للاختبارات. ملف قياسي لم نعدّله.</td></tr>
+      <tr><td><span class="path">requirements.txt</span></td><td><span class="lang other">نص</span></td><td>المكتبات وإصداراتها: Django، وDRF، وChannels، وDaphne، وUvicorn، وGunicorn، وRedis، وPostgreSQL (psycopg)، وArgon2، وpywebpush، وPillow...</td></tr>
+      <tr><td><span class="path">Dockerfile</span></td><td><span class="lang other">Docker</span></td><td>وصفة بناء «حاوية» الخادم: Python 3.12، ثم تثبيت المكتبات ونسخ الكود.</td></tr>
+      <tr><td><span class="path">entrypoint.sh</span></td><td><span class="lang other">Shell</span></td><td>ما يحدث عند تشغيل الحاوية: ينتظر قاعدة البيانات، ثم <code>migrate</code>، ثم يشغّل Gunicorn (للـ API) أو Uvicorn (للـ WebSocket) بعدد عمّال مناسب.</td></tr>
+      <tr><td><span class="path">.dockerignore</span></td><td><span class="lang other">نص</span></td><td>ملفات لا تُنسخ إلى Docker: قاعدة بيانات التطوير، والملفات المرفوعة، والمفاتيح.</td></tr>
+      <tr><td><span class="path">locale/compile.py</span></td><td><span class="lang py">Python</span></td><td>يحوّل ملف الترجمة ‎.po إلى ‎.mo الذي يقرؤه Django.</td></tr>
+      <tr><td><span class="path">locale/en/LC_MESSAGES/django.po</span></td><td><span class="lang other">ترجمة</span></td><td>ترجمة رسائل الخادم إلى الإنجليزية: كل سطر <code>msgid</code> (العربي) يقابله <code>msgstr</code> (الإنجليزي).</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3><span class="n">6.2</span><span class="path">config/</span>: إعدادات المشروع العامة</h3>
+  <div class="table"><table>
+    <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
+    <tbody>
+      <tr><td><span class="path">settings.py</span></td><td><span class="lang py">Python</span></td><td><b>ملف الإعدادات</b>، ومشروح بالتفصيل في القسم 5.</td></tr>
+      <tr><td><span class="path">urls.py</span></td><td><span class="lang py">Python</span></td><td>الروابط الرئيسية: <code>/admin/</code> للوحة الإدارة، و<code>/api/</code> تتوزع على التطبيقات الخمسة، و<code>/media/</code> للملفات.</td></tr>
+      <tr><td><span class="path">asgi.py</span></td><td><span class="lang py">Python</span></td><td>نقطة الدخول الحديثة: توزّع الاتصالات؛ HTTP إلى Django، وWebSocket إلى Channels (مع التحقق من التوكن).</td></tr>
+      <tr><td><span class="path">wsgi.py</span></td><td><span class="lang py">Python</span></td><td>نقطة الدخول التقليدية للطلبات العادية (يستعملها Gunicorn). ملف قياسي.</td></tr>
+      <tr><td><span class="path">media.py</span></td><td><span class="lang py">Python</span></td><td>تقديم الملفات المرفوعة: يتحقق من <b>توقيع الرابط</b> (HMAC) ومدته، ويفك تشفير الملف عند الطلب، ويدعم تقديم الفيديو جزءاً جزءاً.</td></tr>
+      <tr><td><span class="path">throttles.py</span></td><td><span class="lang py">Python</span></td><td>قواعد حدود الطلبات: الدخول، وإرسال الرسائل، والبحث عن الحسابات.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3><span class="n">6.3</span><span class="path">accounts/</span>: الحسابات والدخول وجهات الاتصال</h3>
+  <div class="table"><table>
+    <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
+    <tbody>
+      <tr><td><span class="path">models.py</span></td><td><span class="lang py">Python</span></td><td>الجداول: <code>Profile</code> (الاسم، والصورة، والهاتف، والدور، والرقم الجامعي، واللغة، والوضع الليلي، و«متصل الآن»)، و<code>SupportRequest</code> (طلبات الدعم)، و<code>AuthToken</code> (هاش توكن الدخول لكل جهاز)، و<code>Contact</code> (جهات الاتصال).</td></tr>
+      <tr><td><span class="path">views.py</span></td><td><span class="lang py">Python</span></td><td>التسجيل، والدخول (بالاسم أو البريد أو الرقم الجامعي)، والخروج، وتعديل «معلوماتي»، والبحث عن حساب بمعرّف كامل، وجهات الاتصال، وطلبات «نسيت كلمة المرور».</td></tr>
+      <tr><td><span class="path">urls.py</span></td><td><span class="lang py">Python</span></td><td>روابط <code>auth/...</code> و<code>users/...</code> و<code>contacts/...</code>.</td></tr>
+      <tr><td><span class="path">serializers.py</span></td><td><span class="lang py">Python</span></td><td>شكل بيانات المستخدم في JSON، والتحقق من بيانات التسجيل والتعديل (مثل: رقم الهاتف أرقام فقط).</td></tr>
+      <tr><td><span class="path">tokens.py</span></td><td><span class="lang py">Python</span></td><td><b>إصدار توكن الدخول وحفظ هاشه</b> (SHA-256) والتحقق منه.</td></tr>
+      <tr><td><span class="path">authentication.py</span></td><td><span class="lang py">Python</span></td><td>يقرأ ترويسة <code>Authorization: Token ...</code> من كل طلب ويعرف صاحبه.</td></tr>
+      <tr><td><span class="path">presence.py</span></td><td><span class="lang py">Python</span></td><td>يصفّر حالة «متصل الآن» للجميع عند تشغيل الخادم.</td></tr>
+      <tr><td><span class="path">admin.py</span></td><td><span class="lang py">Python</span></td><td>ما يظهر للإداري في <code>/admin</code>: الملفات الشخصية، وطلبات الدعم، وجهات الاتصال.</td></tr>
+      <tr><td><span class="path">tests.py</span></td><td><span class="lang py">Python</span></td><td>اختبارات: الدخول بكل المعرّفات، والدور، واللغة، و«معلوماتي»، وخصوصية جهات الاتصال.</td></tr>
+      <tr><td><span class="path">management/commands/reset_presence.py</span></td><td><span class="lang py">Python</span></td><td>الأمر <code>python manage.py reset_presence</code>.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3><span class="n">6.4</span><span class="path">chat/</span>: قلب النظام (المحادثات والرسائل والقنوات)</h3>
+  <div class="table"><table>
+    <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
+    <tbody>
+      <tr><td><span class="path">models.py</span></td><td><span class="lang py">Python</span></td><td>الجداول: <code>Conversation</code> (ثنائية، أو مجموعة، أو قناة، أو محفوظة)، و<code>Membership</code> (عضوية كل شخص ودوره وإعداداته)، و<code>Message</code> (نصها مشفّر)، و<code>Reaction</code>، و<code>StarredMessage</code>.</td></tr>
+      <tr><td><span class="path">views.py</span></td><td><span class="lang py">Python</span></td><td><b>أكبر ملفات الخادم (554 سطراً)</b>: قائمة المحادثات، وفتح محادثة، والمجموعات وأعضاؤها، والقنوات والاشتراك، وإرسال الرسائل وتعديلها وحذفها، والتفاعلات، والوسائط المشتركة.</td></tr>
+      <tr><td><span class="path">urls.py</span></td><td><span class="lang py">Python</span></td><td>روابط <code>conversations/...</code> و<code>channels/...</code> و<code>messages/...</code>.</td></tr>
+      <tr><td><span class="path">serializers.py</span></td><td><span class="lang py">Python</span></td><td>شكل الرسالة والمحادثة في JSON، وحساب علامات ✓ و✓✓ والأزرق.</td></tr>
+      <tr><td><span class="path">services.py</span></td><td><span class="lang py">Python</span></td><td>منطق مشترك: حفظ الرسالة ثم بثّها ثم إرسال الإشعار (<code>create_message</code>)، و«من أعرفهم» (<code>known_ids</code>)، ومن يحق له النشر في القنوات (<code>can_broadcast</code>).</td></tr>
+      <tr><td><span class="path">consumers.py</span></td><td><span class="lang py">Python</span></td><td><b>WebSocket</b>: <code>ChatConsumer</code> لاتصال المحادثة المفتوحة (الرسائل، و«يكتب الآن»، وحدّ الإرسال)، و<code>PresenceConsumer</code> للاتصال العام («متصل الآن» ورسائل تعارف المكالمات).</td></tr>
+      <tr><td><span class="path">routing.py</span></td><td><span class="lang py">Python</span></td><td>روابط WebSocket: <code>ws/chat/&lt;id&gt;/</code> و<code>ws/presence/</code>.</td></tr>
+      <tr><td><span class="path">auth.py</span></td><td><span class="lang py">Python</span></td><td>التعرف على المستخدم في WebSocket من التوكن الموجود في الرابط.</td></tr>
+      <tr><td><span class="path">crypto.py</span></td><td><span class="lang py">Python</span></td><td><b>التشفير AES-256-GCM</b>: تشفير النصوص وفكّها، وتشفير الملفات قطعاً.</td></tr>
+      <tr><td><span class="path">fields.py</span></td><td><span class="lang py">Python</span></td><td>يربط التشفير بالجداول: حقل نص يُشفَّر تلقائياً عند الحفظ، وتخزين ملفات مشفّرة.</td></tr>
+      <tr><td><span class="path">media.py</span></td><td><span class="lang py">Python</span></td><td>فحص الملفات المرفوعة: هل الصورة صورة فعلاً؟ والحدود القصوى لكل نوع.</td></tr>
+      <tr><td><span class="path">admin.py</span></td><td><span class="lang py">Python</span></td><td>المحادثات والرسائل في لوحة الإدارة.</td></tr>
+      <tr><td><span class="path">tests.py</span> و<span class="path">test_features.py</span></td><td><span class="lang py">Python</span></td><td>اختبارات: المحادثة كاملة، وWebSocket وحدّه، والمجموعات، والقنوات وصلاحياتها، والوسائط، والتشفير، وArgon2.</td></tr>
+      <tr><td><span class="path">testing.py</span></td><td><span class="lang py">Python</span></td><td>مساعدات للاختبارات فقط (إضافة جهة اتصال ثم فتح محادثة).</td></tr>
+      <tr><td><span class="path">management/commands/loadtest_users.py</span></td><td><span class="lang py">Python</span></td><td>ينشئ ألفي مستخدم وهمي لاختبار الضغط.</td></tr>
+      <tr><td><span class="path">management/commands/encrypt_existing_files.py</span></td><td><span class="lang py">Python</span></td><td>يشفّر الملفات القديمة المرفوعة قبل تفعيل التشفير.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3><span class="n">6.5</span><span class="path">calls/</span>: المكالمات</h3>
+  <div class="table"><table>
+    <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
+    <tbody>
+      <tr><td><span class="path">models.py</span></td><td><span class="lang py">Python</span></td><td>الجدول <code>Call</code>: المتصل، ونوعها (صوت أو فيديو)، وحالتها (ترنّ، جارية، انتهت، فائتة، مرفوضة)، ومدتها.</td></tr>
+      <tr><td><span class="path">views.py</span></td><td><span class="lang py">Python</span></td><td>بدء المكالمة ورنينها، والرد، والرفض، والإنهاء، والتحويل إلى فيديو، وسجل المكالمات، وخوادم STUN/TURN.</td></tr>
+      <tr><td><span class="path">urls.py</span> و<span class="path">admin.py</span> و<span class="path">tests.py</span></td><td><span class="lang py">Python</span></td><td>روابط <code>calls/...</code>، والظهور في لوحة الإدارة، والاختبارات.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3><span class="n">6.6</span><span class="path">stories/</span>: الحالات (24 ساعة)</h3>
+  <div class="table"><table>
+    <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
+    <tbody>
+      <tr><td><span class="path">models.py</span></td><td><span class="lang py">Python</span></td><td><code>Story</code> (صورة أو فيديو أو نص، وتنتهي بعد 24 ساعة)، و<code>StoryView</code> (من شاهدها).</td></tr>
+      <tr><td><span class="path">views.py</span></td><td><span class="lang py">Python</span></td><td>عرض حالات من أعرفهم فقط، ونشر حالة، وحذفها، وتسجيل المشاهدة، وقائمة المشاهدين لصاحبها.</td></tr>
+      <tr><td><span class="path">management/commands/cleanup_stories.py</span></td><td><span class="lang py">Python</span></td><td>يحذف الحالات المنتهية وملفاتها (يُشغَّل كل ساعة).</td></tr>
+      <tr><td><span class="path">urls.py</span> و<span class="path">admin.py</span> و<span class="path">tests.py</span></td><td><span class="lang py">Python</span></td><td>الروابط، ولوحة الإدارة، والاختبارات.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3><span class="n">6.7</span><span class="path">notifications/</span>: الإشعارات</h3>
+  <div class="table"><table>
+    <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
+    <tbody>
+      <tr><td><span class="path">models.py</span></td><td><span class="lang py">Python</span></td><td><code>PushSubscription</code>: «عنوان» كل متصفح لإرسال الإشعارات إليه، ومفاتيح تشفيرها.</td></tr>
+      <tr><td><span class="path">push.py</span></td><td><span class="lang py">Python</span></td><td>إرسال الإشعارات في طابور خلفي، بلغة كل مستخدم، مع إخفاء المحتوى لمن طلب ذلك، والإشعار التجريبي.</td></tr>
+      <tr><td><span class="path">vapid.py</span></td><td><span class="lang py">Python</span></td><td>مفاتيح VAPID (هوية خادمنا عند Google وApple)، ويولّدها أول مرة.</td></tr>
+      <tr><td><span class="path">views.py</span> و<span class="path">urls.py</span></td><td><span class="lang py">Python</span></td><td>المفتاح العام، والاشتراك وإلغاؤه، والإشعار التجريبي.</td></tr>
+      <tr><td><span class="path">admin.py</span> و<span class="path">tests.py</span></td><td><span class="lang py">Python</span></td><td>لوحة الإدارة والاختبارات.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 7 -->
+<section class="part" id="frontend">
+  <h2><span class="n">7</span>ملفات الواجهة: مجلد <span class="path">frontend</span></h2>
+  <div class="note info"><strong>قاعدة سريعة</strong>ملفات <code>.tsx</code> فيها <b>شاشات</b> (ما يُرسم)، وملفات <code>.ts</code> فيها <b>منطق</b> بلا شاشات. وفي أول ملفات الشاشات سطر <code>"use client"</code>، ومعناه في Next.js: «هذا المكوّن يعمل في المتصفح»، لأن فيه أزراراً وتفاعلاً.</div>
+
+  <h3><span class="n">7.1</span>ملفات الإعدادات في جذر <span class="path">frontend/</span></h3>
+  <div class="table"><table>
+    <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
+    <tbody>
+      <tr><td><span class="path">package.json</span></td><td><span class="lang other">JSON</span></td><td>اسم المشروع، وأوامره، ومكتباته: <code>next</code> و<code>react</code>، ولأدوات التطوير <code>typescript</code> و<code>tailwindcss</code> و<code>eslint</code>.</td></tr>
+      <tr><td><span class="path">package-lock.json</span></td><td><span class="lang other">JSON</span></td><td>الإصدارات الدقيقة لكل مكتبة ومكتباتها الفرعية. يولّده <code>npm</code>، ولا يُعدَّل يدوياً.</td></tr>
+      <tr><td><span class="path">tsconfig.json</span></td><td><span class="lang other">JSON</span></td><td>إعدادات TypeScript (الفحص الصارم، واختصار <code>@/</code>).</td></tr>
+      <tr><td><span class="path">next.config.ts</span></td><td><span class="lang ts">TypeScript</span></td><td>إعدادات Next.js: تمرير طلبات الخادم إلى Django، والترويسات.</td></tr>
+      <tr><td><span class="path">eslint.config.mjs</span></td><td>JavaScript</td><td>قواعد فحص جودة الكود (ESLint).</td></tr>
+      <tr><td><span class="path">postcss.config.mjs</span></td><td>JavaScript</td><td>تفعيل Tailwind CSS.</td></tr>
+      <tr><td><span class="path">Dockerfile</span> و<span class="path">.dockerignore</span></td><td><span class="lang other">Docker</span></td><td>بناء حاوية الواجهة: Node 22، ثم <code>npm run build</code>.</td></tr>
+      <tr><td><span class="path">.gitignore</span></td><td><span class="lang other">نص</span></td><td>ملفات لا تُرفع إلى GitHub (المكتبات والبناء).</td></tr>
+      <tr><td><span class="path">scripts/check-i18n.py</span></td><td><span class="lang py">Python</span></td><td>يتحقق أن كل نص عربي في الواجهة له ترجمة إنجليزية (<code>npm run i18n:check</code>).</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3><span class="n">7.2</span><span class="path">app/</span>: الصفحات (نظام Next.js)</h3>
+  <div class="table"><table>
+    <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
+    <tbody>
+      <tr><td><span class="path">layout.tsx</span></td><td><span class="lang ts">TypeScript</span></td><td>الإطار المشترك لكل الصفحات: عنوان التطبيق، والأيقونات، وملفات التنسيق، وضبط اللغة والاتجاه قبل الرسم.</td></tr>
+      <tr><td><span class="path">page.tsx</span></td><td><span class="lang ts">TypeScript</span></td><td>الصفحة الرئيسية <code>/</code>: تحوّل مباشرة إلى <code>/chat</code>.</td></tr>
+      <tr><td><span class="path">login/page.tsx</span> و<span class="path">register/page.tsx</span></td><td><span class="lang ts">TypeScript</span></td><td>صفحتا <code>/login</code> و<code>/register</code>، وكلتاهما تعرض <code>AuthForm</code>.</td></tr>
+      <tr><td><span class="path">AuthForm.tsx</span></td><td><span class="lang ts">TypeScript</span></td><td><b>بوابة الدخول والتسجيل</b>: صورة الحرم نهاراً وليلاً، والشعار، واختيار الدور، والحقول، و«تذكرني»، و«نسيت كلمة المرور»، والدعم الفني، وملاءمة الشاشة في الهاتف.</td></tr>
+      <tr><td><span class="path">chat/page.tsx</span></td><td><span class="lang ts">TypeScript</span></td><td>صفحة <code>/chat</code>: تعرض التطبيق كله من <code>_ui/App.tsx</code>.</td></tr>
+      <tr><td><span class="path">manifest.ts</span></td><td><span class="lang ts">TypeScript</span></td><td>بطاقة التطبيق للهاتف (الاسم، والأيقونة، والألوان)؛ هي التي تجعل «إضافة إلى الشاشة الرئيسية» تطبيقاً.</td></tr>
+      <tr><td><span class="path">globals.css</span></td><td><span class="lang other">CSS</span></td><td>التنسيق العام: Tailwind، وخط الهاتف نفسه.</td></tr>
+      <tr><td><span class="path">wasl.css</span></td><td><span class="lang other">CSS</span></td><td>ألوان «وَصل» للوضعين النهاري والليلي (متغيرات مثل <code>--bg</code> و<code>--accent</code>)، وتنسيق بوابة الدخول، وسلوك لوحة المفاتيح في الآيفون.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3><span class="n">7.3</span><span class="path">app/chat/_ui/</span>: شاشات التطبيق</h3>
+  <p class="muted">الشرطة السفلية في <code>_ui</code> تعني في Next.js: «مجلد داخلي، ليس صفحة».</p>
+  <div class="table"><table>
+    <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
+    <tbody>
+      <tr><td><span class="path">App.tsx</span></td><td><span class="lang ts">TypeScript</span></td><td>الهيكل العام: القائمة الجانبية والمحادثة المفتوحة، وفتح اللوحات (جهة الاتصال، والمجموعة، والقنوات...)، وتكيّف الشاشة مع لوحة المفاتيح.</td></tr>
+      <tr><td><span class="path">store.tsx</span></td><td><span class="lang ts">TypeScript</span></td><td><b>«المخزن»</b>: مكان واحد لكل بيانات التطبيق (أنا، والمحادثات، وجهات الاتصال، والحالات، والمكالمة الجارية)، ويفتح الاتصال المباشر ويستقبل أحداثه، وأوامر المكالمات.</td></tr>
+      <tr><td><span class="path">ChatList.tsx</span></td><td><span class="lang ts">TypeScript</span></td><td>قائمة المحادثات، وأزرار التصفية (الكل، وغير المقروءة، والمجموعات، والقنوات، والمكالمات)، والشريط السفلي.</td></tr>
+      <tr><td><span class="path">Conversation.tsx</span></td><td><span class="lang ts">TypeScript</span></td><td>شاشة المحادثة: الترويسة، والرسائل، وقائمة الضغط على الرسالة (رد، وتعديل، وحذف، وتفاعل، ونجمة)، وشريط «ليس ضمن جهات اتصالك»، وشريط القناة للمشترك.</td></tr>
+      <tr><td><span class="path">Composer.tsx</span></td><td><span class="lang ts">TypeScript</span></td><td>خانة الكتابة: إرسال النص، والإيموجي، والمرفقات، والكاميرا، وتسجيل الرسالة الصوتية.</td></tr>
+      <tr><td><span class="path">Bubbles.tsx</span></td><td><span class="lang ts">TypeScript</span></td><td>شكل كل نوع رسالة: نص بروابط، وصورة، وفيديو، ومشغّل الصوت، وملف، وموقع، وعلامات ✓✓.</td></tr>
+      <tr><td><span class="path">People.tsx</span></td><td><span class="lang ts">TypeScript</span></td><td>تبويب جهات الاتصال، ولوحة «إضافة جهة اتصال» بالمعرّف.</td></tr>
+      <tr><td><span class="path">Profiles.tsx</span></td><td><span class="lang ts">TypeScript</span></td><td>ملف جهة الاتصال، ومعلومات المجموعة أو القناة، وإنشاء مجموعة أو قناة، ودليل القنوات، والوسائط المشتركة، والرسائل المميزة.</td></tr>
+      <tr><td><span class="path">Settings.tsx</span></td><td><span class="lang ts">TypeScript</span></td><td>الإعدادات: القائمة، وصفحات معلوماتي، والمظهر، واللغة، والإشعارات، والأذونات.</td></tr>
+      <tr><td><span class="path">Calls.tsx</span></td><td><span class="lang ts">TypeScript</span></td><td>سجل المكالمات، وشاشة المكالمة (رنين، وفيديو، وكتم، وإنهاء، وتشغيل الكاميرا).</td></tr>
+      <tr><td><span class="path">Stories.tsx</span></td><td><span class="lang ts">TypeScript</span></td><td>الحالات: القائمة، والعارض، ونشر حالة.</td></tr>
+      <tr><td><span class="path">Location.tsx</span></td><td><span class="lang ts">TypeScript</span></td><td>مشاركة الموقع الحالي أو المباشر (15 دقيقة، أو ساعة، أو 8 ساعات).</td></tr>
+      <tr><td><span class="path">bits.tsx</span></td><td><span class="lang ts">TypeScript</span></td><td>قطع صغيرة تتكرر في كل الشاشات: الصورة الشخصية، والأزرار، والمفتاح، واللوحة الجانبية، وتنسيق الأوقات، والخريطة الصغيرة.</td></tr>
+      <tr><td><span class="path">icons.tsx</span></td><td><span class="lang ts">TypeScript</span></td><td>كل الأيقونات مرسومة بـ SVG في ملف واحد.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3><span class="n">7.4</span><span class="path">lib/</span>: المنطق (بلا شاشات)</h3>
+  <div class="table"><table>
+    <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
+    <tbody>
+      <tr><td><span class="path">api.ts</span></td><td><span class="lang ts">TypeScript</span></td><td><b>كل الاتصال بالخادم يمر من هنا</b>: الدالة <code>api()</code> ترسل الطلب مع التوكن وترجع JSON، و<b>تعريف الأنواع</b> (<code>User</code>، <code>Message</code>، <code>Conversation</code>...)، وحفظ الجلسة.</td></tr>
+      <tr><td><span class="path">endpoints.ts</span></td><td><span class="lang ts">TypeScript</span></td><td>دالة جاهزة لكل رابط في الـ API: <code>auth.login()</code>، <code>messages.sendText()</code>، <code>channels.subscribe()</code>...</td></tr>
+      <tr><td><span class="path">socket.ts</span></td><td><span class="lang ts">TypeScript</span></td><td>الاتصال المباشر (WebSocket) وإعادة الاتصال تلقائياً، وقائمة كل الأحداث التي يرسلها الخادم.</td></tr>
+      <tr><td><span class="path">call.ts</span></td><td><span class="lang ts">TypeScript</span></td><td>المكالمات بتقنية WebRTC: الاتصال، والرد، وتبادل رسائل التعارف، والتحويل إلى فيديو.</td></tr>
+      <tr><td><span class="path">push.ts</span></td><td><span class="lang ts">TypeScript</span></td><td>تفعيل الإشعارات وإيقافها، والإشعار التجريبي.</td></tr>
+      <tr><td><span class="path">permissions.ts</span></td><td><span class="lang ts">TypeScript</span></td><td>أذونات المايكروفون والكاميرا والإشعارات والموقع، وشرح تفعيلها لكل جهاز.</td></tr>
+      <tr><td><span class="path">i18n.ts</span></td><td><span class="lang ts">TypeScript</span></td><td>نظام اللغتين: الدالة <code>t("النص")</code> تعيد النص بلغة المستخدم.</td></tr>
+      <tr><td><span class="path">i18n-en.ts</span></td><td><span class="lang ts">TypeScript</span></td><td>القاموس الإنجليزي: كل نص عربي وترجمته.</td></tr>
+      <tr><td><span class="path">lang-boot.ts</span></td><td><span class="lang ts">TypeScript</span></td><td>سكربت صغير يضبط اللغة والاتجاه قبل ظهور الصفحة.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3><span class="n">7.5</span><span class="path">public/</span>: ملفات تُقدَّم كما هي</h3>
+  <div class="table"><table>
+    <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
+    <tbody>
+      <tr><td><span class="path">sw.js</span></td><td>JavaScript</td><td><b>Service Worker</b>: يعمل في الخلفية والتطبيق مغلق، فيستقبل الإشعارات ويعرضها، ويفتح المحادثة عند الضغط. (JavaScript لا TypeScript، لأن المتصفح يشغّله مباشرة دون بناء.)</td></tr>
+      <tr><td><span class="path">brand/</span></td><td><span class="lang other">صور</span></td><td>صورتا الحرم (نهار وليل) وشعار الكلية.</td></tr>
+      <tr><td><span class="path">icons/</span></td><td><span class="lang other">صور</span></td><td>أيقونات التطبيق على الشاشة الرئيسية والإشعارات.</td></tr>
+      <tr><td><span class="path">bg/</span></td><td><span class="lang other">SVG</span></td><td>زخارف خلفية المحادثة للوضعين.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 8 -->
+<section class="part" id="other">
+  <h2><span class="n">8</span>ملفات التشغيل والتوثيق</h2>
+  <div class="table"><table>
+    <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
+    <tbody>
+      <tr><td><span class="path">run-mobile.sh</span></td><td><span class="lang other">Shell</span></td><td>تشغيل النظام على حاسوبك بأمر واحد: يثبّت المكتبات، ويحدّث الجداول، ويبني الواجهة، ويشغّل Django وNext.js ونفق cloudflared، ويطبع رابط https ورمز QR.</td></tr>
+      <tr><td><span class="path">README.md</span></td><td><span class="lang other">Markdown</span></td><td>التعريف بالمشروع وطريقة تشغيله وهيكله.</td></tr>
+      <tr><td><span class="path">.gitignore</span></td><td><span class="lang other">نص</span></td><td>ما لا يُرفع إلى GitHub: المكتبات، وقاعدة بيانات التطوير، والملفات المرفوعة، و<b>المفاتيح السرية</b>.</td></tr>
+      <tr><td><span class="path">deploy/docker-compose.yml</span></td><td><span class="lang other">YAML</span></td><td>الخدمات السبع في Docker: قاعدة البيانات، وRedis، والـ API، والـ WebSocket، والواجهة، والبوابة، والنفق.</td></tr>
+      <tr><td><span class="path">deploy/Caddyfile</span></td><td><span class="lang other">Caddy</span></td><td>البوابة: <code>/ws</code> إلى خدمة WebSocket، و<code>/api</code> إلى الـ API، والباقي إلى الواجهة، مع ترويسات الأمان.</td></tr>
+      <tr><td><span class="path">deploy/start.sh</span></td><td><span class="lang other">Shell</span></td><td>يولّد كلمات سر عشوائية، ويشغّل Docker، ويطبع الرابط.</td></tr>
+      <tr><td><span class="path">deploy/.env.example</span></td><td><span class="lang other">نص</span></td><td>نموذج الإعدادات السرية للخادم الحقيقي.</td></tr>
+      <tr><td><span class="path">loadtest/run.py</span></td><td><span class="lang py">Python</span></td><td>أداة اختبار الضغط: آلاف المستخدمين الوهميين يتصلون ويرسلون معاً، وتقيس السرعة.</td></tr>
+      <tr><td><span class="path">loadtest/results/</span></td><td><span class="lang other">JSON</span></td><td>نتائج الاختبار قبل التحسين وبعده.</td></tr>
+      <tr><td><span class="path">docs/report.html</span></td><td>HTML</td><td>التقرير الشامل: المعمارية، وقاعدة البيانات، والتشفير، والضغط.</td></tr>
+      <tr><td><span class="path">docs/files-guide.html</span></td><td>HTML</td><td>هذا الدليل.</td></tr>
+      <tr><td><span class="path">docs/next-steps.md</span></td><td><span class="lang other">Markdown</span></td><td>قائمة عمل الغد: ميزات تيليغرام الناقصة، والاختبارات.</td></tr>
+      <tr><td><span class="path">docs/API.md</span></td><td><span class="lang other">Markdown</span></td><td>دليل الـ API للمصمم: كل شاشة وما تستعمل.</td></tr>
+      <tr><td><span class="path">docs/DEPLOY.md</span></td><td><span class="lang other">Markdown</span></td><td>التشغيل على خادم، وrun-mobile، والإشعارات، وTURN، واختبار الضغط.</td></tr>
+      <tr><td><span class="path">docs/LEARN.md</span> و<span class="path">study-guide.html</span> و<span class="path">roadmap.html</span></td><td>Markdown / HTML</td><td>دليل التعلّم والمفاهيم مع أسئلة، وخطة المشروع.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 9 -->
+<section class="part" id="generated">
+  <h2><span class="n">9</span>ما تراه في VS Code ولم نكتبه نحن</h2>
+  <p>في الشريط الجانبي مجلدات وملفات <b>تولّدها الأدوات تلقائياً</b>. لا تعدّلها، ولا تقلق من حجمها:</p>
+  <div class="table"><table>
+    <thead><tr><th>المجلد أو الملف</th><th>ما هو</th></tr></thead>
+    <tbody>
+      <tr><td><span class="path">.venv/</span></td><td>«البيئة الافتراضية» لـ Python: مكتبات الخادم المثبّتة (Django وغيره). تُنشأ بـ <code>python -m venv</code>.</td></tr>
+      <tr><td><span class="path">frontend/node_modules/</span></td><td>مكتبات الواجهة المثبّتة (Next.js وReact...). تُنشأ بـ <code>npm install</code>، وحجمها كبير.</td></tr>
+      <tr><td><span class="path">frontend/.next/</span></td><td>نتيجة البناء (<code>npm run build</code>): الواجهة بعد تحويل TypeScript إلى JavaScript.</td></tr>
+      <tr><td><span class="path">__pycache__/</span></td><td>نسخ مترجمة من ملفات Python يولّدها Python لتسريع التشغيل.</td></tr>
+      <tr><td><span class="path">*/migrations/0001_...py</span></td><td>سجلّ تغييرات الجداول، يولّده الأمر <code>makemigrations</code> من <code>models.py</code> (22 ملفاً). يُقرأ ولا يُعدَّل يدوياً غالباً.</td></tr>
+      <tr><td><span class="path">backend/db.sqlite3</span></td><td>قاعدة بيانات التطوير على جهازك (لا تُرفع إلى GitHub).</td></tr>
+      <tr><td><span class="path">backend/media/</span></td><td>الملفات التي رفعها المستخدمون، مشفّرة.</td></tr>
+      <tr><td><span class="path">backend/message_key</span></td><td><b>مفتاح تشفير الرسائل. سرّي جداً:</b> لا تشاركه ولا تحذفه، وانسخه احتياطياً.</td></tr>
+      <tr><td><span class="path">backend/vapid_keys.json</span></td><td>مفاتيح الإشعارات (سرّية).</td></tr>
+      <tr><td><span class="path">backend/locale/.../django.mo</span></td><td>نسخة الترجمة المحوّلة من ‎.po.</td></tr>
+      <tr><td><span class="path">frontend/next-env.d.ts</span> و<span class="path">tsconfig.tsbuildinfo</span></td><td>ملفات يولّدها Next.js وTypeScript.</td></tr>
+      <tr><td><span class="path">frontend/AGENTS.md</span></td><td>ملاحظة يضيفها Next.js 16 تلقائياً لأدوات الذكاء الاصطناعي.</td></tr>
+      <tr><td><span class="path">.run/</span> و<span class="path">.tools/</span></td><td>سجلات <code>run-mobile.sh</code>، وبرنامج cloudflared الذي ينزّله.</td></tr>
+      <tr><td><span class="path">.git/</span></td><td>تاريخ كل التعديلات (Git). لا تلمسه.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============================================================ 10 -->
+<section class="part" id="qa">
+  <h2><span class="n">10</span>أسئلة المدير المتوقعة وأجوبتها</h2>
+  <details open><summary>10.1 ما لغة المشروع؟</summary><p>الخادم Python بإطار Django، والواجهة TypeScript بإطار Next.js مع React (القسم 4).</p></details>
+  <details><summary>10.2 أين ملف الإعدادات؟ وماذا فيه؟</summary><p><span class="path">backend/config/settings.py</span>: فيه الأمان (SECRET_KEY وDEBUG)، والتطبيقات المفعّلة، وقاعدة البيانات، وهاش كلمات المرور (Argon2)، واللغة، وRedis، وإعدادات الـ API وحدود الطلبات، وأماكن الملفات، والإشعارات، والمكالمات (القسم 5). والأسرار تأتي من ملف <code>.env</code> لا من الكود.</p></details>
+  <details><summary>10.3 أين الـ API؟</summary><p>الروابط في <span class="path">backend/*/urls.py</span>، ومنطقها في <span class="path">backend/*/views.py</span>، وأكبرها <span class="path">backend/chat/views.py</span>. وفي الواجهة تُستدعى من <span class="path">frontend/lib/endpoints.ts</span>.</p></details>
+  <details><summary>10.4 أين قاعدة البيانات والجداول؟</summary><p>تعريف الجداول في <span class="path">backend/*/models.py</span>. في التطوير ملف <span class="path">backend/db.sqlite3</span>، وفي التشغيل الفعلي PostgreSQL داخل Docker.</p></details>
+  <details><summary>10.5 أين الهاش والتشفير؟</summary><p>هاش كلمات المرور: <code>PASSWORD_HASHERS</code> في settings.py (Argon2). هاش التوكن: <span class="path">backend/accounts/tokens.py</span>. تشفير الرسائل والملفات: <span class="path">backend/chat/crypto.py</span> و<span class="path">fields.py</span>.</p></details>
+  <details><summary>10.6 أين الرسائل الفورية (WebSocket)؟</summary><p>الخادم: <span class="path">backend/chat/consumers.py</span> و<span class="path">routing.py</span>. الواجهة: <span class="path">frontend/lib/socket.ts</span>.</p></details>
+  <details><summary>10.7 أين الشاشات؟</summary><p>في <span class="path">frontend/app/chat/_ui/</span>، وكل شاشة في ملف باسمها (القسم 7.3)، وبوابة الدخول في <span class="path">frontend/app/AuthForm.tsx</span>.</p></details>
+  <details><summary>10.8 كيف تشغّل المشروع؟</summary><p>على الحاسوب: <code>./run-mobile.sh</code>. على خادم حقيقي: <code>cd deploy &amp;&amp; ./start.sh</code> (Docker). والاختبارات: <code>cd backend &amp;&amp; python manage.py test</code>.</p></details>
+  <details><summary>10.9 ما الفرق بين views.py وurls.py وmodels.py؟</summary><p><b>models.py</b> يعرّف الجداول (ماذا نحفظ)، و<b>views.py</b> يقرر ماذا يحدث عند كل طلب (المنطق)، و<b>urls.py</b> يربط كل رابط بدالته في views.py. مثال: الرابط <code>/api/conversations/</code> في urls.py يذهب إلى الدالة <code>conversations</code> في views.py، التي تقرأ من جدول <code>Conversation</code> المعرّف في models.py.</p></details>
+</section>
+
+<footer>دليل ملفات «وَصل» · كلية الأسباط الجامعة · أيلول 2026</footer>
+</div>
+
+<button class="theme-btn" type="button" id="theme" aria-label="تبديل الوضع الليلي">🌓 الوضع</button>
+<script>
+  // عنوان كل عمود يُنسخ إلى خلاياه، ليظهر فوق القيمة حين يصبح الصف بطاقة في الهاتف
+  document.querySelectorAll(".table table").forEach(function (table) {
+    var heads = Array.prototype.map.call(table.querySelectorAll("thead th"), function (th) { return th.textContent.trim(); });
+    table.querySelectorAll("tbody tr").forEach(function (tr) {
+      Array.prototype.forEach.call(tr.children, function (td, i) { if (heads[i]) td.setAttribute("data-label", heads[i]); });
+    });
+  });
+  (function () {
+    var root = document.documentElement, key = "report-theme";
+    try { var saved = localStorage.getItem(key); if (saved) root.dataset.theme = saved; } catch (e) {}
+    document.getElementById("theme").addEventListener("click", function () {
+      var dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+      root.dataset.theme = dark ? "light" : "dark";
+      try { localStorage.setItem(key, root.dataset.theme); } catch (e) {}
+    });
+  })();
+</script>
+</body>
+</html>
