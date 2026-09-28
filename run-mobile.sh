@@ -1,26 +1,86 @@
 #!/usr/bin/env bash
 # تشغيل النظام كاملاً على حاسوبك وفتحه من الهاتف عبر رابط https مؤقت (بلا Docker).
 #
-#   ./run-mobile.sh          ← يجهّز كل شيء، يشغّل الخادم والواجهة والنفق، ويطبع الرابط ورمز QR
-#   ./run-mobile.sh --fast   ← يتخطى تثبيت المكتبات وبناء الواجهة (إن لم يتغير الكود)
+#   ./run-mobile.sh           ← يجهّز كل شيء، يشغّل الخادم والواجهة والنفق، ويطبع الرابط ورمز QR
+#   ./run-mobile.sh --fast    ← يتخطى تثبيت المكتبات وبناء الواجهة (إن لم يتغير الكود)
+#   ./run-mobile.sh --force   ← إن كان المنفذ 8000 أو 3000 مشغولاً بخادم سابق من هذا المشروع، يوقفه دون سؤال
+#   (يمكن الجمع بينهما: ./run-mobile.sh --fast --force)
 #
 # الإيقاف: Ctrl+C (يوقف كل شيء معاً).
 # لماذا https؟ المتصفحات لا تسمح بالمايكروفون والكاميرا والإشعارات إلا عبر اتصال آمن.
+# ملاحظة: رسائل الطرفية بالإنجليزية لأن أغلب الطرفيات (ومنها طرفية VS Code) لا تعرض العربية من اليمين إلى اليسار.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 LOGS="$ROOT/.run"
 mkdir -p "$LOGS" "$ROOT/.tools"
-FAST=0; [ "${1:-}" = "--fast" ] && FAST=1
+FAST=0; FORCE=0
+for arg in "$@"; do
+  case "$arg" in
+    --fast) FAST=1 ;;
+    --force) FORCE=1 ;;
+    *) echo "Usage: ./run-mobile.sh [--fast] [--force]"; exit 2 ;;
+  esac
+done
 
 say() { printf '\n\033[1;32m▶ %s\033[0m\n' "$1"; }
+warn() { printf '\n\033[1;33m! %s\033[0m\n' "$1"; }
 die() { printf '\n\033[1;31m✖ %s\033[0m\n' "$1"; exit 1; }
 
-command -v node >/dev/null || die "Node.js غير مثبت. ثبّته أولاً: https://nodejs.org"
-PY=python3; command -v $PY >/dev/null || die "Python 3 غير مثبت."
+command -v node >/dev/null || die "Node.js is not installed. Install it first: https://nodejs.org"
+PY=python3; command -v $PY >/dev/null || die "Python 3 is not installed."
+
+# ---------------------------------------------------------------- المنافذ: من يشغلها؟
+port_busy() { (echo >"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+
+# رقم البرنامج الذي يستمع على المنفذ (lsof أو ss، أيهما متوفر)
+port_pid() {
+  if command -v lsof >/dev/null; then
+    lsof -t -iTCP:"$1" -sTCP:LISTEN 2>/dev/null | head -1
+  elif command -v ss >/dev/null; then
+    ss -ltnpH "sport = :$1" 2>/dev/null | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2
+  fi
+}
+
+# هل هو خادم سابق من هذا المشروع؟ (Django أو Next.js أو النفق، أو يعمل من داخل مجلد المشروع)
+is_ours() {
+  local pid=$1 args cwd
+  args="$(ps -o args= -p "$pid" 2>/dev/null || true)"
+  cwd="$(readlink "/proc/$pid/cwd" 2>/dev/null || true)"
+  [[ "$cwd" == "$ROOT"* || "$args" == *"$ROOT"* ]] && return 0
+  [[ "$args" =~ manage\.py\ runserver|daphne|uvicorn|gunicorn|next-server|next\ start|cloudflared ]]
+}
+
+free_port() {
+  local port=$1 pid args
+  port_busy "$port" || return 0
+  pid="$(port_pid "$port")"
+  if [ -z "$pid" ]; then
+    die "Port $port is in use by another program. Stop it (e.g. 'fuser -k $port/tcp') and try again."
+  fi
+  args="$(ps -o args= -p "$pid" 2>/dev/null || echo '?')"
+  warn "Port $port is in use by: $args (PID $pid)"
+  if ! is_ours "$pid"; then
+    die "That program is not part of this project, so it was left running. Stop it yourself ('kill $pid'), then try again."
+  fi
+  # خادم سابق من المشروع (غالباً runserver في طرفية أخرى أو تشغيل سابق لهذا السكربت)
+  if [ $FORCE = 0 ]; then
+    if [ -t 0 ]; then
+      read -r -p "  It looks like an earlier server from this project. Stop it and continue? [Y/n] " answer
+      [[ "${answer:-y}" =~ ^[Yy]$ ]] || die "Stopped. Free port $port and run again."
+    else
+      die "Run again with --force to stop it automatically."
+    fi
+  fi
+  kill "$pid" 2>/dev/null || true
+  for _ in $(seq 1 20); do port_busy "$port" || break; sleep 0.5; done
+  if port_busy "$port"; then kill -9 "$pid" 2>/dev/null || true; sleep 1; fi
+  port_busy "$port" && die "Could not free port $port."
+  echo "  ✔ Stopped the old server on port $port"
+}
 
 # ---------------------------------------------------------------- 1) الخادم (Django)
-say "تجهيز الخادم (Django)"
+say "Preparing the backend (Django)"
 cd "$ROOT/backend"
 [ -d .venv ] || $PY -m venv .venv
 # shellcheck disable=SC1091
@@ -32,7 +92,7 @@ fi
 python manage.py migrate --noinput
 
 # ---------------------------------------------------------------- 2) الواجهة (Next.js)
-say "تجهيز الواجهة (Next.js)"
+say "Preparing the frontend (Next.js)"
 cd "$ROOT/frontend"
 if [ $FAST = 0 ] || [ ! -d .next ]; then
   [ -d node_modules ] || npm install
@@ -44,45 +104,44 @@ CF="$(command -v cloudflared || true)"
 if [ -z "$CF" ]; then
   CF="$ROOT/.tools/cloudflared"
   if [ ! -x "$CF" ]; then
-    say "تنزيل أداة النفق cloudflared (مرة واحدة فقط)"
+    say "Downloading the tunnel tool cloudflared (one time only)"
     case "$(uname -m)" in
-      x86_64) ARCH=amd64 ;; aarch64|arm64) ARCH=arm64 ;; armv7l) ARCH=arm ;; *) die "معالج غير مدعوم: $(uname -m)" ;;
+      x86_64) ARCH=amd64 ;; aarch64|arm64) ARCH=arm64 ;; armv7l) ARCH=arm ;; *) die "Unsupported CPU: $(uname -m)" ;;
     esac
     case "$(uname -s)" in
       Linux) curl -fsSL -o "$CF" "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-$ARCH" ;;
       Darwin) curl -fsSL "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-$ARCH.tgz" | tar -xz -C "$ROOT/.tools" ;;
-      *) die "على Windows استخدم Docker (deploy/start.sh) أو WSL." ;;
+      *) die "On Windows use Docker (deploy/start.sh) or WSL." ;;
     esac
     chmod +x "$CF"
   fi
 fi
 
 # ---------------------------------------------------------------- 4) التشغيل
+free_port 8000
+free_port 3000
+
 PIDS=()
 cleanup() {
-  printf '\n\033[1;33m■ إيقاف كل شيء...\033[0m\n'
+  printf '\n\033[1;33m■ Stopping everything...\033[0m\n'
   for p in ${PIDS[@]+"${PIDS[@]}"}; do pkill -P "$p" 2>/dev/null || true; kill "$p" 2>/dev/null || true; done
   wait 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
-for port in 8000 3000; do
-  if (echo >/dev/tcp/127.0.0.1/$port) 2>/dev/null; then die "المنفذ $port مشغول. أوقف البرنامج الذي يستخدمه ثم أعد المحاولة."; fi
-done
-
-say "تشغيل الخادم على المنفذ 8000"
+say "Starting the backend on port 8000"
 cd "$ROOT/backend"
 # الرابط المؤقت يتبع trycloudflare.com: نثق به لنماذج لوحة الإدارة (CSRF)
 CSRF_TRUSTED_ORIGINS="https://*.trycloudflare.com" \
   python manage.py runserver 0.0.0.0:8000 --noreload >"$LOGS/backend.log" 2>&1 &
 PIDS+=($!)
 
-say "تشغيل الواجهة على المنفذ 3000"
+say "Starting the frontend on port 3000"
 cd "$ROOT/frontend"
 ./node_modules/.bin/next start -p 3000 >"$LOGS/frontend.log" 2>&1 &
 PIDS+=($!)
 
-say "فتح النفق (رابط https)"
+say "Opening the tunnel (https link)"
 : >"$LOGS/tunnel.log"
 "$CF" tunnel --no-autoupdate --url http://127.0.0.1:3000 >"$LOGS/tunnel.log" 2>&1 &
 TUNNEL=$!
@@ -98,10 +157,10 @@ done
 if [ -z "$URL" ]; then
   tail -3 "$LOGS/tunnel.log"
   IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
-  die "تعذّر إنشاء رابط https (تحقق من الإنترنت). بديل مؤقت على نفس شبكة الواي فاي: http://${IP:-IP-الحاسوب}:3000 (من دون مايكروفون أو كاميرا أو إشعارات)"
+  die "Could not create the https link (check your internet). Temporary fallback on the same Wi-Fi: http://${IP:-YOUR-PC-IP}:3000 (no microphone, camera or notifications)"
 fi
 
-# ننتظر حتى تجيب الواجهة والخادم
+# ننتظر حتى تستجيب الواجهة والخادم
 for _ in $(seq 1 30); do
   curl -fs -o /dev/null http://127.0.0.1:3000/login && curl -fs -o /dev/null http://127.0.0.1:8000/api/push/key/ && break
   sleep 1
@@ -110,28 +169,28 @@ done
 cat <<EOF
 
 ======================================================================
-  افتح هذا الرابط من الهاتف (أي شبكة: واي فاي أو بيانات الجوال):
+  Open this link on your phone (any network: Wi-Fi or mobile data):
 
       $URL
 
-  على الحاسوب نفسه:       http://localhost:3000
-  لوحة الإدارة:            $URL/admin
+  On this computer:   http://localhost:3000
+  Admin panel:        $URL/admin
 ======================================================================
 EOF
 python - "$URL" <<'PY' 2>/dev/null || true
 import sys, qrcode
 q = qrcode.QRCode(border=1)
 q.add_data(sys.argv[1])
-print("  أو امسح هذا الرمز بكاميرا الهاتف:\n")
+print("  Or scan this code with your phone's camera:\n")
 q.print_ascii(invert=True)
 PY
 cat <<EOF
-  ملاحظات:
-  - الرابط مؤقت: يتغير في كل تشغيل، ويعمل ما دام هذا الطرفية مفتوحة.
-  - الأيفون: لتصلك الإشعارات أضف الموقع إلى الشاشة الرئيسية (زر المشاركة ← إضافة إلى الشاشة الرئيسية).
-  - السجلات: $LOGS/   |   للإيقاف: Ctrl+C
+  Notes:
+  - The link is temporary: it changes on every run and works while this terminal is open.
+  - iPhone: to get notifications, add the site to the Home Screen (Share → Add to Home Screen).
+  - Logs: $LOGS/   |   Stop: Ctrl+C
 EOF
 
-# نبقى نعمل حتى يتوقف أحدها أو يضغط المستخدم Ctrl+C
+# نبقى نعمل حتى يتوقف أحد الأجزاء أو يضغط المستخدم Ctrl+C
 wait -n "${PIDS[@]}"
-echo "توقف أحد الأجزاء. راجع السجلات في $LOGS/"
+echo "One of the parts stopped. Check the logs in $LOGS/"
