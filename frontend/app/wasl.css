@@ -224,6 +224,14 @@
 /* هيكل التطبيق بارتفاع الجزء الظاهر من الشاشة (يتقلص عند ظهور لوحة المفاتيح، انظر useVisibleViewport في App.tsx) */
 .wasl-shell { position: fixed; inset-inline: 0; top: var(--app-top, 0px); height: var(--app-h, 100dvh); }
 html:has(.wasl-shell), body:has(.wasl-shell) { overflow: hidden; overscroll-behavior: none; }
+/*
+ * ما خلف التطبيق (يظهر تحت لوحة المفاتيح حين يتقلص) بلون الوضع نفسه، و color-scheme يجعل الآيفون
+ * يرسم لوحة مفاتيح داكنة في الوضع الليلي بدل البيضاء.
+ */
+html:has(.wasl-shell[data-theme="light"]), html:has(.wasl-shell[data-theme="light"]) body { background: #f6f6fb; color-scheme: light; }
+html:has(.wasl-shell[data-theme="dark"]), html:has(.wasl-shell[data-theme="dark"]) body { background: #121726; color-scheme: dark; }
+html:has(.portal[data-theme="light"]), html:has(.portal[data-theme="light"]) body { color-scheme: light; }
+html:has(.portal[data-theme="dark"]), html:has(.portal[data-theme="dark"]) body { background: #0b1210; color-scheme: dark; }
 
 /* الواجهة الإنجليزية (من اليسار إلى اليمين): أيقونات الاتجاه (رجوع، التالي، رد) تنعكس */
 [dir="ltr"] .dir-icon { transform: scaleX(-1); }

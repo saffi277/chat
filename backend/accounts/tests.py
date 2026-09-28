@@ -134,3 +134,25 @@ class LanguageTests(TestCase):
         self.assertEqual(c.get('/api/auth/me/').data['language'], 'ar')
         self.assertEqual(c.patch('/api/auth/me/', {'language': 'en'}, format='json').data['language'], 'en')
         self.assertEqual(c.patch('/api/auth/me/', {'language': 'fr'}, format='json').status_code, 400)
+
+
+class MyInfoTests(TestCase):
+    """صفحة «معلوماتي»: تعديل البريد الجامعي مع منع تكراره."""
+
+    def client_for(self, username, email=''):
+        r = APIClient().post('/api/auth/register/', {'username': username, 'password': 'secret123', 'email': email}, format='json')
+        c = APIClient()
+        c.credentials(HTTP_AUTHORIZATION='Token ' + r.data['token'])
+        return c
+
+    def test_change_email(self):
+        ali = self.client_for('ali_info')
+        self.client_for('sara_info', 'sara@asbat.edu.iq')
+        r = ali.patch('/api/auth/me/', {'email': 'ali@asbat.edu.iq', 'display_name': 'علي'}, format='json')
+        self.assertEqual((r.data['email'], r.data['display_name']), ('ali@asbat.edu.iq', 'علي'))
+        taken = ali.patch('/api/auth/me/', {'email': 'SARA@asbat.edu.iq', 'display_name': 'تغيير'}, format='json')
+        self.assertEqual(taken.status_code, 400)
+        self.assertIn('email', taken.data)
+        me = ali.get('/api/auth/me/').data
+        self.assertEqual((me['email'], me['display_name']), ('ali@asbat.edu.iq', 'علي'))  # لم يُحفظ شيء
+        self.assertEqual(ali.patch('/api/auth/me/', {'email': 'not-an-email'}, format='json').status_code, 400)

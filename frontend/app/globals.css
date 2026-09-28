@@ -9,7 +9,8 @@
 * { box-sizing: border-box; }
 
 body {
-  font-family: Tahoma, Arial, sans-serif;
+  /* خط الهاتف نفسه (كما في واتساب): SF في الآيفون، وخط أندرويد في أندرويد، وخط النظام في الحاسوب */
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Arabic", "Segoe UI", Roboto, "Noto Sans Arabic", "Noto Sans", "Helvetica Neue", Arial, sans-serif;
   background: #ffffff;
   color: #101827;
 }

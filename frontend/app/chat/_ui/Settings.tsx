@@ -1,11 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { ROLE_LABELS, type Mode } from "@/lib/api";
+import { ROLE_LABELS, type Me, type Mode } from "@/lib/api";
 import { auth } from "@/lib/endpoints";
 import { LANGS, setLang, useT } from "@/lib/i18n";
 import { howToEnable, isStandalone, PERM_LABELS, permState, platform, requestPerm, type PermName, type PermState } from "@/lib/permissions";
 import { disablePush, enablePush, getPushState, testPush, type PushState } from "@/lib/push";
-import { Avatar, nameOf, Section, Toggle } from "./bits";
+import { Avatar, IconButton, nameOf, Section, Toggle } from "./bits";
 import { Icon } from "./icons";
 import { useWasl } from "./store";
 
@@ -16,125 +16,80 @@ const modes: { value: Mode; label: string; icon: "sun" | "moon" | "device" }[] =
   { value: "system", label: "تلقائي", icon: "device" },
 ];
 
-export function SettingsView() {
-  const t = useT();
-  const { me, updateMe, signOut, openSaved, notify, setTab, stories } = useWasl();
-  const [form, setForm] = useState({ display_name: me.display_name, bio: me.bio, phone: me.phone, city: me.city });
-  const [busy, setBusy] = useState(false);
-  const pick = useRef<HTMLInputElement>(null);
-  const dirty = (Object.keys(form) as (keyof typeof form)[]).some((k) => form[k] !== me[k]);
+// ------------------------------------------------------------ الإعدادات: قائمة أقسام، وكل قسم في صفحته
+type Page = "account" | "appearance" | "language" | "notifications" | "permissions";
+type IconName = Parameters<typeof Icon>[0]["name"];
 
-  async function run(fn: () => Promise<typeof me>, done?: string) {
+/** الحفظ في الخادم مع رسالة نجاح/خطأ (مشترك بين الصفحات) */
+function useSave() {
+  const { updateMe, notify } = useWasl();
+  const [busy, setBusy] = useState(false);
+  async function run(fn: () => Promise<Me>, done?: string) {
     setBusy(true);
     try {
       updateMe(await fn());
       if (done) notify(done);
+      return true;
     } catch (e) {
       notify((e as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
   }
+  return { busy, run };
+}
 
+export function SettingsView() {
+  const t = useT();
+  const { me, signOut, openSaved, setTab, stories } = useWasl();
+  const [page, setPage] = useState<Page | null>(null);
+
+  if (page) {
+    const titles: Record<Page, string> = { account: "معلوماتي", appearance: "المظهر", language: "اللغة", notifications: "الإشعارات", permissions: "الأذونات" };
+    return (
+      <SubPage title={t(titles[page])} onBack={() => setPage(null)}>
+        {page === "account" && <AccountPage />}
+        {page === "appearance" && <AppearancePage />}
+        {page === "language" && <LanguagePage />}
+        {page === "notifications" && <NotificationsPage />}
+        {page === "permissions" && <><p className="w-muted mb-1 mt-3 px-1 text-xs leading-6">{t("تحكّم في ما يستطيع التطبيق استخدامه في جهازك.")}</p><Section><PermissionsList /></Section></>}
+      </SubPage>
+    );
+  }
+
+  const modeLabel = modes.find((m) => m.value === me.mode)?.label ?? "";
   return (
     <div className="flex h-full flex-col" style={{ background: "var(--bg)" }}>
       <header className="px-4 pt-[max(1rem,env(safe-area-inset-top))]">
         <h1 className="text-[28px] font-extrabold leading-tight">{t("الإعدادات")}</h1>
       </header>
       <div className="w-scroll flex-1 overflow-y-auto px-4 pb-6">
-        <div className="mt-3 flex items-center gap-4 rounded-[22px] p-4" style={{ background: "var(--panel)", boxShadow: "var(--soft-shadow)" }}>
-          <button onClick={() => pick.current?.click()} className="relative" aria-label={t("تغيير الصورة")}>
-            <Avatar user={me} size={72} />
-            <span className="w-accent absolute -bottom-1 -end-1 grid h-8 w-8 place-items-center rounded-full border-2" style={{ borderColor: "var(--panel)" }}><Icon name="camera" size={15} /></span>
-          </button>
-          <input ref={pick} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) run(() => auth.setAvatar(f), t("حُفظت الصورة")); e.target.value = ""; }} />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-lg font-extrabold">{nameOf(me)}</div>
-            <div className="w-muted truncate text-sm" dir="ltr">@{me.username}</div>
-            <div className="mt-1 flex flex-wrap gap-1.5 text-[11px] font-bold">
-              <span className="w-tint rounded-full px-2 py-0.5">{t(ROLE_LABELS[me.role] ?? me.role)}</span>
-              {me.university_id && <span className="w-tint rounded-full px-2 py-0.5" dir="ltr">{me.university_id}</span>}
-            </div>
-            {me.avatar && <button onClick={() => run(() => auth.setAvatar(null))} className="mt-1 text-xs font-bold" style={{ color: "var(--danger)" }}>{t("حذف الصورة")}</button>}
-          </div>
-        </div>
+        {/* بطاقتي: تفتح «معلوماتي» */}
+        <button onClick={() => setPage("account")} className="mt-3 flex w-full items-center gap-4 rounded-[22px] p-4 text-start"
+          style={{ background: "var(--panel)", boxShadow: "var(--soft-shadow)" }}>
+          <Avatar user={me} size={64} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-lg font-extrabold" dir="auto">{nameOf(me)}</span>
+            <span className="w-muted block truncate text-sm">{t(ROLE_LABELS[me.role] ?? me.role)}{me.university_id ? ` • ${me.university_id}` : ""}</span>
+          </span>
+          <Icon name="back" size={18} className="w-muted rotate-180" />
+        </button>
 
-        <Section title={t("ملفي الشخصي")}>
-          <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); run(() => auth.updateMe(form), t("حُفظ")); }}>
-            {([
-              ["display_name", t("الاسم الظاهر"), me.username],
-              ["bio", t("نبذة"), t("مثلاً: متاح 🌙")],
-              ["phone", t("رقم الهاتف"), "+964 7xx xxx xxxx"],
-              ["city", t("المدينة"), t("بغداد، العراق")],
-            ] as const).map(([key, label, ph]) => (
-              <label key={key} className="block text-sm font-bold">
-                {label}
-                <input value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} placeholder={ph}
-                  dir={key === "phone" ? "ltr" : "auto"} inputMode={key === "phone" ? "tel" : undefined}
-                  className="w-input mt-1.5 h-11 w-full rounded-xl px-4 text-base font-normal outline-none md:text-sm" />
-              </label>
-            ))}
-            <button disabled={!dirty || busy} className="w-accent w-full rounded-full py-3 font-bold disabled:opacity-40">{t(busy ? "جارٍ الحفظ..." : "حفظ")}</button>
-          </form>
-        </Section>
+        <Group>
+          <Row icon="user" color="#6c5ce7" label={t("معلوماتي")} onClick={() => setPage("account")} />
+          <Row icon={me.mode === "dark" ? "moon" : "sun"} color="#0ea5e9" label={t("المظهر")} value={t(modeLabel)} onClick={() => setPage("appearance")} />
+          <Row icon="globe" color="#10b981" label={t("اللغة")} value={LANGS.find((l) => l.value === me.language)?.label} onClick={() => setPage("language")} />
+          <Row icon="bell" color="#f43f5e" label={t("الإشعارات")} onClick={() => setPage("notifications")} />
+          <Row icon="shield" color="#f59e0b" label={t("الأذونات")} onClick={() => setPage("permissions")} />
+        </Group>
 
-        <Section title={t("الوضع")}>
-          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label={t("الوضع")}>
-            {modes.map((m) => (
-              <button key={m.value} role="radio" aria-checked={me.mode === m.value} disabled={busy}
-                onClick={() => run(() => auth.updateMe({ mode: m.value }))}
-                className={`grid justify-items-center gap-1.5 rounded-2xl py-3 text-[13px] font-semibold transition ${me.mode === m.value ? "w-tint" : ""}`}
-                style={me.mode === m.value ? { border: "1px solid var(--tint-border)" } : { background: "var(--card)" }}>
-                <Icon name={m.icon} size={20} filled={me.mode === m.value && m.icon !== "device"} />
-                {t(m.label)}
-              </button>
-            ))}
-          </div>
-        </Section>
-
-        {/* اللغة: تتغير النصوص واتجاه الواجهة فوراً (العربية من اليمين، الإنجليزية من اليسار) */}
-        <Section title={t("اللغة")}>
-          <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={t("اللغة")}>
-            {LANGS.map((l) => (
-              <button key={l.value} role="radio" aria-checked={me.language === l.value} disabled={busy} lang={l.value}
-                onClick={() => { setLang(l.value); run(() => auth.updateMe({ language: l.value })); }}
-                className={`rounded-2xl py-3 text-[14px] font-bold transition ${me.language === l.value ? "w-tint" : ""}`}
-                style={me.language === l.value ? { border: "1px solid var(--tint-border)" } : { background: "var(--card)" }}>
-                {l.label}
-              </button>
-            ))}
-          </div>
-        </Section>
-
-        <Section title={t("الإشعارات")}>
-          <PushToggle />
-          <div className="w-line mt-3 flex items-center gap-3 border-t pt-3">
-            <Icon name="eye" size={20} className="w-accent-text" />
-            <div className="flex-1">
-              <p className="font-bold">{t("إخفاء محتوى الإشعار")}</p>
-              <p className="w-muted text-xs leading-5">{t("يظهر \"رسالة جديدة\" فقط، دون اسم المرسل أو النص")}</p>
-            </div>
-            <Toggle on={me.hide_preview} label={t("إخفاء محتوى الإشعار")} onChange={(v) => !busy && run(() => auth.updateMe({ hide_preview: v }))} />
-          </div>
-        </Section>
-
-        <Section title={t("الأذونات")}><PermissionsList /></Section>
-
-        <section className="mt-3 overflow-hidden rounded-[22px]" style={{ background: "var(--panel)", boxShadow: "var(--soft-shadow)" }}>
-          <button onClick={() => setTab("stories")} className="w-hover flex w-full items-center gap-3 px-4 py-3.5 font-semibold">
-            <Icon name="stories" size={20} className="w-accent-text" /><span className="flex-1 text-start">{t("الحالات")}</span>
-            {stories.some((g) => !g.is_me && !g.all_seen) && <span className="w-badge h-2.5 w-2.5 rounded-full" aria-label={t("حالات جديدة")} />}
-            <Icon name="back" size={18} className="w-muted rotate-180" />
-          </button>
-          <button onClick={() => setTab("people")} className="w-hover w-line flex w-full items-center gap-3 border-t px-4 py-3.5 font-semibold">
-            <Icon name="users" size={20} className="w-accent-text" /><span className="flex-1 text-start">{t("جهات الاتصال")}</span>
-            <Icon name="back" size={18} className="w-muted rotate-180" />
-          </button>
-          <button onClick={openSaved} className="w-hover w-line flex w-full items-center gap-3 border-t px-4 py-3.5 font-semibold">
-            <Icon name="bookmark" size={20} className="w-accent-text" /><span className="flex-1 text-start">{t("الرسائل المحفوظة")}</span>
-            <Icon name="back" size={18} className="w-muted rotate-180" />
-          </button>
-        </section>
+        <Group>
+          <Row icon="stories" color="#8b5cf6" label={t("الحالات")} onClick={() => setTab("stories")}
+            badge={stories.some((g) => !g.is_me && !g.all_seen) ? t("حالات جديدة") : undefined} />
+          <Row icon="users" color="#3b82f6" label={t("جهات الاتصال")} onClick={() => setTab("people")} />
+          <Row icon="bookmark" color="#14b8a6" label={t("الرسائل المحفوظة")} onClick={openSaved} />
+        </Group>
 
         <button onClick={signOut} className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 font-bold"
           style={{ background: "color-mix(in srgb, var(--danger) 14%, transparent)", color: "var(--danger)" }}>
@@ -142,6 +97,173 @@ export function SettingsView() {
         </button>
       </div>
     </div>
+  );
+}
+
+function Group({ children }: { children: React.ReactNode }) {
+  return <section className="w-divide mt-3 overflow-hidden rounded-[22px]" style={{ background: "var(--panel)", boxShadow: "var(--soft-shadow)" }}>{children}</section>;
+}
+
+/** صف في القائمة: أيقونة ملوّنة، الاسم، القيمة الحالية، وسهم */
+function Row({ icon, color, label, value, badge, onClick }: { icon: IconName; color: string; label: string; value?: string; badge?: string; onClick: () => void }) {
+  return (
+    <button onClick={onClick} className="w-hover flex w-full items-center gap-3 px-4 py-3 text-start font-semibold">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] text-white" style={{ background: color }}><Icon name={icon} size={17} /></span>
+      <span className="flex-1">{label}</span>
+      {badge && <span className="w-badge h-2.5 w-2.5 rounded-full" aria-label={badge} />}
+      {value && <span className="w-muted text-sm font-normal">{value}</span>}
+      <Icon name="back" size={18} className="w-muted rotate-180" />
+    </button>
+  );
+}
+
+/** صفحة داخل الإعدادات: ترويسة بزر رجوع إلى القائمة */
+function SubPage({ title, onBack, children }: { title: string; onBack: () => void; children: React.ReactNode }) {
+  const t = useT();
+  return (
+    <div className="flex h-full flex-col" style={{ background: "var(--bg)" }}>
+      <header className="flex items-center gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <IconButton icon="back" label={t("رجوع")} onClick={onBack} plain size={40} />
+        <h1 className="text-[22px] font-extrabold leading-tight">{title}</h1>
+      </header>
+      <div className="w-scroll flex-1 overflow-y-auto px-4 pb-6">{children}</div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------ معلوماتي: الصورة والاسم والرقم والبريد
+function AccountPage() {
+  const t = useT();
+  const { me } = useWasl();
+  const { busy, run } = useSave();
+  const pick = useRef<HTMLInputElement>(null);
+  const [form, setForm] = useState({ display_name: me.display_name, bio: me.bio, phone: me.phone, city: me.city, email: me.email });
+  const dirty = (Object.keys(form) as (keyof typeof form)[]).some((k) => form[k] !== me[k]);
+  const fields = [
+    ["display_name", t("الاسم الظاهر"), me.username, "user"],
+    ["phone", t("رقم الهاتف"), "+964 7xx xxx xxxx", "phone"],
+    ["email", t("البريد الجامعي"), "name@asbat.edu.iq", "mail"],
+    ["bio", t("نبذة"), t("مثلاً: متاح 🌙"), "info"],
+    ["city", t("المدينة"), t("بغداد، العراق"), "pin"],
+  ] as const;
+
+  return (
+    <>
+      {/* الصورة */}
+      <div className="mt-4 flex flex-col items-center">
+        <button onClick={() => pick.current?.click()} className="relative" aria-label={t("تغيير الصورة")}>
+          <Avatar user={me} size={112} />
+          <span className="w-accent absolute bottom-1 end-1 grid h-9 w-9 place-items-center rounded-full border-2" style={{ borderColor: "var(--bg)" }}><Icon name="camera" size={17} /></span>
+        </button>
+        <input ref={pick} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) run(() => auth.setAvatar(f), t("حُفظت الصورة")); e.target.value = ""; }} />
+        <div className="mt-3 flex gap-4 text-sm font-bold">
+          <button onClick={() => pick.current?.click()} className="w-accent-text">{t("تغيير الصورة")}</button>
+          {me.avatar && <button onClick={() => run(() => auth.setAvatar(null))} style={{ color: "var(--danger)" }}>{t("حذف الصورة")}</button>}
+        </div>
+      </div>
+
+      {/* ما يستطيع المستخدم تعديله */}
+      <form onSubmit={(e) => { e.preventDefault(); run(() => auth.updateMe(form), t("حُفظ")); }}>
+        <Section>
+          <div className="space-y-3">
+            {fields.map(([key, label, ph, icon]) => (
+              <label key={key} className="block text-sm font-bold">
+                <span className="flex items-center gap-1.5"><Icon name={icon} size={15} className="w-accent-text" />{label}</span>
+                <input value={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.value })} placeholder={ph}
+                  type={key === "email" ? "email" : "text"} dir={key === "phone" || key === "email" ? "ltr" : "auto"}
+                  inputMode={key === "phone" ? "tel" : key === "email" ? "email" : undefined} autoCapitalize={key === "email" ? "none" : undefined}
+                  className="w-input mt-1.5 h-11 w-full rounded-xl px-4 text-base font-normal outline-none md:text-sm" />
+              </label>
+            ))}
+          </div>
+        </Section>
+        <button disabled={!dirty || busy} className="w-accent mt-3 w-full rounded-full py-3 font-bold disabled:opacity-40">{t(busy ? "جارٍ الحفظ..." : "حفظ")}</button>
+      </form>
+
+      {/* بيانات الجامعة: للعرض فقط */}
+      <Section title={t("بيانات الجامعة")}>
+        <div className="w-divide">
+          <ReadOnly label={t("الرقم الجامعي")} value={me.university_id || "—"} ltr />
+          <ReadOnly label={t("الدور")} value={t(ROLE_LABELS[me.role] ?? me.role)} />
+          <ReadOnly label={t("اسم المستخدم")} value={`@${me.username}`} ltr />
+        </div>
+        <p className="w-muted mt-2 flex items-center gap-1.5 text-xs"><Icon name="lock" size={12} />{t("يغيّرها الإداري فقط")}</p>
+      </Section>
+    </>
+  );
+}
+
+function ReadOnly({ label, value, ltr }: { label: string; value: string; ltr?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5">
+      <span className="w-muted text-sm">{label}</span>
+      <span className="truncate font-bold" dir={ltr ? "ltr" : "auto"}>{value}</span>
+    </div>
+  );
+}
+
+/** اختيار واحد من قائمة (المظهر، اللغة) */
+function Choice({ label, selected, onClick, icon, lang }: { label: string; selected: boolean; onClick: () => void; icon?: IconName; lang?: string }) {
+  return (
+    <button role="radio" aria-checked={selected} onClick={onClick} lang={lang} className="w-hover flex w-full items-center gap-3 px-4 py-3.5 text-start font-semibold">
+      {icon && <Icon name={icon} size={20} className="w-accent-text" />}
+      <span className="flex-1">{label}</span>
+      <span className={`grid h-6 w-6 place-items-center rounded-full ${selected ? "w-accent" : "border-2 border-[var(--divider)]"}`}>{selected && <Icon name="check" size={14} strokeWidth={3} />}</span>
+    </button>
+  );
+}
+
+function AppearancePage() {
+  const t = useT();
+  const { me } = useWasl();
+  const { busy, run } = useSave();
+  return (
+    <Group>
+      <div role="radiogroup" aria-label={t("المظهر")} className="w-divide">
+        {modes.map((m) => (
+          <Choice key={m.value} label={t(m.label)} icon={m.icon} selected={me.mode === m.value}
+            onClick={() => !busy && me.mode !== m.value && run(() => auth.updateMe({ mode: m.value }))} />
+        ))}
+      </div>
+    </Group>
+  );
+}
+
+function LanguagePage() {
+  const t = useT();
+  const { me } = useWasl();
+  const { busy, run } = useSave();
+  return (
+    <>
+      <p className="w-muted mb-1 mt-3 px-1 text-xs leading-6">{t("تتغير النصوص واتجاه الواجهة فوراً.")}</p>
+      <Group>
+        <div role="radiogroup" aria-label={t("اللغة")} className="w-divide">
+          {LANGS.map((l) => (
+            <Choice key={l.value} label={l.label} lang={l.value} selected={me.language === l.value}
+              onClick={() => { if (busy || me.language === l.value) return; setLang(l.value); run(() => auth.updateMe({ language: l.value })); }} />
+          ))}
+        </div>
+      </Group>
+    </>
+  );
+}
+
+function NotificationsPage() {
+  const t = useT();
+  const { me } = useWasl();
+  const { busy, run } = useSave();
+  return (
+    <Section>
+      <PushToggle />
+      <div className="w-line mt-3 flex items-center gap-3 border-t pt-3">
+        <Icon name="eye" size={20} className="w-accent-text" />
+        <div className="flex-1">
+          <p className="font-bold">{t("إخفاء محتوى الإشعار")}</p>
+          <p className="w-muted text-xs leading-5">{t("يظهر \"رسالة جديدة\" فقط، دون اسم المرسل أو النص")}</p>
+        </div>
+        <Toggle on={me.hide_preview} label={t("إخفاء محتوى الإشعار")} onChange={(v) => !busy && run(() => auth.updateMe({ hide_preview: v }))} />
+      </div>
+    </Section>
   );
 }
 

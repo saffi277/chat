@@ -68,6 +68,11 @@ function Shell() {
   const { theme, tab, activeId, convs, panel, storyViewer, call, toast } = useWasl();
   useT(); // يعيد رسم الهيكل كله عند تغيير اللغة
   useVisibleViewport();
+  // لون شريط الحالة في الهاتف يتبع وضع التطبيق (لا وضع الجهاز)
+  useEffect(() => {
+    const color = theme === "dark" ? "#121726" : "#f6f6fb";
+    document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute("content", color));
+  }, [theme]);
   const active = convs.find((c) => c.id === activeId);
   return (
     <div className="wasl wasl-shell overflow-hidden" data-theme={theme}>

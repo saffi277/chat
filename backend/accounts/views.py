@@ -2,8 +2,9 @@ from django.contrib.auth import authenticate, get_user_model
 from django.db.models import Exists, OuterRef, Q
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext as _
-from rest_framework import generics, status
+from rest_framework import generics, serializers, status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
@@ -79,7 +80,16 @@ def me(request):
         # partial=True: نعدل بس الحقول اللي انرسلت
         serializer = ProfileUpdateSerializer(profile, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
+        # البريد الجامعي في جدول المستخدم لا الملف الشخصي: نتحقق منه قبل حفظ أي شيء
+        email = request.data.get('email') if hasattr(request.data, 'get') else None
+        if email is not None:
+            email = serializers.EmailField(allow_blank=True).run_validation(str(email).strip())
+            if email and User.objects.filter(email__iexact=email).exclude(pk=request.user.pk).exists():
+                raise ValidationError({'email': _('هذا البريد مسجّل بحساب آخر')})
         serializer.save()
+        if email is not None and email != request.user.email:
+            request.user.email = email
+            request.user.save(update_fields=['email'])
         # إذا تبدلت الصورة أو انمسحت، نمسح الملف القديم حتى ما يتكدس
         if old_avatar and old_avatar != (profile.avatar.name if profile.avatar else None):
             profile.avatar.storage.delete(old_avatar)
