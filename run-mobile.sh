@@ -9,7 +9,7 @@
 # الإيقاف: Ctrl+C (يوقف كل شيء معاً).
 # لماذا https؟ المتصفحات لا تسمح بالمايكروفون والكاميرا والإشعارات إلا عبر اتصال آمن.
 # ملاحظة: رسائل الطرفية بالإنجليزية لأن أغلب الطرفيات (ومنها طرفية VS Code) لا تعرض العربية من اليمين إلى اليسار.
-set -euo pipefail
+set -Eeuo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 LOGS="$ROOT/.run"
@@ -26,6 +26,8 @@ done
 say() { printf '\n\033[1;32m▶ %s\033[0m\n' "$1"; }
 warn() { printf '\n\033[1;33m! %s\033[0m\n' "$1"; }
 die() { printf '\n\033[1;31m✖ %s\033[0m\n' "$1"; exit 1; }
+# أي خطأ غير متوقع يُطبع مع رقم السطر بدل أن يخرج السكربت بصمت
+trap 'printf "\n\033[1;31m✖ Unexpected error at line %s (logs: %s)\033[0m\n" "$LINENO" "$LOGS" >&2' ERR
 
 command -v node >/dev/null || die "Node.js is not installed. Install it first: https://nodejs.org"
 PY=python3; command -v $PY >/dev/null || die "Python 3 is not installed."
@@ -33,13 +35,26 @@ PY=python3; command -v $PY >/dev/null || die "Python 3 is not installed."
 # ---------------------------------------------------------------- المنافذ: من يشغلها؟
 port_busy() { (echo >"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 
-# رقم البرنامج الذي يستمع على المنفذ (lsof أو ss، أيهما متوفر)
+# رقم البرنامج الذي يستمع على المنفذ (lsof أو ss أو fuser، أيها متوفر).
+# يعيد فراغاً إن لم يُعرف (مثلاً: البرنامج لمستخدم آخر كـ root أو Docker، فلا نراه دون صلاحيات)
 port_pid() {
+  local pid=""
   if command -v lsof >/dev/null; then
-    lsof -t -iTCP:"$1" -sTCP:LISTEN 2>/dev/null | head -1
-  elif command -v ss >/dev/null; then
-    ss -ltnpH "sport = :$1" 2>/dev/null | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2
+    pid="$(lsof -t -iTCP:"$1" -sTCP:LISTEN 2>/dev/null | head -1 || true)"
   fi
+  if [ -z "$pid" ] && command -v ss >/dev/null; then
+    pid="$(ss -ltnpH "sport = :$1" 2>/dev/null | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2 || true)"
+  fi
+  if [ -z "$pid" ] && command -v fuser >/dev/null; then
+    pid="$(fuser "$1/tcp" 2>/dev/null | awk '{print $1}' || true)"
+  fi
+  echo "$pid"
+}
+
+# حاوية Docker تنشر هذا المنفذ؟ (من تشغيل سابق لـ deploy/start.sh)
+docker_on_port() {
+  command -v docker >/dev/null || return 0
+  docker ps --format '{{.Names}} {{.Ports}}' 2>/dev/null | grep -E ":$1->" | awk '{print $1}' | head -1 || true
 }
 
 # هل هو خادم سابق من هذا المشروع؟ (Django أو Next.js أو النفق، أو يعمل من داخل مجلد المشروع)
@@ -48,7 +63,7 @@ is_ours() {
   args="$(ps -o args= -p "$pid" 2>/dev/null || true)"
   cwd="$(readlink "/proc/$pid/cwd" 2>/dev/null || true)"
   [[ "$cwd" == "$ROOT"* || "$args" == *"$ROOT"* ]] && return 0
-  [[ "$args" =~ manage\.py\ runserver|daphne|uvicorn|gunicorn|next-server|next\ start|cloudflared ]]
+  [[ "$args" =~ manage\.py\ runserver|daphne|uvicorn|gunicorn|next-server|next\ start|next\ dev|cloudflared ]]
 }
 
 free_port() {
@@ -56,7 +71,15 @@ free_port() {
   port_busy "$port" || return 0
   pid="$(port_pid "$port")"
   if [ -z "$pid" ]; then
-    die "Port $port is in use by another program. Stop it (e.g. 'fuser -k $port/tcp') and try again."
+    local container
+    container="$(docker_on_port "$port")"
+    if [ -n "$container" ]; then
+      die "Port $port is used by the Docker container '$container' (from deploy/start.sh). Stop it with: (cd deploy && docker compose down), then try again."
+    fi
+    die "Port $port is in use by a program owned by another user (e.g. root or Docker), so it can't be identified without admin rights.
+  See what it is:   sudo lsof -i :$port
+  Stop it:          sudo fuser -k $port/tcp
+  Then run again:   ./run-mobile.sh --fast"
   fi
   args="$(ps -o args= -p "$pid" 2>/dev/null || echo '?')"
   warn "Port $port is in use by: $args (PID $pid)"
@@ -192,5 +215,5 @@ cat <<EOF
 EOF
 
 # نبقى نعمل حتى يتوقف أحد الأجزاء أو يضغط المستخدم Ctrl+C
-wait -n "${PIDS[@]}"
+wait -n "${PIDS[@]}" || true
 echo "One of the parts stopped. Check the logs in $LOGS/"
