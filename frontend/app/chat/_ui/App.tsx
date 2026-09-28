@@ -51,6 +51,9 @@ function useVisibleViewport() {
     const apply = () => {
       root.style.setProperty("--app-h", `${Math.round(vv.height)}px`);
       root.style.setProperty("--app-top", `${Math.round(vv.offsetTop)}px`);
+      // لوحة المفاتيح ظاهرة: الجزء الظاهر أقصر من الصفحة بوضوح (clientHeight لا يتقلص في iOS)
+      if (root.clientHeight - vv.height > 120) root.dataset.kb = "open";
+      else delete root.dataset.kb;
     };
     apply();
     vv.addEventListener("resize", apply);
@@ -60,6 +63,7 @@ function useVisibleViewport() {
       vv.removeEventListener("scroll", apply);
       root.style.removeProperty("--app-h");
       root.style.removeProperty("--app-top");
+      delete root.dataset.kb;
     };
   }, []);
 }

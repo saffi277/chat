@@ -224,6 +224,8 @@
 /* هيكل التطبيق بارتفاع الجزء الظاهر من الشاشة (يتقلص عند ظهور لوحة المفاتيح، انظر useVisibleViewport في App.tsx) */
 .wasl-shell { position: fixed; inset-inline: 0; top: var(--app-top, 0px); height: var(--app-h, 100dvh); }
 html:has(.wasl-shell), body:has(.wasl-shell) { overflow: hidden; overscroll-behavior: none; }
+/* لوحة المفاتيح تغطي مؤشر الشاشة الرئيسية، فلا حاجة إلى مسافته تحت خانة الكتابة (data-kb من useVisibleViewport) */
+html[data-kb="open"] .w-composer { padding-bottom: .5rem; }
 /*
  * ما خلف التطبيق (يظهر تحت لوحة المفاتيح حين يتقلص) بلون الوضع نفسه، و color-scheme يجعل الآيفون
  * يرسم لوحة مفاتيح داكنة في الوضع الليلي بدل البيضاء.

@@ -146,7 +146,7 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent }: {
   const hasText = text.trim().length > 0;
 
   return (
-    <div className="relative rounded-t-[26px] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 md:rounded-none md:border-t md:w-line"
+    <div className="w-composer relative rounded-t-[26px] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 md:rounded-none md:border-t md:w-line"
       style={{ background: "var(--panel)", boxShadow: "0 -6px 24px rgba(40, 36, 90, .06)" }}>
       {(reply || editing) && (
         <div className="w-card mb-2 flex items-center gap-3 rounded-xl border-s-4 px-3 py-2" style={{ borderColor: "var(--accent)" }}>
