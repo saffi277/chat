@@ -91,7 +91,7 @@ function Timer({ since }: { since: number }) {
 
 export function CallOverlay() {
   const t = useT();
-  const { call, acceptCall, declineCall, hangup, toggleMute, toggleCamera } = useWasl();
+  const { call, acceptCall, declineCall, hangup, toggleMute, toggleCamera, enableVideo } = useWasl();
   const [speaker, setSpeaker] = useState(true);
   const remoteAudio = useRef<HTMLAudioElement>(null);
   useEffect(() => {
@@ -109,7 +109,9 @@ export function CallOverlay() {
       : call.phase === "outgoing" ? t("يرنّ...")
         : call.phase === "connecting" ? t("جارٍ الاتصال...")
           : call.phase === "ended" ? call.endedText ?? t("انتهت المكالمة") : null;
-  const showVideo = video && call.phase === "active" && call.remote;
+  // نعرض الفيديو متى وصل مسار فيديو فعلاً (حتى لو بدأت المكالمة صوتية ثم تحوّلت)
+  const showVideo = call.phase === "active" && !!call.remote && !!call.remoteVideo;
+  const myCamera = !!call.local?.getVideoTracks().length;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-md">
@@ -117,7 +119,7 @@ export function CallOverlay() {
         style={{ border: "1px solid var(--border)", background: showVideo ? "#000" : undefined }}>
         {/* الصوت يخرج من عنصر audio في الأسفل، لذا الفيديو مكتوم كي لا يتكرر الصوت */}
         {showVideo && <Video stream={call.remote} muted className="absolute inset-0 h-full w-full object-cover" />}
-        {video && call.local && call.phase !== "ended" && (
+        {myCamera && call.local && call.phase !== "ended" && (
           <Video stream={call.local} muted className="absolute start-4 top-[max(1rem,env(safe-area-inset-top))] z-10 h-40 w-28 rounded-2xl object-cover shadow-xl" />
         )}
         <audio ref={remoteAudio} autoPlay />
@@ -143,7 +145,7 @@ export function CallOverlay() {
           </div>
         )}
 
-        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-6 p-6 pb-[max(2rem,env(safe-area-inset-bottom))]">
+        <div className={`absolute inset-x-0 bottom-0 flex flex-col items-center gap-6 p-6 pb-[max(2rem,env(safe-area-inset-bottom))] ${showVideo ? "text-white drop-shadow" : ""}`}>
           {call.phase === "incoming" ? (
             <div className="flex w-full justify-around">
               <button onClick={declineCall} className="grid justify-items-center gap-2 font-bold" aria-label={t("رفض")}>
@@ -157,11 +159,14 @@ export function CallOverlay() {
             <>
               <div className="flex gap-6">
                 <Ctl icon={call.muted ? "micOff" : "mic"} label={t(call.muted ? "إلغاء الكتم" : "كتم الصوت")} on={call.muted} onClick={toggleMute} />
-                {video ? (
+                {myCamera ? (
                   <Ctl icon={call.cameraOff ? "videoOff" : "video"} label={t(call.cameraOff ? "تشغيل الكاميرا" : "إيقاف الكاميرا")} on={call.cameraOff} onClick={toggleCamera} />
                 ) : (
-                  <Ctl icon="speaker" label={t("مكبّر الصوت")} on={speaker} onClick={() => setSpeaker((s) => !s)} />
+                  // مكالمة صوتية (أو فيديو لم أشغّل فيها كاميرتي بعد): زر للتحويل إلى فيديو
+                  <Ctl icon="video" label={t(video ? "تشغيل الكاميرا" : "فيديو")} on={false} onClick={enableVideo}
+                    disabled={call.phase !== "active" && call.phase !== "connecting"} />
                 )}
+                {!myCamera && <Ctl icon="speaker" label={t("مكبّر الصوت")} on={speaker} onClick={() => setSpeaker((s) => !s)} />}
               </div>
               <button onClick={hangup} aria-label={t("إنهاء المكالمة")} className="w-danger grid h-18 w-18 place-items-center rounded-full p-5 shadow-lg">
                 <Icon name="phoneOff" size={30} />
@@ -174,9 +179,9 @@ export function CallOverlay() {
   );
 }
 
-function Ctl({ icon, label, on, onClick }: { icon: "mic" | "micOff" | "video" | "videoOff" | "speaker"; label: string; on: boolean; onClick: () => void }) {
+function Ctl({ icon, label, on, onClick, disabled }: { icon: "mic" | "micOff" | "video" | "videoOff" | "speaker"; label: string; on: boolean; onClick: () => void; disabled?: boolean }) {
   return (
-    <button onClick={onClick} className="grid justify-items-center gap-1.5 text-xs font-bold" aria-label={label} aria-pressed={on}>
+    <button onClick={onClick} disabled={disabled} className="grid justify-items-center gap-1.5 text-xs font-bold disabled:opacity-40" aria-label={label} aria-pressed={on}>
       <span className={`grid h-16 w-16 place-items-center rounded-full ${on ? "w-accent" : "w-card"}`}><Icon name={icon} size={26} /></span>
       {label}
     </button>

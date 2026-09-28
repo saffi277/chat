@@ -51,6 +51,52 @@ class CallTests(TestCase):
         outsider = register('omar')
         self.assertEqual(outsider.post(f"/api/calls/{c2['id']}/answer/").status_code, 404)
 
+    def test_ringing_call_is_found_after_opening_from_a_notification(self, _):
+        self.assertIsNone(self.sara.get('/api/calls/ringing/').data['call'])
+        c = self.ali.post('/api/calls/', {'conversation_id': self.conv}, format='json').data
+        self.assertEqual(self.sara.get('/api/calls/ringing/').data['call']['id'], c['id'])
+        self.assertIsNone(self.ali.get('/api/calls/ringing/').data['call'])  # المتصل لا يرى مكالمته كواردة
+        self.sara.post(f"/api/calls/{c['id']}/answer/")
+        self.assertIsNone(self.sara.get('/api/calls/ringing/').data['call'])
+
+    def test_upgrade_to_video(self, _):
+        c = self.ali.post('/api/calls/', {'conversation_id': self.conv, 'kind': 'audio'}, format='json').data
+        self.assertEqual(self.ali.post(f"/api/calls/{c['id']}/video/").status_code, 400)  # قبل الرد
+        self.sara.post(f"/api/calls/{c['id']}/answer/")
+        self.assertTrue(self.ali.post(f"/api/calls/{c['id']}/video/").data['ok'])
+        self.assertEqual(Call.objects.get(pk=c['id']).kind, 'video')
+
+
+class IceServerTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.delete('turn_servers')
+
+    def test_stun_only_by_default(self):
+        from .views import ice_servers
+        with mock.patch.dict('os.environ', {}, clear=False):
+            for k in ('CLOUDFLARE_TURN_KEY_ID', 'TURN_CREDENTIALS_URL', 'TURN_URLS'):
+                __import__('os').environ.pop(k, None)
+            servers = ice_servers()
+        self.assertTrue(all(str(u).startswith('stun:') for s in servers for u in s['urls']))
+
+    def test_turn_from_environment(self):
+        from .views import ice_servers
+        env = {'TURN_URLS': 'turn:turn.example.com:3478,turns:turn.example.com:5349', 'TURN_USERNAME': 'u', 'TURN_CREDENTIAL': 'p'}
+        with mock.patch.dict('os.environ', env):
+            turn = ice_servers()[-1]
+        self.assertEqual((turn['urls'][0], turn['username'], turn['credential']), ('turn:turn.example.com:3478', 'u', 'p'))
+
+    def test_cloudflare_turn_credentials(self):
+        from .views import ice_servers
+        reply = mock.MagicMock()
+        reply.__enter__.return_value = __import__('io').BytesIO(b'{"iceServers": [{"urls": ["turn:turn.cloudflare.com:3478"], "username": "x", "credential": "y"}]}')
+        env = {'CLOUDFLARE_TURN_KEY_ID': 'k', 'CLOUDFLARE_TURN_API_TOKEN': 't'}
+        with mock.patch.dict('os.environ', env), mock.patch('urllib.request.urlopen', return_value=reply) as urlopen:
+            turn = ice_servers()[-1]
+        self.assertEqual(turn['username'], 'x')
+        self.assertIn('/turn/keys/k/credentials/', urlopen.call_args.args[0].full_url)
+
 
 class SignalingTests(TransactionTestCase):
     async def test_signal_relayed_only_within_call(self):

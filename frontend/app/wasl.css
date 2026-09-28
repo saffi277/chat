@@ -210,5 +210,20 @@
 @media (min-width: 1024px) and (max-height: 780px) { .p-fit { zoom: .75; } }
 @media (min-width: 1024px) and (max-height: 730px) { .p-fit { zoom: .7; } }
 
+/* صفحة الدخول في الهاتف: ثابتة بارتفاع الشاشة، لا تمرير ولا ارتداد (البطاقة تُصغَّر لتتسع، انظر useFitToScreen) */
+@media (max-width: 1023px) {
+  html:has(.portal), body:has(.portal) { overflow: hidden; overscroll-behavior: none; height: 100%; }
+}
+/* الهواتف القصيرة (مثل iPhone SE): نصغّر الشعار والبلاطات فقط، ليبقى حجم النص مريحاً للقراءة */
+@media (max-width: 1023px) and (max-height: 760px) {
+  .portal .p-logo { zoom: .72; }
+  .portal .p-tile { padding-block: .6rem; gap: .3rem; }
+  .portal h1.p-welcome { margin-top: .75rem; }
+}
+
+/* هيكل التطبيق بارتفاع الجزء الظاهر من الشاشة (يتقلص عند ظهور لوحة المفاتيح، انظر useVisibleViewport في App.tsx) */
+.wasl-shell { position: fixed; inset-inline: 0; top: var(--app-top, 0px); height: var(--app-h, 100dvh); }
+html:has(.wasl-shell), body:has(.wasl-shell) { overflow: hidden; overscroll-behavior: none; }
+
 /* الواجهة الإنجليزية (من اليسار إلى اليمين): أيقونات الاتجاه (رجوع، التالي، رد) تنعكس */
 [dir="ltr"] .dir-icon { transform: scaleX(-1); }

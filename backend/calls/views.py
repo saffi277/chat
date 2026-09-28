@@ -1,6 +1,11 @@
+import json
+import logging
+import os
+import urllib.request
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone, translation
@@ -18,6 +23,7 @@ from notifications.push import in_language, send_to_user
 from .models import Call
 
 RING_TIMEOUT = timedelta(seconds=60)
+log = logging.getLogger('notifications')
 
 
 class CallSerializer(serializers.ModelSerializer):
@@ -51,8 +57,48 @@ class CallSerializer(serializers.ModelSerializer):
 
 
 def ice_servers():
-    # STUN = خادم يساعد الجهاز يعرف عنوانه على الإنترنت. للشبكات الصعبة نحتاج TURN (بالإنتاج)
-    return getattr(settings, 'ICE_SERVERS', [{'urls': ['stun:stun.l.google.com:19302']}])
+    """
+    STUN: يساعد الجهاز على معرفة عنوانه على الإنترنت (يكفي على الشبكة نفسها وكثير من الشبكات المنزلية).
+    TURN: خادم ترحيل يمرّر الصوت والصورة عندما لا يصل الجهازان إلى بعضهما مباشرة
+    (مثلاً: هاتف على بيانات الجوال وحاسوب على واي فاي). يُفعَّل بإحدى الطرق التالية في متغيرات البيئة:
+      1) CLOUDFLARE_TURN_KEY_ID + CLOUDFLARE_TURN_API_TOKEN  (بيانات دخول مؤقتة من Cloudflare)
+      2) TURN_CREDENTIALS_URL  (رابط يعيد قائمة iceServers بصيغة JSON، مثل خدمة Metered)
+      3) TURN_URLS (مفصولة بفواصل) + TURN_USERNAME + TURN_CREDENTIAL  (خادم TURN خاص، مثل coturn)
+    """
+    servers = list(getattr(settings, 'ICE_SERVERS', [{'urls': ['stun:stun.l.google.com:19302']}]))
+    return servers + turn_servers()
+
+
+def turn_servers():
+    cached = cache.get('turn_servers')
+    if cached is not None:
+        return cached
+    result, ttl = [], 3600
+    try:
+        key_id, token = os.environ.get('CLOUDFLARE_TURN_KEY_ID'), os.environ.get('CLOUDFLARE_TURN_API_TOKEN')
+        creds_url = os.environ.get('TURN_CREDENTIALS_URL')
+        if key_id and token:
+            req = urllib.request.Request(
+                f'https://rtc.live.cloudflare.com/v1/turn/keys/{key_id}/credentials/generate-ice-servers',
+                data=json.dumps({'ttl': 86400}).encode(), method='POST',
+                headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'})
+            with urllib.request.urlopen(req, timeout=5) as r:
+                data = json.load(r).get('iceServers')
+            result = data if isinstance(data, list) else [data] if data else []
+            ttl = 12 * 3600  # بيانات الدخول صالحة 24 ساعة، فنجددها قبل انتهائها بوقت كافٍ
+        elif creds_url:
+            with urllib.request.urlopen(creds_url, timeout=5) as r:
+                data = json.load(r)
+            result = data if isinstance(data, list) else data.get('iceServers', [])
+        elif os.environ.get('TURN_URLS'):
+            result = [{'urls': [u.strip() for u in os.environ['TURN_URLS'].split(',') if u.strip()],
+                       'username': os.environ.get('TURN_USERNAME', ''),
+                       'credential': os.environ.get('TURN_CREDENTIAL', '')}]
+    except Exception as exc:  # خدمة TURN لا تستجيب: نكمل بـ STUN بدل أن تفشل المكالمة كلها
+        log.warning('TURN credentials failed: %s', exc)
+        ttl = 60
+    cache.set('turn_servers', result, ttl)
+    return result
 
 
 def expire_ringing():
@@ -159,3 +205,30 @@ def end(request, pk):
 @api_view(['GET'])
 def ice(request):
     return Response({'ice_servers': ice_servers()})
+
+
+@api_view(['GET'])
+def ringing(request):
+    """
+    المكالمة التي ترنّ لي الآن: {"call": {...}} أو {"call": null}. يسأل عنها التطبيق عند فتحه من إشعار مكالمة،
+    أو عند عودة الاتصال، لأن حدث call_incoming ربما وصل وهو مغلق.
+    """
+    expire_ringing()
+    call = (Call.objects.filter(conversation__memberships__user=request.user, status=Call.RINGING)
+            .exclude(caller=request.user).select_related('caller__profile', 'conversation')
+            .order_by('-created_at').first())
+    return Response({'call': CallSerializer(call, context={'request': request}).data if call else None})
+
+
+@api_view(['POST'])
+def upgrade_video(request, pk):
+    """تحويل المكالمة الصوتية إلى فيديو (أثناءها): نحدّث نوعها ليظهر صحيحاً في السجل، ونبلغ الطرف الآخر."""
+    call = my_call(request, pk)
+    if call.status != Call.ONGOING:
+        raise ValidationError(_('انتهت المكالمة'))
+    if call.kind != Call.VIDEO:
+        call.kind = Call.VIDEO
+        call.save(update_fields=['kind'])
+    send_to_users([uid for uid in member_ids(call.conversation) if uid != request.user.id],
+                  {'type': 'call_video', 'call_id': call.id, 'user_id': request.user.id})
+    return Response({'ok': True})

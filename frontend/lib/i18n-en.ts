@@ -3,6 +3,7 @@
  * عند إضافة نص جديد في الواجهة أضف ترجمته هنا (وإلا يظهر بالعربية في الواجهة الإنجليزية).
  */
 export const EN: Record<string, string> = {
+  "تعذّر الاتصال بين الشبكتين. جرّبا على شبكة الواي فاي نفسها، أو فعّل خادم TURN.": "Couldn't connect across these networks. Try both devices on the same Wi-Fi, or enable a TURN server.",
   "سيصل إشعار تجريبي خلال 5 ثوانٍ. أغلق التطبيق أو اقفل الشاشة الآن.": "A test notification will arrive in 5 seconds. Close the app or lock the screen now.",
   "انتهى اشتراك هذا الجهاز. أوقف الإشعارات ثم فعّلها من جديد.": "This device's subscription has expired. Turn notifications off, then on again.",
   "رفضت خدمة الإشعارات ({host}) الإرسال: {status} {reason}": "The notification service ({host}) rejected the message: {status} {reason}",

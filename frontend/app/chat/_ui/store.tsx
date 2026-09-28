@@ -34,6 +34,7 @@ export type CallUI = {
   session: CallSession | null;
   local: MediaStream | null;
   remote: MediaStream | null;
+  remoteVideo?: boolean; // يصل من الطرف الآخر فيديو فعلاً (قد تبدأ المكالمة صوتية ثم تتحول)
   startedAt: number | null;
   muted: boolean;
   cameraOff: boolean;
@@ -70,6 +71,7 @@ type Ctx = {
   hangup: () => Promise<void>;
   toggleMute: () => void;
   toggleCamera: () => void;
+  enableVideo: () => void;
   // الموقع المباشر
   startLiveShare: (msg: Message) => void;
   stopLiveShare: (msgId: number) => Promise<void>;
@@ -154,12 +156,36 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
 
   const handlers = useCallback(() => ({
     onLocalStream: (s: MediaStream) => setCall((c) => (c ? { ...c, local: s } : c)),
-    onRemoteStream: (s: MediaStream) => setCall((c) => (c ? { ...c, remote: s } : c)),
+    onRemoteStream: (s: MediaStream) => setCall((c) => (c ? { ...c, remote: s, remoteVideo: s.getVideoTracks().some((tr) => tr.readyState === "live" && !tr.muted) } : c)),
     onState: (state: RTCPeerConnectionState) => {
       if (state === "connected") setCall((c) => (c ? { ...c, phase: "active", startedAt: c.startedAt ?? Date.now() } : c));
       if (state === "failed") endCallUI(t("تعذّر الاتصال"));
     },
   }), [endCallUI]);
+
+  // مكالمة ترنّ لي ولم يصلني حدثها (التطبيق كان مغلقاً وفُتح من إشعار المكالمة، أو انقطع الاتصال): نسأل الخادم
+  const checkRinging = useCallback(async () => {
+    if (callRef.current && callRef.current.phase !== "ended") return;
+    const ringing = await calls.ringing().catch(() => null);
+    if (ringing?.id && !(callRef.current && callRef.current.phase !== "ended")) {
+      setCall({ phase: "incoming", call: ringing, peer: ringing.caller, session: null, local: null, remote: null, startedAt: null, muted: false, cameraOff: false });
+    }
+  }, []);
+
+  // «جارٍ الاتصال» لا يبقى للأبد: إن لم يتصل الجهازان خلال 25 ثانية فالشبكتان تحتاجان خادم ترحيل (TURN)
+  useEffect(() => {
+    if (call?.phase !== "connecting") return;
+    const id = call.call.id;
+    const timer = setTimeout(() => {
+      const cur = callRef.current;
+      if (cur?.phase !== "connecting" || cur.call.id !== id) return;
+      const s = sessionRef.current;
+      sessionRef.current = null;
+      (s ? s.hangup() : calls.end(id).catch(() => {})).finally(() =>
+        endCallUI(t("تعذّر الاتصال بين الشبكتين. جرّبا على شبكة الواي فاي نفسها، أو فعّل خادم TURN.")));
+    }, 25000);
+    return () => clearTimeout(timer);
+  }, [call?.phase, call?.call.id, endCallUI]);
 
   // ------------------------------------------------ أول تحميل + الاتصال العام
   useEffect(() => {
@@ -178,6 +204,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
         setStories(s);
         if (c.some((x) => x.id === wanted)) setActiveId(wanted);
         syncPushSubscription();
+        checkRinging(); // فُتح التطبيق من إشعار مكالمة؟ نعرضها مباشرة للرد
       })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) signOut();
@@ -222,6 +249,11 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
           }
           break;
         }
+        case "call_video": {
+          // الطرف الآخر شغّل الكاميرا: نعرض واجهة الفيديو (وزر "تشغيل الكاميرا" لنا)
+          setCall((c) => (c && c.call.id === e.call_id ? { ...c, call: { ...c.call, kind: "video" } } : c));
+          break;
+        }
         case "call_ended": {
           const cur = callRef.current;
           if (cur && cur.call.id === e.call_id && cur.phase !== "ended") {
@@ -235,10 +267,30 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
           break;
         }
       }
-    }, { onOpen: (again) => { if (again) { softRefreshConvs(); usersApi.list().then(setUsers); } } });
+    }, { onOpen: (again) => { if (again) { softRefreshConvs(); usersApi.list().then(setUsers); checkRinging(); } } });
     socketRef.current = socket;
-    return () => socket.close();
-  }, [router, signOut, endCallUI]);
+
+    // الضغط على إشعار والتطبيق مفتوح: الـ Service Worker يرسل الرابط بدل إعادة تحميل الصفحة
+    const onSwMessage = (ev: MessageEvent) => {
+      if (ev.data?.type !== "open") return;
+      const params = new URL(ev.data.url, window.location.origin).searchParams;
+      const conv = Number(params.get("c"));
+      if (conv) {
+        setActiveId(conv);
+        window.history.replaceState(null, "", `/chat?c=${conv}`);
+      }
+      if (params.get("call")) checkRinging();
+    };
+    // عند العودة إلى التطبيق من الخلفية قد تكون هناك مكالمة ترنّ
+    const onVisible = () => document.visibilityState === "visible" && checkRinging();
+    navigator.serviceWorker?.addEventListener("message", onSwMessage);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      socket.close();
+      navigator.serviceWorker?.removeEventListener("message", onSwMessage);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [router, signOut, endCallUI, checkRinging]);
 
   // ------------------------------------------------ مساعدات
   const userById = useCallback((id: number) => users.find((u) => u.id === id) ?? (me?.id === id ? me : undefined), [users, me]);
@@ -333,6 +385,19 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     const cur = callRef.current;
     if (cur?.session) setCall({ ...cur, cameraOff: cur.session.toggleCamera() });
   }, []);
+  // تحويل المكالمة الصوتية إلى فيديو (أو تشغيل كاميرتي بعد أن حوّلها الطرف الآخر)
+  const enableVideo = useCallback(async () => {
+    const cur = callRef.current;
+    const s = cur?.session;
+    if (!cur || !s) return;
+    try {
+      const local = await s.enableVideo();
+      setCall((c) => (c ? { ...c, local, cameraOff: false, call: { ...c.call, kind: "video" } } : c));
+      if (cur.call.kind !== "video") calls.video(cur.call.id).catch(() => {});
+    } catch (err) {
+      notify(callError(err, "video"));
+    }
+  }, [notify]);
 
   // ------------------------------------------------ الموقع المباشر: نحدّثه كل ما الجهاز يتحرك
   const stopWatch = useCallback((msgId: number) => {
@@ -378,7 +443,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
   const value: Ctx = {
     me, users, convs, stories, theme, tab, setTab, activeId, openConv, openWith, openSaved, panel, setPanel,
     storyViewer, setStoryViewer, userById, otherOf, refreshConvs, refreshStories, updateMe, signOut,
-    call, startCall, acceptCall, declineCall, hangup, toggleMute, toggleCamera,
+    call, startCall, acceptCall, declineCall, hangup, toggleMute, toggleCamera, enableVideo,
     startLiveShare, stopLiveShare, liveShares, toast, notify,
   };
   return <WaslContext.Provider value={value}>{children}</WaslContext.Provider>;

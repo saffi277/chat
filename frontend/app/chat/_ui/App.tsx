@@ -5,6 +5,7 @@
  *  - في الحاسوب: عمودان: القائمة في البداية (يمين العربية/يسار الإنجليزية) والمحادثة بجانبها، والتفاصيل تظهر كلوحة جانبية.
  * الوضع (نهاري/ليلي) يُحدَّد بـ data-theme، والألوان كلها في app/wasl.css
  */
+import { useEffect } from "react";
 import { useT } from "@/lib/i18n";
 import { CallOverlay, CallsView } from "./Calls";
 import { ChatList, NavBar } from "./ChatList";
@@ -37,12 +38,39 @@ function Splash() {
   );
 }
 
+/**
+ * لوحة المفاتيح في الآيفون لا تُصغّر الصفحة بل تدفعها للأعلى، فتختفي ترويسة المحادثة.
+ * الحل: نجعل التطبيق بارتفاع الجزء الظاهر فعلاً من الشاشة (visualViewport) وفي موضعه،
+ * فتبقى الترويسة ثابتة وتتقلّص الرسائل فوق اللوحة (كما في واتساب).
+ */
+function useVisibleViewport() {
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const root = document.documentElement;
+    const apply = () => {
+      root.style.setProperty("--app-h", `${Math.round(vv.height)}px`);
+      root.style.setProperty("--app-top", `${Math.round(vv.offsetTop)}px`);
+    };
+    apply();
+    vv.addEventListener("resize", apply);
+    vv.addEventListener("scroll", apply);
+    return () => {
+      vv.removeEventListener("resize", apply);
+      vv.removeEventListener("scroll", apply);
+      root.style.removeProperty("--app-h");
+      root.style.removeProperty("--app-top");
+    };
+  }, []);
+}
+
 function Shell() {
   const { theme, tab, activeId, convs, panel, storyViewer, call, toast } = useWasl();
   useT(); // يعيد رسم الهيكل كله عند تغيير اللغة
+  useVisibleViewport();
   const active = convs.find((c) => c.id === activeId);
   return (
-    <div className="wasl h-dvh overflow-hidden" data-theme={theme}>
+    <div className="wasl wasl-shell overflow-hidden" data-theme={theme}>
       <div className="mx-auto flex h-full max-w-[1600px]">
         <aside className={`${active ? "hidden md:flex" : "flex"} w-line relative w-full shrink-0 flex-col overflow-hidden md:w-[400px] md:border-e`}
           style={{ background: "var(--panel)" }}>

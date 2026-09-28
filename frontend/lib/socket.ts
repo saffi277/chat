@@ -19,6 +19,7 @@ export type ChatEvent =
   | { type: "call_incoming"; call: Call }
   | { type: "call_answered"; call_id: number; user_id: number }
   | { type: "call_ended"; call_id: number; status: Call["status"] }
+  | { type: "call_video"; call_id: number; user_id: number } // الطرف الآخر حوّل المكالمة إلى فيديو
   | { type: "call.signal"; call_id: number; from: number; data: CallSignal };
 
 export type CallSignal =

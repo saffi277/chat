@@ -39,9 +39,13 @@ self.addEventListener("notificationclick", (event) => {
   const url = new URL(event.notification.data?.url || "/chat", self.location.origin).href;
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      // إن كان التطبيق مفتوحاً في تبويب ننتقل إليه بدل فتح تبويب جديد
+      // إن كان التطبيق مفتوحاً (ولو في الخلفية): نركّز عليه ونرسل له الرابط ليفتح المحادثة أو المكالمة بنفسه،
+      // دون إعادة تحميل الصفحة (إعادة التحميل كانت تُضيع نافذة المكالمة الواردة)
       const existing = clients.find((c) => new URL(c.url).pathname.startsWith("/chat"));
-      if (existing) return existing.focus().then((c) => (c && "navigate" in c ? c.navigate(url) : self.clients.openWindow(url)));
+      if (existing) {
+        existing.postMessage({ type: "open", url });
+        return existing.focus();
+      }
       return self.clients.openWindow(url);
     }),
   );

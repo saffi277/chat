@@ -6,10 +6,11 @@
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useSyncExternalStore } from "react";
+import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ROLE_LABELS, saveSession, type Role } from "@/lib/api";
 import { auth } from "@/lib/endpoints";
 import { getLang, setLang, useLang, useT } from "@/lib/i18n";
+import { isStandalone } from "@/lib/permissions";
 import { Icon, type IconName } from "./chat/_ui/icons";
 
 const ROLES: Role[] = ["student", "faculty", "staff"];
@@ -55,7 +56,7 @@ function Logo({ size, night }: { size: number; night: boolean }) {
     // الشعار (خلفيته شفافة) + الشريط الذهبي تحته مرسوم بالكود ليبقى حاداً في كل المقاسات.
     // في الوضع الليلي نستخدم logo-dark.png: داخل القوس أبيض والخط العربي فاتح (كما في التصميم)
     return (
-      <div className="mx-auto flex w-fit flex-col items-stretch" style={{ height: size }}>
+      <div className="p-logo mx-auto flex w-fit flex-col items-stretch" style={{ height: size }}>
         {/* eslint-disable-next-line @next/next/no-img-element -- شعار الكلية من public/brand */}
         <img src={night ? "/brand/logo-dark.png" : "/brand/logo.png"} alt={t("كلية الأسباط الجامعة")} className="w-auto" style={{ height: size * 0.9 }} />
         <span className="mt-auto grid place-items-center whitespace-nowrap font-extrabold uppercase leading-none text-white"
@@ -68,7 +69,7 @@ function Logo({ size, night }: { size: number; night: boolean }) {
   if (state === "loading") return <div style={{ height: size }} />;
   // شعار مؤقت: قوس + كتاب + اسم الكلية (يُستبدل تلقائياً عند وضع logo.png)
   return (
-    <div className="mx-auto grid justify-items-center" style={{ height: size }} aria-label={t("كلية الأسباط الجامعة")}>
+    <div className="p-logo mx-auto grid justify-items-center" style={{ height: size }} aria-label={t("كلية الأسباط الجامعة")}>
       <svg viewBox="0 0 80 80" style={{ height: size * 0.72 }} aria-hidden="true">
         <path d="M14 76V34Q14 12 40 4Q66 12 66 34V76Z" fill="var(--p-green)" />
         <path d="M22 76V36Q22 20 40 13Q58 20 58 36V76Z" fill="var(--p-card)" />
@@ -81,6 +82,44 @@ function Logo({ size, night }: { size: number; night: boolean }) {
   );
 }
 
+// ------------------------------------------------------------ ملاءمة الشاشة في الهاتف
+/**
+ * في الهاتف تبقى الصفحة بارتفاع الشاشة دون أي تمرير: إن كانت البطاقة أطول من المساحة المتاحة
+ * (هاتف قصير، أو صفحة التسجيل بحقولها الأكثر) نصغّرها بالنسبة المطلوبة بالضبط.
+ * لا نعيد الحساب عند ظهور لوحة المفاتيح (الإطار بارتفاع 100dvh الذي لا يتغير معها).
+ * في الحاسوب تتولى ذلك قواعد ‎.p-fit‎ في wasl.css.
+ */
+function useFitToScreen() {
+  const frame = useRef<HTMLDivElement>(null);
+  const card = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const box = frame.current, el = card.current;
+    if (!box || !el) return;
+    const fit = () => {
+      if (window.innerWidth >= 1024) {
+        el.style.zoom = "";
+        return;
+      }
+      el.style.zoom = "1";
+      const style = getComputedStyle(box);
+      const room = box.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      const need = el.offsetHeight;
+      el.style.zoom = need > room ? String(Math.max(0.6, Math.floor((room / need) * 1000) / 1000)) : "1";
+    };
+    fit();
+    // الإطار (دوران الشاشة) والبطاقة نفسها (تغيير اللغة، ظهور رسالة خطأ) كلاهما يعيد الحساب
+    const ro = new ResizeObserver(fit);
+    ro.observe(box);
+    ro.observe(el);
+    window.addEventListener("orientationchange", fit);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("orientationchange", fit);
+    };
+  }, []);
+  return { frame, card };
+}
+
 // ------------------------------------------------------------ الصفحة
 export default function AuthForm({ mode }: { mode: "login" | "register" }) {
   const theme = useSyncExternalStore(subscribeMode, readMode, () => "light" as const);
@@ -89,9 +128,10 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
   const night = theme === "dark";
   const t = useT();
   const lang = useLang();
+  const { frame, card } = useFitToScreen();
 
   return (
-    <main className="portal relative min-h-dvh overflow-x-hidden" data-theme={theme}>
+    <main className="portal relative h-dvh overflow-hidden lg:h-auto lg:min-h-dvh lg:overflow-x-hidden" data-theme={theme}>
       {/* صورة الحرم تملأ الشاشة (في الحاسوب)، وفي الهاتف خلفية ناعمة داكنة/فاتحة */}
       {/* للصورتين القص والقياس نفسهما تماماً (الليلية محاذية على النهارية)، فيكون التبديل تلاشياً ناعماً دون أن يتحرك المبنى */}
       {(["day", "night"] as const).map((photo) => (
@@ -103,7 +143,8 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
         <path d="M600 110 C 460 130 360 250 350 700" fill="none" stroke="var(--p-gold)" strokeWidth="1" opacity=".22" />
       </svg>
 
-      <div className="absolute left-4 top-4 z-20 flex gap-2 lg:left-6 lg:top-6" dir="ltr">
+      {/* في الهاتف: تحت شريط الحالة (الساعة والبطارية) لا فوقه */}
+      <div className="absolute left-4 top-[max(0.75rem,env(safe-area-inset-top))] z-20 flex gap-2 lg:left-6 lg:top-6" dir="ltr">
         <button onClick={() => setMode(night ? "light" : "dark")} aria-label={t(night ? "الوضع النهاري" : "الوضع الليلي")}
           className="p-card grid h-10 w-10 place-items-center rounded-full">
           <Icon name={night ? "sun" : "moon"} size={18} />
@@ -117,8 +158,9 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
       </div>
 
       {/* البطاقة: يمين الشاشة في الحاسوب (بالعربية والإنجليزية، كي لا تغطي المبنى)، وفي الوسط في الهاتف */}
-      <div className="relative z-10 flex min-h-dvh items-center justify-center px-4 pb-8 pt-16 lg:px-[5vw] lg:py-8 rtl:lg:justify-start ltr:lg:justify-end">
-        <section className="p-card p-fit w-full max-w-[540px] rounded-[30px] px-5 py-7 sm:px-10 sm:py-8">
+      {/* في الهاتف: الإطار بارتفاع الشاشة تماماً والبطاقة تُصغَّر لتتسع فيه (useFitToScreen)، فلا تمرير إطلاقاً */}
+      <div ref={frame} className="relative z-10 flex h-full items-center justify-center px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[calc(max(0.75rem,env(safe-area-inset-top))+3.25rem)] lg:h-auto lg:min-h-dvh lg:px-[5vw] lg:py-8 rtl:lg:justify-start ltr:lg:justify-end">
+        <section ref={card} className="p-card p-fit w-full max-w-[540px] rounded-[30px] px-5 py-6 sm:px-10 sm:py-8">
           <Logo size={isLogin ? 176 : 118} night={night} />
           <h1 className={`p-welcome text-center font-extrabold ${isLogin ? "mt-5 text-[40px]" : "mt-3 text-[32px]"} leading-tight`}>
             {t(isLogin ? "مرحباً بكم" : "حساب جديد")}
@@ -216,7 +258,8 @@ function LoginForm({ onForgot }: { onForgot: () => void }) {
   const [role, setRole] = useState<Role>("student");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(false);
+  // مفعّل افتراضياً: الجلسة تبقى حتى تسجيل الخروج (الرمز لا ينتهي في الخادم)
+  const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -227,7 +270,8 @@ function LoginForm({ onForgot }: { onForgot: () => void }) {
     try {
       // POST /api/auth/login/  body: {"identifier", "password", "role"}
       const data = await auth.login(identifier.trim(), password, role);
-      saveSession(data.token, data.user, remember);
+      // التطبيق المثبّت على الشاشة الرئيسية يحفظ الدخول دائماً (كتطبيقات الهاتف)
+      saveSession(data.token, data.user, remember || isStandalone());
       // اللغة المختارة في صفحة الدخول تُحفظ في الحساب (لتتبعه على أجهزته الأخرى)
       await auth.updateMe({ language: getLang() }).catch(() => {});
       router.push("/chat");

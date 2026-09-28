@@ -147,4 +147,8 @@ export const calls = {
   decline: (id: number) => api(`/calls/${id}/decline/`, "POST"),
   end: (id: number) => api<Call>(`/calls/${id}/end/`, "POST"),
   iceServers: () => api<{ ice_servers: RTCIceServer[] }>("/calls/ice/"),
+  /** المكالمة التي ترنّ لي الآن (عند فتح التطبيق من إشعار مكالمة) */
+  ringing: async () => (await api<{ call: Call | null }>("/calls/ringing/")).call,
+  /** حوّلتُ المكالمة إلى فيديو: يُبلَّغ الطرف الآخر ويُحدَّث السجل */
+  video: (id: number) => api(`/calls/${id}/video/`, "POST"),
 };
