@@ -124,8 +124,11 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
   }, []);
 
   const signOut = useCallback(() => {
-    logout();
-    router.replace("/login");
+    // نمسح التوكن من السيرفر أول (حتى لو أحد نسخه ما يشتغل بعد)، وبعدين من المتصفح
+    auth.logout().catch(() => {}).finally(() => {
+      logout();
+      router.replace("/login");
+    });
   }, [router]);
 
   const refreshConvs = useCallback(async () => setConvs(await convApi.list("all")), []);
@@ -366,4 +369,26 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     startLiveShare, stopLiveShare, liveShares, toast, notify,
   };
   return <WaslContext.Provider value={value}>{children}</WaslContext.Provider>;
+}
+
+/**
+ * البحث عن ناس: بالجامعة آلاف المستخدمين، فما نحملهم كلهم.
+ * بدون بحث: أول 50 (اللي تحچي وياهم أول). ويا بحث: نسأل السيرفر بعد ما يوقف الكتابة ربع ثانية.
+ */
+export function useUserSearch(q: string) {
+  const { users } = useWasl();
+  const query = q.trim();
+  const [found, setFound] = useState<{ q: string; list: User[] } | null>(null);
+  useEffect(() => {
+    if (!query) return;
+    let alive = true;
+    const t = setTimeout(() => {
+      usersApi.list(query).then((list) => alive && setFound({ q: query, list })).catch(() => {});
+    }, 250);
+    return () => { alive = false; clearTimeout(t); };
+  }, [query]);
+  if (!query) return { list: users, loading: false };
+  // الحالة (متصل) من المخزن إذا عندنا نسخة أحدث
+  const list = found?.q === query ? found.list.map((u) => users.find((x) => x.id === u.id) ?? u) : [];
+  return { list, loading: found?.q !== query };
 }

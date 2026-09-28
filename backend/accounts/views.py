@@ -1,28 +1,31 @@
 from django.contrib.auth import authenticate, get_user_model
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
-from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 
+from config.throttles import LoginThrottle
+
 from .models import Profile, SupportRequest
 from .serializers import MeSerializer, ProfileUpdateSerializer, RegisterSerializer, UserSerializer
+from .tokens import issue_token
 
 User = get_user_model()
 
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([LoginThrottle])
 def register(request):
     # request.data = الـ JSON اللي دزته الواجهة بالـ body
     serializer = RegisterSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)  # إذا غلط يرجع 400 تلقائياً
     user = serializer.save()
-    token = Token.objects.create(user=user)
-    return Response({'token': token.key, 'user': MeSerializer(user).data}, status=status.HTTP_201_CREATED)
+    token = issue_token(user, request.META.get('HTTP_USER_AGENT', ''))
+    return Response({'token': token, 'user': MeSerializer(user).data}, status=status.HTTP_201_CREATED)
 
 
 def find_user(identifier):
@@ -37,6 +40,7 @@ def find_user(identifier):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([LoginThrottle])
 def login(request):
     """{"identifier": اسم المستخدم أو البريد أو الرقم الجامعي, "password": ..., "role": student|faculty|staff (اختياري)}"""
     found = find_user(request.data.get('identifier') or request.data.get('username'))
@@ -50,8 +54,19 @@ def login(request):
         # نتحقق بعد كلمة المرور، حتى ما نكشف دور أي حساب لأي أحد
         return Response({'detail': f'هذا الحساب مسجل كـ «{profile.get_role_display()}»، اختار الدور الصحيح',
                          'role': profile.role}, status=status.HTTP_400_BAD_REQUEST)
-    token, _ = Token.objects.get_or_create(user=user)
-    return Response({'token': token.key, 'user': MeSerializer(user).data})
+    # كل دخول (كل جهاز) إله توكن جديد، ونحفظ الهاش مالته بس
+    token = issue_token(user, request.META.get('HTTP_USER_AGENT', ''))
+    return Response({'token': token, 'user': MeSerializer(user).data})
+
+
+@api_view(['POST'])
+def logout(request):
+    """تسجيل الخروج: نمسح توكن هذا الجهاز من السيرفر (مو بس من المتصفح). {"all": true} = من كل الأجهزة."""
+    if request.data.get('all'):
+        request.user.auth_tokens.all().delete()
+    elif request.auth is not None:
+        request.auth.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(['GET', 'PATCH'])
@@ -72,17 +87,34 @@ def me(request):
 
 
 class UserListView(generics.ListAPIView):
-    """GET /api/users/ — كل المستخدمين عدا أنا."""
+    """
+    GET /api/users/?q=بحث&limit=50&offset=0 — المستخدمين عدا أنا.
+    بالجامعة آلاف المستخدمين، فما نرجعهم كلهم: 50 بالمرة (وأقصى شي 200)، واللي تحچي وياهم يطلعون أول.
+    """
 
     serializer_class = UserSerializer
 
     def get_queryset(self):
-        # SQL تقريباً: SELECT * FROM auth_user WHERE id != <me> ORDER BY username
-        qs = User.objects.exclude(id=self.request.user.id).select_related('profile').order_by('username')
-        q = self.request.query_params.get('q', '').strip()  # ?q= للبحث بالاسم أو الرقم
+        from chat.models import Membership
+        me = self.request.user
+        my_convs = Membership.objects.filter(user=me).values('conversation_id')
+        is_contact = Exists(Membership.objects.filter(user=OuterRef('pk'), conversation_id__in=my_convs))
+        qs = (User.objects.exclude(id=me.id).select_related('profile')
+              .annotate(contact=is_contact).order_by('-contact', 'profile__display_name', 'username'))
+        q = self.request.query_params.get('q', '').strip()  # ?q= بالاسم أو الرقم أو الرقم الجامعي
         if q:
-            qs = qs.filter(Q(username__icontains=q) | Q(profile__display_name__icontains=q) | Q(profile__phone__icontains=q))
+            qs = qs.filter(Q(username__icontains=q) | Q(profile__display_name__icontains=q)
+                           | Q(profile__phone__icontains=q) | Q(profile__university_id__iexact=q))
         return qs
+
+    def list(self, request, *args, **kwargs):
+        try:
+            limit = max(1, min(int(request.query_params.get('limit', 50)), 200))
+            offset = max(0, int(request.query_params.get('offset', 0)))
+        except ValueError:
+            limit, offset = 50, 0
+        page = self.get_queryset()[offset:offset + limit]
+        return Response(self.get_serializer(page, many=True).data)
 
 
 @api_view(['GET'])

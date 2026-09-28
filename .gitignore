@@ -7,3 +7,7 @@ node_modules/
 frontend/.env.local
 backend/media/
 backend/vapid_keys.json
+deploy/.env
+backend/staticfiles/
+backend/message_key
+backend/keys/

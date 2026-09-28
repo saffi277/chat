@@ -212,9 +212,21 @@ class DeliveredTests(Base, TransactionTestCase):
         url = f"/api/conversations/{d.data['id']}/messages/"
         m = await sync_to_async(ali.post)(url, {'content': 'هلو'}, format='json')
         self.assertEqual(m.data['status'], 'sent')
+        omar = await sync_to_async(self.register)('omar')  # مو من معارف سارة
+        ali_ws = WebsocketCommunicator(application, f'/ws/presence/?token={ali.token}')
+        omar_ws = WebsocketCommunicator(application, f'/ws/presence/?token={omar.token}')
+        await ali_ws.connect()
+        await omar_ws.connect()
         ws = WebsocketCommunicator(application, f'/ws/presence/?token={sara.token}')
         self.assertTrue((await ws.connect())[0])
-        await ws.receive_json_from()  # حدث presence
+        # "متصل" يوصل بس لعلي (يشاركها محادثة)، مو لعمر ولا لكل الجامعة
+        event = await ali_ws.receive_json_from(timeout=3)
+        while event.get('type') != 'presence':
+            event = await ali_ws.receive_json_from(timeout=3)
+        self.assertEqual((event['user_id'], event['is_online']), (sara.user['id'], True))
+        self.assertTrue(await omar_ws.receive_nothing(timeout=0.5))
+        await ali_ws.disconnect()
+        await omar_ws.disconnect()
         msgs = await sync_to_async(ali.get)(url)
         self.assertEqual(msgs.data[-1]['status'], 'delivered')
         # ثاني تبويب لنفس المستخدم، يسد واحد: يبقى متصل
@@ -226,3 +238,61 @@ class DeliveredTests(Base, TransactionTestCase):
         await ws.disconnect()
         user = await sync_to_async(ali.get)(f"/api/users/{sara.user['id']}/")
         self.assertFalse(user.data['is_online'])
+
+
+@override_settings(MEDIA_ROOT=MEDIA, PUSH_RUN_INLINE=True)
+@mock.patch('notifications.push.webpush')
+class SecurityTests(Base, TestCase):
+    """التشفير والهاش: اللي بقاعدة البيانات والقرص ما ينقرا، والروابط محمية."""
+
+    def test_message_encrypted_at_rest(self, _):
+        from django.db import connection
+        ali, sara = self.register('ali'), self.register('sara')
+        d = ali.post('/api/conversations/', {'user_id': sara.user['id']}, format='json').data
+        m = ali.post(f"/api/conversations/{d['id']}/messages/", {'content': 'سر: https://x.iq'}, format='json').data
+        self.assertEqual(m['content'], 'سر: https://x.iq')  # الـ API يرجعها مفهومة
+        with connection.cursor() as c:
+            c.execute('SELECT content, has_link FROM chat_message WHERE id = %s', [m['id']])
+            raw, has_link = c.fetchone()
+        self.assertTrue(raw.startswith('enc1:'))            # بقاعدة البيانات مشفرة
+        self.assertNotIn('سر', raw)
+        self.assertTrue(has_link)
+        links = ali.get(f"/api/conversations/{d['id']}/media/?type=link").data
+        self.assertEqual([x['id'] for x in links['results']], [m['id']])
+
+    def test_file_encrypted_and_signed_url(self, _):
+        from pathlib import Path
+
+        from django.test import Client
+        ali, sara = self.register('ali'), self.register('sara')
+        d = ali.post('/api/conversations/', {'user_id': sara.user['id']}, format='json').data
+        data = b'%PDF-1.4 ' + bytes(range(256)) * 700  # أكبر من قطعة وحدة
+        up = SimpleUploadedFile('خطة.pdf', data, content_type='application/pdf')
+        m = ali.post(f"/api/conversations/{d['id']}/messages/", {'file': up, 'kind': 'file'}, format='multipart').data
+        url = m['file_url']
+        path = url.split('?')[0].replace('/media/', '')
+        on_disk = (Path(MEDIA) / path).read_bytes()
+        self.assertTrue(on_disk.startswith(b'WASLENC1'))     # على القرص مشفر
+        self.assertNotIn(b'%PDF', on_disk)
+        c = Client()
+        self.assertEqual(c.get(url.split('?')[0]).status_code, 403)             # بدون توقيع
+        self.assertEqual(c.get(url.replace('s=', 's=0')).status_code, 403)       # توقيع مزور
+        r = c.get(url)
+        self.assertEqual(b''.join(r.streaming_content), data)                   # ينفك صح
+        r = c.get(url, HTTP_RANGE='bytes=100-70099')                             # جزء (صوت/فيديو)
+        self.assertEqual((r.status_code, r['Content-Range']), (206, f'bytes 100-70099/{len(data)}'))
+        self.assertEqual(b''.join(r.streaming_content), data[100:70100])
+
+    def test_password_argon2_and_hashed_tokens(self, _):
+        from django.contrib.auth.models import User
+
+        from accounts.models import AuthToken
+        from accounts.tokens import hash_token
+        ali = self.register('ali')
+        self.assertTrue(User.objects.get(username='ali').password.startswith('argon2'))
+        stored = AuthToken.objects.get(user__username='ali').key_hash
+        self.assertNotEqual(stored, ali.token)                 # التوكن نفسه مو محفوظ
+        self.assertEqual(stored, hash_token(ali.token))
+        self.assertEqual(ali.get('/api/auth/me/').status_code, 200)
+        self.assertEqual(ali.post('/api/auth/logout/').status_code, 204)
+        self.assertEqual(ali.get('/api/auth/me/').status_code, 401)  # بعد الخروج التوكن ما يشتغل

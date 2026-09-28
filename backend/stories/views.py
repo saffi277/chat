@@ -10,7 +10,8 @@ from rest_framework.response import Response
 
 from accounts.serializers import UserSerializer
 from chat.media import validate_upload
-from chat.services import send_to_everyone, send_to_users
+from chat.services import send_to_contacts, send_to_users
+from config.media import signed_url
 
 from .models import Story, StoryView
 
@@ -26,7 +27,7 @@ class StorySerializer(serializers.ModelSerializer):
                   'views_count', 'seen']
 
     def get_file_url(self, obj):
-        return obj.file.url if obj.file else None
+        return signed_url(obj.file.name) if obj.file else None  # موقّع ومؤقت
 
 
 def active_stories(request):
@@ -74,7 +75,7 @@ def stories(request):
             raise ValidationError({'background': 'لون بصيغة #RRGGBB'})
         story = Story.objects.create(user=request.user, kind=Story.TEXT, text=text, background=background)
     # نبلغ المتصلين حتى تطلع الحلقة الملونة حول صورته
-    send_to_everyone({'type': 'story', 'user_id': request.user.id})
+    send_to_contacts(request.user.id, {'type': 'story', 'user_id': request.user.id})
     return Response(StorySerializer(story).data, status=status.HTTP_201_CREATED)
 
 

@@ -22,7 +22,8 @@ import websockets
 lat = defaultdict(list)       # زمن كل نوع طلب (ثواني)
 errors = defaultdict(int)
 delivery = []                 # زمن وصول الرسالة للطرف الثاني
-sent_at = {}                  # marker → وقت الإرسال
+sent = set()                  # الرسائل اللي دزيناها (marker)
+received = set()              # الرسائل اللي وصلت لطرف ثاني
 connected = 0
 
 
@@ -48,8 +49,10 @@ async def listen(ws, stop, uid):
             e = json.loads(raw)
             if e.get('type') == 'inbox' and e['message']['sender']['id'] != uid:
                 marker = e['message'].get('content', '')
-                if marker in sent_at:
-                    delivery.append(time.perf_counter() - sent_at.pop(marker))
+                if marker.startswith('lt:'):
+                    # وقت الإرسال مكتوب داخل الرسالة (حتى لو المرسل بعملية ثانية)
+                    delivery.append(time.time() - float(marker.split(':')[2]))
+                    received.add(marker)
     except (asyncio.TimeoutError, TimeoutError):
         if not stop.is_set():
             return await listen(ws, stop, uid)
@@ -82,8 +85,8 @@ async def user(u, args, client, stop, start_gate):
         await asyncio.sleep(random.uniform(0, args.think))
         if not conv:
             break
-        marker = f"lt:{u['id']}:{random.random()}"
-        sent_at[marker] = time.perf_counter()
+        marker = f"lt:{u['id']}:{time.time():.6f}:{random.random():.8f}"
+        sent.add(marker)
         await timed('POST message', client.post(f'/api/conversations/{conv}/messages/', headers=headers,
                                                   json={'content': marker}))
     await stop.wait()
@@ -100,7 +103,32 @@ def pct(values, p):
     return values[min(len(values) - 1, int(len(values) * p))]
 
 
-async def main():
+async def run_slice(args, users, out):
+    """عملية وحدة تشغل جزء من المستخدمين وتكتب النتائج الخام."""
+    limits = httpx.Limits(max_connections=len(users), max_keepalive_connections=len(users))
+    async with httpx.AsyncClient(base_url=args.base, timeout=60, limits=limits) as client:
+        stop, gate = asyncio.Event(), asyncio.Event()
+        tasks = [asyncio.create_task(user(u, args, client, stop, gate)) for u in users]
+        gate.set()
+        await asyncio.sleep(args.ramp + args.think * args.messages + args.hold)
+        stop.set()
+        # اللي بعده عالق (السيرفر ما رد) نلغيه بعد مهلة قصيرة ونحسبه فشل
+        _, pending = await asyncio.wait(tasks, timeout=15)
+        for t in pending:
+            t.cancel()
+        if pending:
+            errors['ما خلص (السيرفر ما لحّگ)'] += len(pending)
+        await asyncio.gather(*tasks, return_exceptions=True)
+    json.dump({'lat': lat, 'errors': errors, 'delivery': delivery, 'sent': list(sent),
+               'received': list(received), 'connected': connected}, open(out, 'w'))
+
+
+def child(args, users, out):
+    asyncio.run(run_slice(args, users, out))
+
+
+def main():
+    import multiprocessing as mp
     ap = argparse.ArgumentParser()
     ap.add_argument('--base', default='http://localhost:8000')
     ap.add_argument('--users-file', default='/tmp/lt_users.json')
@@ -109,37 +137,48 @@ async def main():
     ap.add_argument('--ramp', type=float, default=5, help='كل المستخدمين يبدون خلال هذي الثواني')
     ap.add_argument('--think', type=float, default=3, help='أقصى انتظار بين رسالة ورسالة')
     ap.add_argument('--hold', type=float, default=15, help='شكد نبقى متصلين بعد آخر رسالة')
+    ap.add_argument('--procs', type=int, default=4, help='عمليات الاختبار (حتى جهاز الاختبار نفسه ما يصير هو البطيء)')
     ap.add_argument('--label', default='')
     args = ap.parse_args()
 
     users = json.load(open(args.users_file))[: args.users]
-    limits = httpx.Limits(max_connections=args.users, max_keepalive_connections=args.users)
-    async with httpx.AsyncClient(base_url=args.base, timeout=60, limits=limits) as client:
-        stop, gate = asyncio.Event(), asyncio.Event()
-        tasks = [asyncio.create_task(user(u, args, client, stop, gate)) for u in users]
-        t0 = time.perf_counter()
-        gate.set()
-        await asyncio.sleep(args.ramp + args.think * args.messages + args.hold)
-        stop.set()
-        await asyncio.gather(*tasks, return_exceptions=True)
-        total = time.perf_counter() - t0
-
-    requests = sum(len(v) for v in lat.values())
-    print(f"\n=== {args.label} {len(users)} مستخدم، {total:.0f} ثانية ===")
+    t0 = time.perf_counter()
+    procs = []
+    for i in range(args.procs):
+        out = f'/tmp/lt_part_{i}.json'
+        p = mp.Process(target=child, args=(args, users[i::args.procs], out))
+        p.start()
+        procs.append((p, out))
+    all_lat, all_err, all_del, all_sent, all_recv, conn = defaultdict(list), defaultdict(int), [], set(), set(), 0
+    for p, out in procs:
+        p.join()
+        d = json.load(open(out))
+        for k, v in d['lat'].items():
+            all_lat[k] += v
+        for k, v in d['errors'].items():
+            all_err[k] += v
+        all_del += d['delivery']
+        all_sent |= set(d['sent'])
+        all_recv |= set(d['received'])
+        conn += d['connected']
+    total = time.perf_counter() - t0
+    requests = sum(len(v) for v in all_lat.values())
+    print(f"\n=== {args.label} {len(users)} مستخدم، {total:.0f} ثانية ({args.procs} عمليات اختبار) ===")
     print(f"{'الطلب':<20}{'العدد':>8}{'p50 ms':>10}{'p95 ms':>10}{'p99 ms':>10}")
-    for name, v in sorted(lat.items()):
+    for name, v in sorted(all_lat.items()):
         print(f"{name:<20}{len(v):>8}{pct(v, .5)*1000:>10.0f}{pct(v, .95)*1000:>10.0f}{pct(v, .99)*1000:>10.0f}")
-    print(f"{'وصول الرسالة':<20}{len(delivery):>8}{pct(delivery, .5)*1000:>10.0f}{pct(delivery, .95)*1000:>10.0f}{pct(delivery, .99)*1000:>10.0f}")
-    print(f"اتصالات WebSocket ناجحة: {connected}/{len(users)} | الطلبات الناجحة: {requests} | الأخطاء: {sum(errors.values())}")
-    for k, v in sorted(errors.items(), key=lambda x: -x[1])[:8]:
+    print(f"{'وصول الرسالة':<20}{len(all_del):>8}{pct(all_del, .5)*1000:>10.0f}{pct(all_del, .95)*1000:>10.0f}{pct(all_del, .99)*1000:>10.0f}")
+    print(f"اتصالات WebSocket ناجحة: {conn}/{len(users)} | الطلبات الناجحة: {requests} | الأخطاء: {sum(all_err.values())}")
+    for k, v in sorted(all_err.items(), key=lambda x: -x[1])[:8]:
         print(f"  ✗ {k}: {v}")
-    lost = len(sent_at)
-    print(f"رسائل ما وصلت للطرف الثاني خلال الاختبار: {lost}")
-    json.dump({'label': args.label, 'users': len(users), 'lat': {k: [pct(v, .5), pct(v, .95), pct(v, .99), len(v)] for k, v in lat.items()},
-               'delivery': [pct(delivery, .5), pct(delivery, .95), pct(delivery, .99), len(delivery)],
-               'errors': dict(errors), 'connected': connected, 'lost': lost},
+    lost = len(all_sent - all_recv)
+    print(f"رسائل انرسلت: {len(all_sent)} | وصلت لطرف ثاني: {len(all_sent & all_recv)} | ما وصلت: {lost}")
+    json.dump({'label': args.label, 'users': len(users),
+               'lat': {k: [pct(v, .5), pct(v, .95), pct(v, .99), len(v)] for k, v in all_lat.items()},
+               'delivery': [pct(all_del, .5), pct(all_del, .95), pct(all_del, .99), len(all_del)],
+               'errors': dict(all_err), 'connected': conn, 'sent': len(all_sent), 'lost': lost},
               open(f"/tmp/lt_result_{args.label or 'run'}.json", 'w'))
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    main()

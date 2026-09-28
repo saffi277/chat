@@ -7,11 +7,9 @@ from django.contrib.auth.models import AnonymousUser
 
 @database_sync_to_async
 def get_user(key):
-    from rest_framework.authtoken.models import Token
-    try:
-        return Token.objects.select_related('user').get(key=key).user
-    except Token.DoesNotExist:
-        return AnonymousUser()
+    from accounts.tokens import user_for_token
+    found = user_for_token(key)  # نقارن الهاش (بقاعدة البيانات ما محفوظ التوكن نفسه)
+    return found[0] if found else AnonymousUser()
 
 
 class TokenAuthMiddleware:

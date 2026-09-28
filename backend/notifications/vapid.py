@@ -15,7 +15,7 @@ from py_vapid import Vapid01, b64urlencode
 
 
 def _key_file():
-    return settings.BASE_DIR / 'vapid_keys.json'
+    return settings.KEYS_DIR / 'vapid_keys.json'
 
 
 @lru_cache

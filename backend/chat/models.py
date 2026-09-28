@@ -4,6 +4,8 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from .fields import EncryptedTextField, get_encrypted_storage
+
 
 class Conversation(models.Model):
     """محادثة: بين شخصين (direct)، أو مجموعة (group)، أو "الرسائل المحفوظة" (saved) وحدك."""
@@ -61,9 +63,12 @@ class Message(models.Model):
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages')
     sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='messages')
     kind = models.CharField(max_length=10, choices=KINDS, default=TEXT)
-    content = models.TextField(blank=True)  # النص، أو تعليق على الصورة/الملف
+    # النص، أو تعليق على الصورة/الملف. ينحفظ مشفر (AES-256) بقاعدة البيانات: chat/crypto.py
+    content = EncryptedTextField(blank=True)
+    # نص الرسالة مشفر فما نكدر نبحث بيه بـ SQL، فنعلّم وقت الحفظ إذا بيها رابط (لتبويب "الروابط")
+    has_link = models.BooleanField(default=False)
     # الوسائط: الملف ينحفظ بـ media/messages/<id>/ والداتابيس تحفظ مساره
-    file = models.FileField(upload_to=message_upload_path, blank=True, null=True)
+    file = models.FileField(upload_to=message_upload_path, blank=True, null=True, storage=get_encrypted_storage)
     file_name = models.CharField(max_length=255, blank=True)
     file_size = models.PositiveBigIntegerField(null=True, blank=True)
     duration = models.FloatField(null=True, blank=True)  # بالثواني، للصوت والفيديو
@@ -80,10 +85,19 @@ class Message(models.Model):
 
     class Meta:
         ordering = ['created_at', 'id']
+        # أكثر استعلام: "آخر رسائل هاي المحادثة" و"آخر رسالة" → فهرس مركب يخليها فورية حتى ويا ملايين الرسائل
+        indexes = [models.Index(fields=['conversation', '-id'], name='msg_conv_id_desc')]
 
     @property
     def is_live(self):
         return bool(self.live_until and self.live_until > timezone.now())
+
+    def save(self, *args, **kwargs):
+        self.has_link = self.kind == self.TEXT and ('http://' in self.content or 'https://' in self.content)
+        fields = kwargs.get('update_fields')
+        if fields is not None and 'content' in fields and 'has_link' not in fields:
+            kwargs['update_fields'] = [*fields, 'has_link']
+        super().save(*args, **kwargs)
 
     def live_for(self, minutes):
         self.live_until = timezone.now() + timedelta(minutes=minutes)

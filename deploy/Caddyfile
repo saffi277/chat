@@ -1,0 +1,38 @@
+# عنوان واحد لكلشي: الواجهة على / والباك اند على /api و /ws و /media و /admin
+# - بدون دومين: {$SITE_ADDRESS} = :80 (والرابط المؤقت https يجي من cloudflared)
+# - ويا دومين: SITE_ADDRESS=chat.asbat.edu.iq  ← Caddy يجيب شهادة HTTPS تلقائياً ويجددها
+{$SITE_ADDRESS::80} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(self), microphone=(self), geolocation=(self), display-capture=()"
+		-Server
+	}
+
+	# الاتصالات المباشرة (WebSocket) ← سيرفر uvicorn (ASGI)
+	handle /ws/* {
+		reverse_proxy ws:8000
+	}
+
+	# الـ API والملفات ← سيرفر gunicorn (عمليات × threads: عشرات الطلبات بنفس اللحظة)
+	@backend path /api/* /media/* /admin/* /static/*
+	handle @backend {
+		reverse_proxy web:8001 {
+			transport http {
+				keepalive 90s
+			}
+		}
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+
+	request_body {
+		max_size 60MB
+	}
+}

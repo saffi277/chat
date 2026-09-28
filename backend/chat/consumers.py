@@ -6,14 +6,14 @@ Consumer = مثل الـ View بس للـ WebSocket.
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.db.models import F
+from django.db.models.functions import Greatest
 from django.utils import timezone
 
 from accounts.models import Profile
 
 from .models import Conversation, Membership, Message
-from .services import create_message, group_name, mark_delivered, user_group
+from .services import contact_ids, create_message, group_name, mark_delivered, user_group
 
-PRESENCE_GROUP = 'presence'
 
 
 class ChatConsumer(AsyncJsonWebsocketConsumer):
@@ -24,6 +24,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await self.close(code=4403)
             return
         self.group = group_name(self.conv_id)
+        # الاسم يروح ويا "يكتب الآن" (حتى الواجهة ما تحتاج قائمة أعضاء المجموعة كاملة)
+        self.display_name = await database_sync_to_async(
+            lambda: getattr(getattr(self.user, 'profile', None), 'display_name', '') or self.user.username)()
         # ننضم لـ "غرفة" المحادثة حتى نستلم أي رسالة تنبث بيها
         await self.channel_layer.group_add(self.group, self.channel_name)
         await self.accept()
@@ -42,7 +45,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 await self.send_text_message(text, content.get('reply_to'))
         elif content.get('type') == 'typing':
             await self.channel_layer.group_send(
-                self.group, {'type': 'chat.event', 'payload': {'type': 'typing', 'user_id': self.user.id}})
+                self.group, {'type': 'chat.event', 'payload': {'type': 'typing', 'user_id': self.user.id,
+                                                              'name': self.display_name}})
 
     async def chat_event(self, event):
         # تنادى لما يوصل group_send بنوع chat.event → ندزه للمتصفح JSON
@@ -67,27 +71,26 @@ class PresenceConsumer(AsyncJsonWebsocketConsumer):
         if not self.user.is_authenticated:
             await self.close(code=4401)
             return
-        await self.channel_layer.group_add(PRESENCE_GROUP, self.channel_name)
         await self.channel_layer.group_add(user_group(self.user.id), self.channel_name)
         await self.accept()
-        await self.connections(+1)
-        await self.set_online(True)
-        # الجهاز صار متصل: كل الرسائل اللي جاته وهو مطفي صارت "وصلت" ✓✓
-        await database_sync_to_async(mark_delivered)(self.user)
+        # كل شغل قاعدة البيانات بخطوة وحدة (بدل 6 استعلامات متفرقة) حتى الاتصال يكون سريع حتى لو الكل دخل سوه
+        first, contacts = await self.came_online()
+        if first:  # أول جهاز/تبويب: نبلغ معارفه إنه صار متصل
+            await self.tell_contacts(contacts, True)
 
     async def disconnect(self, code):
         if getattr(self.user, 'is_authenticated', False):
             # إذا فاتح التطبيق بأكثر من تبويب/جهاز، يبقى "متصل" لحد ما يسد آخر واحد
-            if await self.connections(-1) <= 0:
-                await self.set_online(False)
-            await self.channel_layer.group_discard(PRESENCE_GROUP, self.channel_name)
+            contacts = await self.went_offline()
+            if contacts is not None:
+                await self.tell_contacts(contacts, False)
             await self.channel_layer.group_discard(user_group(self.user.id), self.channel_name)
 
-    async def set_online(self, online):
-        await self.save_status(online)
-        await self.channel_layer.group_send(PRESENCE_GROUP, {
-            'type': 'chat.event',
-            'payload': {'type': 'presence', 'user_id': self.user.id, 'is_online': online}})
+    async def tell_contacts(self, contacts, online):
+        # بس للناس اللي يشاركوه محادثة (مو لكل الجامعة)
+        event = {'type': 'chat.event', 'payload': {'type': 'presence', 'user_id': self.user.id, 'is_online': online}}
+        for uid in contacts:
+            await self.channel_layer.group_send(user_group(uid), event)
 
     async def receive_json(self, content):
         """
@@ -115,22 +118,25 @@ class PresenceConsumer(AsyncJsonWebsocketConsumer):
         return to if to != self.user.id and members.count() == 2 else None
 
     async def chat_event(self, event):
-        payload = event['payload']
-        await self.send_json(payload)
-        # رسالة جديدة وصلت لهذا الجهاز → نعلمها "وصلت"
-        if payload.get('type') == 'inbox' and payload['message']['sender']['id'] != self.user.id:
-            await database_sync_to_async(mark_delivered)(self.user, [payload['message']['conversation']])
+        # ("وصلت ✓✓" يتسجل مرة وحدة وقت الإرسال لكل المتصلين، مو هنا لكل جهاز)
+        await self.send_json(event['payload'])
 
     @database_sync_to_async
-    def connections(self, delta):
-        profile, _ = Profile.objects.get_or_create(user=self.user)
-        Profile.objects.filter(pk=profile.pk).update(connections=F('connections') + delta)
-        profile.refresh_from_db(fields=['connections'])
-        if profile.connections < 0:
-            Profile.objects.filter(pk=profile.pk).update(connections=0)
-        return profile.connections
+    def came_online(self):
+        """+1 اتصال، متصل الآن، والرسائل اللي جاته وهو مطفي صارت "وصلت" ✓✓. يرجع (أول اتصال؟، معارفه)."""
+        now = timezone.now()
+        if not Profile.objects.filter(user=self.user).update(
+                connections=F('connections') + 1, is_online=True, last_seen=now):
+            Profile.objects.create(user=self.user, connections=1, is_online=True, last_seen=now)
+        count = Profile.objects.filter(user=self.user).values_list('connections', flat=True).first()
+        mark_delivered(self.user)
+        return count == 1, contact_ids(self.user.id)
 
     @database_sync_to_async
-    def save_status(self, online):
-        Profile.objects.update_or_create(
-            user=self.user, defaults={'is_online': online, 'last_seen': timezone.now()})
+    def went_offline(self):
+        """-1 اتصال. إذا ما بقى ولا جهاز: غير متصل ونرجع معارفه (حتى نبلغهم)، وإلا None."""
+        Profile.objects.filter(user=self.user).update(connections=Greatest(F('connections') - 1, 0))
+        if Profile.objects.filter(user=self.user, connections__gt=0).exists():
+            return None
+        Profile.objects.filter(user=self.user).update(is_online=False, last_seen=timezone.now())
+        return contact_ids(self.user.id)

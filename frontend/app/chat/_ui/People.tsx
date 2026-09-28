@@ -3,16 +3,14 @@ import { useState } from "react";
 import { Avatar, Empty, IconButton, lastSeenText, nameOf } from "./bits";
 import { ScreenHeader, SearchBox } from "./ChatList";
 import { Icon } from "./icons";
-import { useWasl } from "./store";
+import { useUserSearch, useWasl } from "./store";
 
 /** جهات الاتصال: تبدي منها محادثة أو مجموعة */
 export function PeopleView() {
-  const { users, openWith, setPanel, openSaved } = useWasl();
+  const { openWith, setPanel, openSaved } = useWasl();
   const [q, setQ] = useState("");
-  const query = q.trim().toLowerCase();
-  const list = users
-    .filter((u) => !query || nameOf(u).toLowerCase().includes(query) || u.username.toLowerCase().includes(query) || u.phone.includes(query))
-    .sort((a, b) => Number(b.is_online) - Number(a.is_online) || nameOf(a).localeCompare(nameOf(b), "ar"));
+  const { list: found, loading } = useUserSearch(q);
+  const list = [...found].sort((a, b) => Number(b.is_online) - Number(a.is_online));
 
   return (
     <div className="flex h-full flex-col">
@@ -29,7 +27,8 @@ export function PeopleView() {
           <span className="font-bold">مجموعة جديدة</span>
         </button>
         <p className="w-muted px-4 pb-1 pt-3 text-[13px] font-semibold">جهات الاتصال</p>
-        {list.length === 0 && <Empty icon="users" title="ماكو أحد بهذا الاسم" />}
+        {!loading && list.length === 0 && <Empty icon="users" title="ماكو أحد بهذا الاسم" />}
+        {loading && <p className="w-muted py-6 text-center text-sm">جاري البحث...</p>}
         {list.map((u) => (
           <div key={u.id} className="w-hover flex items-center gap-3 px-4 py-2">
             <button onClick={() => setPanel({ type: "contact", userId: u.id })} className="flex min-w-0 flex-1 items-center gap-3 text-right">

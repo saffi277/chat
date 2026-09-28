@@ -1,7 +1,11 @@
 # منطق مشترك بين الـ HTTP API والـ WebSocket حتى ما نكرر الكود
-from asgiref.sync import async_to_sync
+import asyncio
+import threading
+
+from asgiref.sync import SyncToAsync, async_to_sync
 from channels.layers import get_channel_layer
-from django.db.models import Max
+from django.core.cache import cache
+from django.db.models import Max, OuterRef, Subquery
 from django.utils import timezone
 
 from notifications.push import notify_new_message
@@ -26,8 +30,30 @@ def user_group(user_id):
     return f'user_{user_id}'
 
 
+_loop = None
+_loop_lock = threading.Lock()
+
+
+def _background_loop():
+    """حلقة async وحدة دائمة لكل عملية (بسيرفر الـ HTTP)، حتى البث يعيد استخدام نفس اتصال Redis
+    بدل ما يفتح اتصال جديد لكل رسالة (async_to_sync بدون حلقة يسوي حلقة جديدة كل مرة)."""
+    global _loop
+    with _loop_lock:
+        if _loop is None:
+            _loop = asyncio.new_event_loop()
+            threading.Thread(target=_loop.run_forever, name='channels-send', daemon=True).start()
+    return _loop
+
+
 def _send(group, payload):
-    async_to_sync(get_channel_layer().group_send)(group, {'type': 'chat.event', 'payload': payload})
+    message = {'type': 'chat.event', 'payload': payload}
+    layer = get_channel_layer()
+    if getattr(SyncToAsync.threadlocal, 'main_event_loop', None) is not None:
+        # داخل سيرفر الـ WebSocket (ASGI): نرجع لنفس الحلقة الأساسية
+        async_to_sync(layer.group_send)(group, message)
+    else:
+        # سيرفر الـ HTTP (Gunicorn threads): الحلقة الدائمة
+        asyncio.run_coroutine_threadsafe(layer.group_send(group, message), _background_loop()).result(timeout=10)
 
 
 def broadcast(conversation_id, payload):
@@ -41,9 +67,29 @@ def send_to_users(user_ids, payload):
         _send(user_group(user_id), payload)
 
 
-def send_to_everyone(payload):
-    """لكل المتصلين (مجموعة presence العامة)."""
-    _send('presence', payload)
+def contact_ids(user_id):
+    """
+    الناس اللي يشاركون المستخدم أي محادثة (هم بس يهمهم إذا صار متصل أو نزّل حالة).
+    قبل كنا نبث لكل الجامعة: 2000 متصل × 2000 = 4 مليون رسالة لما الكل يدخل سوه.
+    نحفظها بالكاش دقيقة حتى ما نسأل قاعدة البيانات كل مرة.
+    """
+    key = f'contacts:{user_id}'
+    ids = cache.get(key)
+    if ids is None:
+        mine = Membership.objects.filter(user_id=user_id).values('conversation_id')
+        ids = list(Membership.objects.filter(conversation_id__in=mine).exclude(user_id=user_id)
+                   .values_list('user_id', flat=True).distinct())
+        cache.set(key, ids, 60)
+    return ids
+
+
+def forget_contacts(*user_ids):
+    """المحادثات تغيرت (مجموعة جديدة، عضو انضاف): نمسح الكاش."""
+    cache.delete_many([f'contacts:{u}' for u in user_ids])
+
+
+def send_to_contacts(user_id, payload, include_self=True):
+    send_to_users([*contact_ids(user_id), *([user_id] if include_self else [])], payload)
 
 
 def member_ids(conversation):
@@ -79,10 +125,20 @@ def create_message(conversation, sender, content='', **fields):
     # المرسل طبعاً "قرا" رسالته
     Membership.objects.filter(conversation=conversation, user=sender).update(
         last_read_id=msg.id, last_delivered_id=msg.id)
+    # "وصلت ✓✓" لكل عضو جهازه متصل هسه (الرسالة راح توصله مباشرة): استعلام واحد لكل الأعضاء،
+    # بدل ما كل جهاز يكتب بقاعدة البيانات لحاله (مجموعة 40 شخص كانت = 80 عملية لكل رسالة)
+    online = list(Membership.objects.filter(conversation=conversation, user__profile__connections__gt=0)
+                  .exclude(user=sender).values_list('user_id', flat=True))
+    if online:
+        Membership.objects.filter(conversation=conversation, user_id__in=online, last_delivered_id__lt=msg.id).update(
+            last_delivered_id=msg.id)
     data = serialize_message(msg)
     # للي فاتحين المحادثة: الرسالة نفسها
     broadcast(conversation.id, {'type': 'message', 'message': data})
-    # لكل عضو على اتصاله العام: حتى تتحدث قائمته (وهذا يعلّم الرسالة "وصلت" لجهازه)
+    if online:
+        broadcast(conversation.id, {'type': 'delivered', 'user_id': online[0] if len(online) == 1 else 0,
+                                    'message_id': msg.id})
+    # لكل عضو على اتصاله العام: حتى تتحدث قائمته
     send_to_users(member_ids(conversation), {'type': 'inbox', 'message': data})
     if msg.kind not in QUIET:
         notify_new_message(msg, preview_text(msg))
@@ -119,15 +175,16 @@ def mark_read(conversation, user):
 
 
 def mark_delivered(user, conversation_ids=None):
-    """الرسائل وصلت لجهاز المستخدم (عنده اتصال مفتوح): نحدّث ✓ إلى ✓✓."""
-    memberships = Membership.objects.filter(user=user).select_related('conversation')
+    """الرسائل وصلت لجهاز المستخدم (عنده اتصال مفتوح): نحدّث ✓ إلى ✓✓.
+    استعلام واحد يجيب آخر رسالة لكل محادثة (بدل استعلام لكل محادثة)."""
+    last_id = Message.objects.filter(conversation_id=OuterRef('conversation_id')).order_by('-id').values('id')[:1]
+    memberships = Membership.objects.filter(user=user).annotate(last=Subquery(last_id))
     if conversation_ids is not None:
         memberships = memberships.filter(conversation_id__in=conversation_ids)
     for m in memberships:
-        last = m.conversation.messages.aggregate(x=Max('id'))['x'] or 0
-        if last > m.last_delivered_id:
-            Membership.objects.filter(pk=m.pk).update(last_delivered_id=last)
-            broadcast(m.conversation_id, {'type': 'delivered', 'user_id': user.id, 'message_id': last})
+        if m.last and m.last > m.last_delivered_id:
+            Membership.objects.filter(pk=m.pk, last_delivered_id__lt=m.last).update(last_delivered_id=m.last)
+            broadcast(m.conversation_id, {'type': 'delivered', 'user_id': user.id, 'message_id': m.last})
 
 
 def soft_delete(message):

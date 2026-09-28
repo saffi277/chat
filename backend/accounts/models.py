@@ -57,3 +57,24 @@ class SupportRequest(models.Model):
 
     def __str__(self):
         return f'{self.get_kind_display()}: {self.identifier or self.contact}'
+
+
+class AuthToken(models.Model):
+    """
+    توكن الدخول. ما نخزن التوكن نفسه، بس الـ hash مالته (SHA-256):
+    إذا أحد سرق قاعدة البيانات ما يكدر يستخدمها حتى يدخل بحسابات الناس (نفس فكرة كلمات المرور).
+    كل جهاز إله توكن، وتسجيل الخروج يمسح توكن هذا الجهاز بس.
+    """
+
+    key_hash = models.CharField(max_length=64, unique=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='auth_tokens')
+    created = models.DateTimeField(auto_now_add=True)
+    last_used = models.DateTimeField(null=True, blank=True)
+    user_agent = models.CharField(max_length=200, blank=True)
+
+    class Meta:
+        verbose_name = 'جلسة دخول'
+        verbose_name_plural = 'جلسات الدخول'
+
+    def __str__(self):
+        return f'{self.user} ({self.created:%Y-%m-%d})'

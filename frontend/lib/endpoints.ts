@@ -33,6 +33,8 @@ export const auth = {
   help: (data: { kind: "password" | "support"; identifier?: string; contact?: string; message?: string }) =>
     api<{ detail: string }>("/auth/help/", "POST", data),
   me: () => api<Me>("/auth/me/"),
+  /** تسجيل خروج: التوكن ينمسح من السيرفر (all = من كل الأجهزة) */
+  logout: (all = false) => api("/auth/logout/", "POST", { all }),
   updateMe: (data: Partial<Pick<Me, "display_name" | "bio" | "phone" | "city" | "mode" | "theme">>) =>
     api<Me>("/auth/me/", "PATCH", data),
   setAvatar: (file: File | null) => {

@@ -155,24 +155,25 @@
   --p-photo-shade: linear-gradient(90deg, rgba(0, 0, 0, .05) 30%, rgba(0, 0, 0, .35));
 }
 .portal[data-theme="light"] {
-  --p-bg: radial-gradient(900px 700px at 50% 30%, #fbfaf6, #efece3);
-  --p-page: #f7f5ef;
-  --p-card: rgba(255, 255, 255, .86);
-  --p-card-border: rgba(194, 154, 78, .55);
-  --p-card-shadow: 0 0 0 1px rgba(194, 154, 78, .1), 0 0 40px rgba(194, 154, 78, .14), 0 30px 70px rgba(30, 40, 30, .22);
-  --p-text: #14261f;
-  --p-muted: #5f6a64;
-  --p-green: #0f5c45;
-  --p-btn: linear-gradient(180deg, #13704f, #0c5139);
-  --p-btn-border: rgba(15, 92, 69, .4);
+  /* مثل التصميم النهاري: بطاقة كريمية بحافة ذهبية، والعنوان أخضر */
+  --p-bg: #ffffff;
+  --p-page: #fbf9f3;
+  --p-card: rgba(250, 247, 238, .9);
+  --p-card-border: #e3b945;
+  --p-card-shadow: 0 0 0 1px rgba(227, 185, 69, .15), 0 0 36px rgba(227, 185, 69, .16), 0 30px 70px rgba(30, 40, 30, .18);
+  --p-text: #1d2a24;
+  --p-muted: #56605b;
+  --p-green: #0f6a4c;
+  --p-btn: linear-gradient(180deg, #137a55, #0d5f43);
+  --p-btn-border: rgba(15, 106, 76, .35);
   --p-gold: #b88c3c;
-  --p-input: #ffffff;
-  --p-input-border: #ddd8cc;
-  --p-seg: #f4f2ec;
-  --p-seg-line: #e2ddd1;
-  --p-tile: #faf8f3;
-  --p-tile-icon: #0f5c45;
-  --p-welcome: linear-gradient(180deg, #0f5c45 20%, #9a7534 100%);
+  --p-input: rgba(255, 255, 255, .7);
+  --p-input-border: #e4e0d4;
+  --p-seg: rgba(255, 255, 255, .7);
+  --p-seg-line: #e4e0d4;
+  --p-tile: rgba(255, 255, 255, .7);
+  --p-tile-icon: #0f6a4c;
+  --p-welcome: linear-gradient(180deg, #0f6a4c, #0f6a4c);
   --p-photo-shade: linear-gradient(90deg, rgba(255, 255, 255, 0) 30%, rgba(255, 255, 255, .25));
 }
 .portal-photo { background-size: cover; background-position: center 60%; }

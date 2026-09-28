@@ -12,6 +12,27 @@ def profile_of(user):
     return getattr(user, 'profile', None) or Profile(user=user)
 
 
+def iso(dt):
+    """نفس شكل التاريخ اللي يطلعه DRF (UTC ينكتب Z)."""
+    if not dt:
+        return None
+    value = dt.isoformat()
+    return value[:-6] + 'Z' if value.endswith('+00:00') else value
+
+
+def user_json(user):
+    """
+    المستخدم كـ JSON. نبنيه مباشرة بدل حقول DRF (أسرع بكثير لما نرجع مئات المستخدمين/الرسائل):
+    DRF يبني كائن لكل حقل لكل عنصر، وهذا كان أغلب وقت الطلب.
+    """
+    p = profile_of(user)
+    return {
+        'id': user.id, 'username': user.username, 'display_name': p.display_name or user.username,
+        'avatar': p.avatar.url if p.avatar else None, 'bio': p.bio, 'phone': p.phone, 'city': p.city,
+        'is_online': p.is_online, 'last_seen': iso(p.last_seen), 'date_joined': iso(user.date_joined), 'role': p.role,
+    }
+
+
 class UserSerializer(serializers.ModelSerializer):
     display_name = serializers.SerializerMethodField()
     avatar = serializers.SerializerMethodField()
@@ -50,6 +71,9 @@ class UserSerializer(serializers.ModelSerializer):
     def get_role(self, user):
         return profile_of(user).role
 
+    def to_representation(self, user):
+        return user_json(user)
+
     def get_last_seen(self, user):
         last_seen = profile_of(user).last_seen
         return last_seen.isoformat() if last_seen else None
@@ -68,6 +92,11 @@ class MeSerializer(UserSerializer):
 
     def get_university_id(self, user):
         return profile_of(user).university_id
+
+    def to_representation(self, user):
+        p = profile_of(user)
+        return {**user_json(user), 'mode': p.mode, 'theme': p.theme, 'email': user.email,
+                'university_id': p.university_id}
 
     def get_mode(self, user):
         return profile_of(user).mode

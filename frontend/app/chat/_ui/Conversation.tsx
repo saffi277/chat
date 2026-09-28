@@ -71,7 +71,8 @@ export function Conversation({ conv }: { conv: Conv }) {
       } else if (e.type === "typing" && e.user_id !== me.id) {
         const c = convRef.current;
         const u = c.participants.find((p) => p.id === e.user_id);
-        setTyping(c.kind === "group" && u ? `${nameOf(u)} يكتب...` : "يكتب الآن...");
+        const who = e.name || (u ? nameOf(u) : "");
+        setTyping(c.kind === "group" && who ? `${who} يكتب...` : "يكتب الآن...");
         clearTimeout(typingTimer.current);
         typingTimer.current = setTimeout(() => setTyping(null), 2200);
       } else if ((e.type === "read" || e.type === "delivered") && (e.type === "read" ? e.reader_id : e.user_id) !== me.id) {

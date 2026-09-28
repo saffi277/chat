@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
 
 import dj_database_url
@@ -111,6 +112,14 @@ DATABASES = {
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
+# كلمات المرور تنحفظ بـ Argon2 (أقوى خوارزمية هاش حالياً: بطيئة عمداً وتحتاج ذاكرة، فالتخمين صعب جداً).
+# الحسابات القديمة (PBKDF2) تتحول لـ Argon2 تلقائياً أول ما يسجلون دخول
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+]
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
@@ -159,9 +168,10 @@ ASGI_APPLICATION = 'config.asgi.application'
 # InMemory يشتغل بعملية وحدة بس (تطوير). Redis يخلي عدة عمال (workers) يوصلون لنفس الاتصالات.
 REDIS_URL = os.environ.get('REDIS_URL')
 if REDIS_URL:
+    # Pub/Sub: أخف بكثير لما آلاف الناس متصلين (الرسالة تنبث مباشرة بدون ما تنخزن)
     CHANNEL_LAYERS = {'default': {
-        'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {'hosts': [REDIS_URL], 'capacity': 1500, 'expiry': 30},
+        'BACKEND': 'channels_redis.pubsub.RedisPubSubChannelLayer',
+        'CONFIG': {'hosts': [REDIS_URL]},
     }}
     CACHES = {'default': {'BACKEND': 'django.core.cache.backends.redis.RedisCache', 'LOCATION': REDIS_URL}}
 else:
@@ -169,9 +179,22 @@ else:
 
 REST_FRAMEWORK = {
     # كل Request لازم يحمل Header:  Authorization: Token <token>
-    'DEFAULT_AUTHENTICATION_CLASSES': ['rest_framework.authentication.TokenAuthentication'],
+    # نفس Header التوكن، بس السيرفر يحفظ الهاش مالته بس (accounts/tokens.py)
+    'DEFAULT_AUTHENTICATION_CLASSES': ['accounts.authentication.HashedTokenAuthentication'],
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
+    # حماية من الإغراق: كل مستخدم (أو IP قبل الدخول) إله حد طلبات بالدقيقة.
+    # العدادات بـ Redis (مشتركة بين كل العمال)
+    'DEFAULT_THROTTLE_CLASSES': ['config.throttles.UserThrottle', 'config.throttles.AnonThrottle'],
+    'DEFAULT_THROTTLE_RATES': {
+        'user': os.environ.get('THROTTLE_USER', '600/min'),
+        'anon': os.environ.get('THROTTLE_ANON', '120/min'),
+        'login': os.environ.get('THROTTLE_LOGIN', '20/min'),   # تخمين كلمات المرور
+        'send': os.environ.get('THROTTLE_SEND', '120/min'),    # رسائل لكل مستخدم
+    },
+    # خلف Caddy: عنوان المستخدم الحقيقي بـ X-Forwarded-For (وإلا الكل يطلع بعنوان البروكسي)
+    'NUM_PROXIES': int(os.environ.get('NUM_PROXIES', '0')) or None,
 }
+THROTTLING_ENABLED = env_bool('THROTTLING_ENABLED', 'test' not in sys.argv)
 
 # نسمح لواجهة Next.js تحچي ويا الـ API.
 # بالتطوير نقبل أي بورت على جهازنا، لأن Next.js ينتقل لـ 3001 إذا 3000 محجوز.
@@ -183,6 +206,8 @@ if DEBUG:
 # الملفات اللي يرفعها المستخدمين (الصور الشخصية)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', BASE_DIR / 'media'))
+# مفاتيح الإشعارات والتشفير: لازم تبقى ثابتة (بـ Docker مجلد دائم /app/keys)، وإذا ضاعت تضيع الإشعارات والرسائل المشفرة
+KEYS_DIR = Path(os.environ.get('KEYS_DIR', BASE_DIR))
 # أكبر ملف نقبله بالطلب (الفيديو 50 ميگا + شوية)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 60 * 1024 * 1024
 

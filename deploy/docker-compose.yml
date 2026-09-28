@@ -1,0 +1,80 @@
+# كل النظام بأمر واحد:  docker compose up -d --build
+# ولرابط https مؤقت للموبايل:  docker compose --profile tunnel up -d --build
+name: asbat-chat
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: wasl
+      POSTGRES_USER: wasl
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    command: ["postgres", "-c", "max_connections=300", "-c", "shared_buffers=256MB"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wasl"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+  # الـ API (HTTP): gunicorn بعدة عمليات وthreads
+  web:
+    build: ../backend
+    command: ["web"]
+    restart: unless-stopped
+    env_file: .env
+    environment: &backend_env
+      DATABASE_URL: postgres://wasl:${POSTGRES_PASSWORD:-change-me}@db:5432/wasl
+      REDIS_URL: redis://redis:6379/0
+      MEDIA_ROOT: /data/media
+      KEYS_DIR: /app/keys
+      NUM_PROXIES: "1"
+    volumes: &backend_volumes
+      - media:/data/media
+      - keys:/app/keys
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_started}
+
+  # الاتصالات المباشرة (WebSocket): uvicorn بعدة عمال، وكلهم يتواصلون عبر Redis
+  ws:
+    build: ../backend
+    command: ["ws"]
+    restart: unless-stopped
+    env_file: .env
+    environment: *backend_env
+    volumes: *backend_volumes
+    depends_on: [web]
+
+  frontend:
+    build: ../frontend
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [web, ws, frontend]
+
+  # رابط https مؤقت (بدون دومين) حتى تجرب من أي موبايل. يطلع بالسجل: docker compose logs tunnel
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    profiles: [tunnel]
+    command: ["tunnel", "--no-autoupdate", "--url", "http://caddy:80"]
+    depends_on: [caddy]
+
+volumes:
+  pgdata:
+  media:
+  keys:
+  caddy_data:

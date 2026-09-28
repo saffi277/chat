@@ -1,16 +1,17 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Exists, F, Max, OuterRef, Q, Subquery
+from django.db.models import Count, DateTimeField, Exists, IntegerField, Min, OuterRef, Prefetch, Q, Subquery, Value
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, throttle_classes
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
 from accounts.serializers import profile_of
+from config.throttles import SendThrottle, UserThrottle
 
 from . import services
 from .media import guess_kind, validate_upload
@@ -19,6 +20,7 @@ from .serializers import ConversationSerializer, MemberSerializer, MessageSerial
 
 User = get_user_model()
 PAGE = 50
+EPOCH = timezone.make_aware(timezone.datetime(2000, 1, 1))
 
 
 def name_of(user):
@@ -58,14 +60,40 @@ def conversations(request):
                 Q(title__icontains=q) | Q(memberships__user__username__icontains=q)
                 | Q(memberships__user__profile__display_name__icontains=q)).distinct()
         my_row = Membership.objects.filter(conversation=OuterRef('pk'), user=request.user)
+        # كلشي يتحسب بنفس الاستعلام (بدل استعلامين لكل محادثة): آخر رسالة، غير المقروء، التثبيت.
+        # 2000 طالب يفتحون التطبيق سوه = 2000 طلب، وكل طلب هسه بعدد ثابت من الاستعلامات مهما كثرت محادثاته
+        since = Coalesce(OuterRef('cleared'), Value(EPOCH, output_field=DateTimeField()))
+        visible = Message.objects.filter(conversation=OuterRef('pk'), created_at__gt=since)
+        unread = (visible.filter(id__gt=OuterRef('my_read')).exclude(sender_id=request.user.id)
+                  .order_by().values('conversation').annotate(c=Count('id')).values('c'))
+        # المجموعات ما نحمل أعضاءها (ممكن مئات): نجيب العدد، وأقل نقطة قراءة/وصول عند الباقين (لعلامات ✓✓)
+        others = Membership.objects.filter(conversation=OuterRef('pk')).exclude(user=request.user).order_by().values(
+            'conversation')
         qs = qs.annotate(
-            last=Coalesce(Max('messages__created_at'), 'created_at'),
             pinned=Exists(my_row.filter(is_pinned=True)),
             cleared=Subquery(my_row.values('cleared_at')[:1]),
+            my_read=Subquery(my_row.values('last_read_id')[:1]),
+            my_role=Subquery(my_row.values('role')[:1]),
+            my_favorite=Subquery(my_row.values('is_favorite')[:1]),
+            my_muted=Subquery(my_row.values('is_muted')[:1]),
+            my_archived=Subquery(my_row.values('is_archived')[:1]),
+            n_members=Coalesce(Subquery(others.annotate(c=Count('id')).values('c'), output_field=IntegerField()), 0) + 1,
+            others_read=Subquery(others.annotate(m=Min('last_read_id')).values('m')),
+            others_delivered=Subquery(others.annotate(m=Min('last_delivered_id')).values('m')),
+        ).annotate(
+            last_msg_id=Subquery(visible.order_by('-id').values('id')[:1]),
+            last=Coalesce(Subquery(visible.order_by('-id').values('created_at')[:1]), 'created_at'),
+            unread=Coalesce(Subquery(unread, output_field=IntegerField()), 0),
         )
         # "حذفت المحادثة" = تنخفي لحد ما توصل رسالة جديدة بعد الحذف
-        qs = qs.filter(Q(cleared__isnull=True) | Q(last__gt=F('cleared'))).order_by('-pinned', '-last')
-        data = ConversationSerializer(qs, many=True, context={'request': request}).data
+        qs = (qs.filter(Q(cleared__isnull=True) | Q(last_msg_id__isnull=False)).order_by('-pinned', '-last')
+              .prefetch_related(Prefetch('memberships', queryset=Membership.objects.exclude(
+                  conversation__kind=Conversation.GROUP).select_related('user__profile'))))
+        convs = list(qs)
+        ids = [c.last_msg_id for c in convs if c.last_msg_id]
+        last_messages = {m.id: m for m in Message.objects.filter(id__in=ids).select_related(
+            'sender__profile', 'reply_to__sender__profile').prefetch_related('reactions')} if ids else {}
+        data = ConversationSerializer(convs, many=True, context={'request': request, 'last_messages': last_messages, 'compact': True}).data
         if f == 'unread':
             data = [c for c in data if c['unread_count']]
         return Response(data)
@@ -81,6 +109,7 @@ def conversations(request):
     if created:
         conv = Conversation.objects.create(kind=Conversation.DIRECT, created_by=request.user)
         Membership.objects.bulk_create([Membership(conversation=conv, user=u) for u in (request.user, other)])
+        services.forget_contacts(request.user.id, other.id)
     return Response(conv_data(request, conv), status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
@@ -107,6 +136,7 @@ def create_group(request):
         description=(request.data.get('description') or '')[:300], avatar=request.FILES.get('avatar'))
     Membership.objects.create(conversation=conv, user=request.user, role=Membership.ADMIN)
     Membership.objects.bulk_create([Membership(conversation=conv, user=u) for u in members])
+    services.forget_contacts(request.user.id, *[u.id for u in members])
     services.system_message(conv, request.user, f'{name_of(request.user)} أنشأ المجموعة "{title}"')
     return Response(conv_data(request, conv), status=status.HTTP_201_CREATED)
 
@@ -171,6 +201,7 @@ def clear_conversation(request, pk):
 def leave_group(user, membership, actor):
     conv = membership.conversation
     was_admin = membership.role == Membership.ADMIN
+    services.forget_contacts(*services.member_ids(conv))
     membership.delete()
     text = f'{name_of(user)} غادر المجموعة' if actor == user else f'{name_of(actor)} أزال {name_of(user)}'
     remaining = conv.memberships.order_by('joined_at', 'id')
@@ -196,6 +227,7 @@ def members(request, pk):
     existing = set(services.member_ids(conv))
     new = list(User.objects.filter(id__in=ids).exclude(id__in=existing))
     Membership.objects.bulk_create([Membership(conversation=conv, user=u) for u in new])
+    services.forget_contacts(*services.member_ids(conv))
     for u in new:
         services.system_message(conv, request.user, f'{name_of(request.user)} أضاف {name_of(u)}')
     services.send_to_users(services.member_ids(conv), {'type': 'conversation_updated', 'conversation_id': conv.id})
@@ -227,6 +259,7 @@ def member_detail(request, pk, user_id):
 # ------------------------------------------------------------------ الرسائل
 
 @api_view(['GET', 'POST'])
+@throttle_classes([SendThrottle, UserThrottle])
 def messages(request, pk):
     m = my_membership(request, pk)
     conv = m.conversation
@@ -352,7 +385,7 @@ MEDIA_TYPES = {
     'media': Q(kind__in=[Message.IMAGE, Message.VIDEO]),
     'voice': Q(kind=Message.VOICE),
     'file': Q(kind=Message.FILE),
-    'link': Q(kind=Message.TEXT, content__icontains='http'),
+    'link': Q(has_link=True),  # النص مشفر، فنستخدم العلامة اللي تنحسب وقت الحفظ
     'location': Q(kind=Message.LOCATION),
 }
 

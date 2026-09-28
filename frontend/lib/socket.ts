@@ -9,7 +9,7 @@ export type ChatEvent =
   | { type: "message_updated"; message: Message } // تعدلت، انحذفت، أو الموقع المباشر تحرك
   | { type: "read"; reader_id: number; message_id: number } // ✓✓ أزرق
   | { type: "delivered"; user_id: number; message_id: number } // ✓✓ رمادي
-  | { type: "typing"; user_id: number }
+  | { type: "typing"; user_id: number; name?: string }
   // على الاتصال العام /ws/presence/
   | { type: "inbox"; message: Message } // أي رسالة بأي محادثة (حدّث القائمة)
   | { type: "presence"; user_id: number; is_online: boolean }

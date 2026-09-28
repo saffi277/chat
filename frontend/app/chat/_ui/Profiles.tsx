@@ -5,7 +5,7 @@ import { mediaUrl, ROLE_LABELS, type Member, type Message, type User } from "@/l
 import { conversations as convApi, messages as msgApi, users as usersApi } from "@/lib/endpoints";
 import { Avatar, Chip, ConvAvatar, fileSize, IconButton, lastSeenText, listTime, nameOf, Panel, preview, Section } from "./bits";
 import { Icon, type IconName } from "./icons";
-import { useWasl } from "./store";
+import { useUserSearch, useWasl } from "./store";
 
 function Action({ icon, label, onClick, active }: { icon: IconName; label: string; onClick: () => void; active?: boolean }) {
   return (
@@ -354,10 +354,9 @@ export function GroupPanel({ convId }: { convId: number }) {
 function PickPeople({ title, exclude = [], confirmLabel, onConfirm, onCancel, children }: {
   title: string; exclude?: number[]; confirmLabel: string; onConfirm: (ids: number[]) => void; onCancel: () => void; children?: React.ReactNode;
 }) {
-  const { users } = useWasl();
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<number[]>([]);
-  const list = users.filter((u) => !exclude.includes(u.id) && (!q || nameOf(u).includes(q) || u.username.includes(q)));
+  const list = useUserSearch(q).list.filter((u) => !exclude.includes(u.id));
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onCancel}>
       <div className="w-strong w-shadow flex max-h-[85dvh] w-full max-w-md flex-col rounded-3xl p-4" style={{ border: "1px solid var(--border)" }} onClick={(e) => e.stopPropagation()}>

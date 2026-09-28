@@ -1,6 +1,6 @@
 import json
 import logging
-import threading
+from concurrent.futures import ThreadPoolExecutor
 
 from django.conf import settings
 from django.db import close_old_connections
@@ -10,6 +10,9 @@ from .models import PushSubscription
 from .vapid import get_signer
 
 log = logging.getLogger(__name__)
+# عدد ثابت من العمال للإشعارات: لو انرسلت 2000 رسالة سوه ما نفتح 2000 thread،
+# تنتظر بالطابور وتنرسل بالتسلسل بدون ما تبطئ الرسائل نفسها
+_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix='push')
 
 
 def notify_new_message(message, preview=None):
@@ -40,8 +43,8 @@ def notify_new_message(message, preview=None):
     if getattr(settings, 'PUSH_RUN_INLINE', False):
         _send_all(subs, payload)
     else:
-        # بـ thread منفصل حتى الرسالة ما تتأخر بانتظار خدمة الإشعارات
-        threading.Thread(target=_send_all, args=(subs, payload), daemon=True).start()
+        # بالخلفية حتى الرسالة ما تتأخر بانتظار خدمة الإشعارات
+        _pool.submit(_send_all, subs, payload)
 
 
 def send_to_user(user, payload_dict):
@@ -53,7 +56,7 @@ def send_to_user(user, payload_dict):
     if getattr(settings, 'PUSH_RUN_INLINE', False):
         _send_all(subs, payload)
     else:
-        threading.Thread(target=_send_all, args=(subs, payload), daemon=True).start()
+        _pool.submit(_send_all, subs, payload)
 
 
 def _send_all(subs, payload):
