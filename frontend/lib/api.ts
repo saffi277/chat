@@ -29,10 +29,14 @@ export type User = {
   last_seen: string | null;
   date_joined: string;
   role: Role;
+  /** ضمن جهات اتصالي؟ (يصل من قوائم الناس وملف الشخص فقط) */
+  is_contact?: boolean;
 };
 
 /** الدور بالجامعة */
 export type Role = "student" | "faculty" | "staff";
+/** النشر في القنوات وإنشاؤها: للتدريسيين والإداريين */
+export const canBroadcast = (u: Pick<User, "role">) => u.role === "faculty" || u.role === "staff";
 /** اسم الدور بالعربية (مرّره إلى t() للعرض بلغة المستخدم) */
 export const ROLE_LABELS: Record<Role, string> = { student: "طالب", faculty: "تدريسي", staff: "إداري" };
 
@@ -75,7 +79,8 @@ export type Message = {
   reactions: Reaction[];
 };
 
-export type ConversationKind = "direct" | "group" | "saved";
+/** channel = قناة: ينشر فيها مشرفوها (تدريسيون وإداريون) ويقرأ المشتركون */
+export type ConversationKind = "direct" | "group" | "saved" | "channel";
 
 export type Conversation = {
   id: number;
@@ -96,6 +101,9 @@ export type Conversation = {
 };
 
 export type Member = { user: User; role: "admin" | "member"; joined_at: string };
+
+/** قناة في دليل القنوات */
+export type ChannelInfo = { id: number; kind: "channel"; title: string; description: string; avatar: string | null; member_count: number; is_subscribed: boolean };
 
 export type StoryItem = {
   id: number;

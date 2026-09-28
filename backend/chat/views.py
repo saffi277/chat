@@ -33,9 +33,28 @@ def my_membership(request, pk):
     return get_object_or_404(Membership.objects.select_related('conversation'), conversation_id=pk, user=request.user)
 
 
+SHARED = (Conversation.GROUP, Conversation.CHANNEL)  # لها أعضاء ومشرفون
+
+
 def require_admin(membership):
-    if membership.conversation.kind != Conversation.GROUP or membership.role != Membership.ADMIN:
+    if membership.conversation.kind not in SHARED or membership.role != Membership.ADMIN:
         raise PermissionDenied(_('هذا الإجراء للمشرف فقط'))
+
+
+def require_can_post(membership):
+    """القناة: النشر لمشرفيها فقط، والمشتركون يقرؤون ويتفاعلون."""
+    if membership.conversation.kind == Conversation.CHANNEL and membership.role != Membership.ADMIN:
+        raise PermissionDenied(_('النشر في القناة لمشرفيها فقط'))
+
+
+def known_users(request, ids):
+    """من القائمة: فقط من أعرفهم (جهات اتصالي ومن يشاركني محادثة). لا إضافة غرباء بتجربة الأرقام."""
+    try:
+        ids = [int(i) for i in ids]
+    except (TypeError, ValueError):
+        raise ValidationError({'member_ids': _('قائمة غير صحيحة')})
+    allowed = services.known_ids(request.user.id)
+    return list(User.objects.filter(id__in=[i for i in ids if i in allowed]).exclude(id=request.user.id))
 
 
 def conv_data(request, conv):
@@ -53,6 +72,8 @@ def conversations(request):
         qs = Conversation.objects.filter(memberships__in=mine.filter(is_archived=(f == 'archived')))
         if f == 'groups':
             qs = qs.filter(kind=Conversation.GROUP)
+        elif f == 'channels':
+            qs = qs.filter(kind=Conversation.CHANNEL)
         elif f == 'favorites':
             qs = qs.filter(memberships__in=mine.filter(is_favorite=True))
         q = request.query_params.get('q', '').strip()
@@ -67,7 +88,7 @@ def conversations(request):
         visible = Message.objects.filter(conversation=OuterRef('pk'), created_at__gt=since)
         unread = (visible.filter(id__gt=OuterRef('my_read')).exclude(sender_id=request.user.id)
                   .order_by().values('conversation').annotate(c=Count('id')).values('c'))
-        # المجموعات ما نحمل أعضاءها (ممكن مئات): نجيب العدد، وأقل نقطة قراءة/وصول عند الباقين (لعلامات ✓✓)
+        # المجموعات والقنوات ما نحمل أعضاءها (ممكن مئات أو آلاف): نجيب العدد، وأقل نقطة قراءة/وصول عند الباقين (لعلامات ✓✓)
         others = Membership.objects.filter(conversation=OuterRef('pk')).exclude(user=request.user).order_by().values(
             'conversation')
         qs = qs.annotate(
@@ -89,7 +110,7 @@ def conversations(request):
         # "حذفت المحادثة" = تنخفي لحد ما توصل رسالة جديدة بعد الحذف
         qs = (qs.filter(Q(cleared__isnull=True) | Q(last_msg_id__isnull=False)).order_by('-pinned', '-last')
               .prefetch_related(Prefetch('memberships', queryset=Membership.objects.exclude(
-                  conversation__kind=Conversation.GROUP).select_related('user__profile'))))
+                  conversation__kind__in=SHARED).select_related('user__profile'))))
         convs = list(qs)
         ids = [c.last_msg_id for c in convs if c.last_msg_id]
         last_messages = {m.id: m for m in Message.objects.filter(id__in=ids).select_related(
@@ -100,9 +121,16 @@ def conversations(request):
         return Response(data)
 
     # POST {"user_id": 5} → نرجع المحادثة الثنائية الموجودة أو ننشئ وحدة جديدة
-    other = get_object_or_404(User, pk=request.data.get('user_id'))
-    if other == request.user:
+    try:
+        other_id = int(request.data.get('user_id'))
+    except (TypeError, ValueError):
+        raise ValidationError({'user_id': _('الشخص مطلوب')})
+    if other_id == request.user.id:
         return Response({'detail': _('لمراسلة نفسك استخدم الرسائل المحفوظة')}, status=status.HTTP_400_BAD_REQUEST)
+    # فقط من أعرفه (جهة اتصال، أو يشاركني محادثة، أو أضافني)، حتى لا يراسل أحدٌ الغرباء بتجربة الأرقام
+    if other_id not in services.known_ids(request.user.id):
+        return Response({'detail': _('أضف هذا الشخص إلى جهات اتصالك أولاً')}, status=status.HTTP_404_NOT_FOUND)
+    other = get_object_or_404(User, pk=other_id)
     # filter مرتين = JOIN مرتين: محادثة ثنائية فيها أنا وفيها هو
     conv = (Conversation.objects.filter(kind=Conversation.DIRECT)
             .filter(memberships__user=request.user).filter(memberships__user=other).first())
@@ -131,7 +159,7 @@ def create_group(request):
     if not title:
         raise ValidationError({'title': _('اسم المجموعة مطلوب')})
     ids = request.data.getlist('member_ids') if hasattr(request.data, 'getlist') else request.data.get('member_ids', [])
-    members = list(User.objects.filter(id__in=ids).exclude(id=request.user.id))
+    members = known_users(request, ids)
     conv = Conversation.objects.create(
         kind=Conversation.GROUP, title=title[:80], created_by=request.user,
         description=(request.data.get('description') or '')[:300], avatar=request.FILES.get('avatar'))
@@ -139,6 +167,56 @@ def create_group(request):
     Membership.objects.bulk_create([Membership(conversation=conv, user=u) for u in members])
     services.forget_contacts(request.user.id, *[u.id for u in members])
     services.system_message(conv, request.user, f'{name_of(request.user)} أنشأ المجموعة "{title}"')
+    return Response(conv_data(request, conv), status=status.HTTP_201_CREATED)
+
+
+# ------------------------------------------------------------------ القنوات
+
+def channel_json(conv, subscribed):
+    return {'id': conv.id, 'kind': conv.kind, 'title': conv.title, 'description': conv.description,
+            'avatar': conv.avatar.url if conv.avatar else None, 'member_count': conv.n_subs,
+            'is_subscribed': subscribed}
+
+
+@api_view(['GET', 'POST'])
+def channels(request):
+    """
+    GET ?q=  ← دليل قنوات الجامعة (الأكثر اشتراكاً أولاً)، مع is_subscribed.
+    POST {title, description?} ← قناة جديدة (للتدريسيين والإداريين فقط). منشئها مشرفها.
+    """
+    if request.method == 'GET':
+        mine = set(Membership.objects.filter(user=request.user, conversation__kind=Conversation.CHANNEL)
+                   .values_list('conversation_id', flat=True))
+        qs = Conversation.objects.filter(kind=Conversation.CHANNEL).annotate(n_subs=Count('memberships'))
+        q = request.query_params.get('q', '').strip()
+        if q:
+            qs = qs.filter(Q(title__icontains=q) | Q(description__icontains=q))
+        return Response([channel_json(c, c.id in mine) for c in qs.order_by('-n_subs', 'title')[:100]])
+
+    if not services.can_broadcast(request.user):
+        raise PermissionDenied(_('إنشاء القنوات للتدريسيين والإداريين فقط'))
+    title = (request.data.get('title') or '').strip()
+    if not title:
+        raise ValidationError({'title': _('اسم القناة مطلوب')})
+    conv = Conversation.objects.create(
+        kind=Conversation.CHANNEL, title=title[:80], created_by=request.user,
+        description=(request.data.get('description') or '').strip()[:300], avatar=request.FILES.get('avatar'))
+    Membership.objects.create(conversation=conv, user=request.user, role=Membership.ADMIN)
+    services.system_message(conv, request.user, f'{name_of(request.user)} أنشأ القناة "{title}"')
+    return Response(conv_data(request, conv), status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST', 'DELETE'])
+def subscribe(request, pk):
+    """POST = اشتراك في القناة، DELETE = إلغاء الاشتراك."""
+    conv = get_object_or_404(Conversation, pk=pk, kind=Conversation.CHANNEL)
+    if request.method == 'DELETE':
+        m = Membership.objects.filter(conversation=conv, user=request.user).select_related('conversation').first()
+        if m:
+            leave_group(request.user, m, actor=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    # من يشترك الآن يرى منشورات القناة كلها (هي معلنة للجميع أصلاً)
+    Membership.objects.get_or_create(conversation=conv, user=request.user)
     return Response(conv_data(request, conv), status=status.HTTP_201_CREATED)
 
 
@@ -150,8 +228,8 @@ def conversation_detail(request, pk):
         return Response(conv_data(request, conv))
 
     if request.method == 'DELETE':
-        # بالمجموعة = مغادرة. بالثنائية = أرشفة (ما نمسح رسائل الطرف الثاني)
-        if conv.kind == Conversation.GROUP:
+        # بالمجموعة = مغادرة، وبالقناة = إلغاء الاشتراك. بالثنائية = أرشفة (ما نمسح رسائل الطرف الثاني)
+        if conv.kind in SHARED:
             leave_group(request.user, m, actor=request.user)
         else:
             Membership.objects.filter(pk=m.pk).update(is_archived=True)
@@ -169,9 +247,11 @@ def conversation_detail(request, pk):
         if 'title' in request.data:
             title = (request.data.get('title') or '').strip()
             if not title:
-                raise ValidationError({'title': _('اسم المجموعة مطلوب')})
+                raise ValidationError({'title': _('اسم القناة مطلوب') if conv.kind == Conversation.CHANNEL
+                                       else _('اسم المجموعة مطلوب')})
             if title != conv.title:
-                services.system_message(conv, request.user, f'{name_of(request.user)} غيّر اسم المجموعة إلى "{title}"')
+                what = 'القناة' if conv.kind == Conversation.CHANNEL else 'المجموعة'
+                services.system_message(conv, request.user, f'{name_of(request.user)} غيّر اسم {what} إلى "{title}"')
             conv.title = title[:80]
         if 'description' in request.data:
             conv.description = (request.data.get('description') or '')[:300]
@@ -201,33 +281,47 @@ def clear_conversation(request, pk):
 
 def leave_group(user, membership, actor):
     conv = membership.conversation
+    channel = conv.kind == Conversation.CHANNEL
     was_admin = membership.role == Membership.ADMIN
-    services.forget_contacts(*services.member_ids(conv))
+    if not channel:
+        services.forget_contacts(*services.member_ids(conv))
     membership.delete()
     text = f'{name_of(user)} غادر المجموعة' if actor == user else f'{name_of(actor)} أزال {name_of(user)}'
     remaining = conv.memberships.order_by('joined_at', 'id')
     if not remaining.exists():
         conv.delete()  # آخر واحد طلع: المجموعة ما إلها داعي
         return
-    services.system_message(conv, actor, text)
-    # إذا طلع آخر مشرف، أقدم عضو يصير مشرف
+    if not channel:  # القناة: لا رسائل «غادر» لكل مشترك (ضجيج لا يهم أحداً)
+        services.system_message(conv, actor, text)
+    # إذا طلع آخر مشرف، أقدم عضو يصير مشرف. في القناة: أقدم تدريسي أو إداري فقط (غيرهم لا ينشر)
     if was_admin and not remaining.filter(role=Membership.ADMIN).exists():
-        remaining.filter(pk=remaining.first().pk).update(role=Membership.ADMIN)
-    services.send_to_users([user.id, *services.member_ids(conv)], {'type': 'conversation_updated', 'conversation_id': conv.id})
+        heirs = [m for m in remaining.select_related('user__profile')[:500]
+                 if not channel or services.can_broadcast(m.user)]
+        if heirs:
+            Membership.objects.filter(pk=heirs[0].pk).update(role=Membership.ADMIN)
+    services.send_to_users([user.id] if channel else [user.id, *services.member_ids(conv)],
+                           {'type': 'conversation_updated', 'conversation_id': conv.id})
 
 
 @api_view(['GET', 'POST'])
 def members(request, pk):
     m = my_membership(request, pk)
     conv = m.conversation
+    channel = conv.kind == Conversation.CHANNEL
     if request.method == 'GET':
         qs = conv.memberships.select_related('user__profile').order_by('-role', 'joined_at')
-        return Response(MemberSerializer(qs, many=True).data)
+        # القناة: المشترك يرى المشرفين فقط (قائمة المشتركين خاصة، كما في قنوات واتساب)
+        if channel and m.role != Membership.ADMIN:
+            qs = qs.filter(role=Membership.ADMIN)
+        return Response(MemberSerializer(qs[:1000] if channel else qs, many=True).data)
     require_admin(m)
-    ids = request.data.get('user_ids') or []
     existing = set(services.member_ids(conv))
-    new = list(User.objects.filter(id__in=ids).exclude(id__in=existing))
+    new = [u for u in known_users(request, request.data.get('user_ids') or []) if u.id not in existing]
     Membership.objects.bulk_create([Membership(conversation=conv, user=u) for u in new])
+    if channel:
+        services.send_to_users([u.id for u in new], {'type': 'conversation_updated', 'conversation_id': conv.id})
+        return Response(MemberSerializer(conv.memberships.select_related('user__profile')[:1000], many=True).data,
+                        status=status.HTTP_201_CREATED)
     services.forget_contacts(*services.member_ids(conv))
     for u in new:
         services.system_message(conv, request.user, f'{name_of(request.user)} أضاف {name_of(u)}')
@@ -244,7 +338,7 @@ def member_detail(request, pk, user_id):
     if request.method == 'DELETE':
         if target.user_id != request.user.id:
             require_admin(m)  # تطلع بنفسك، أو المشرف يطلعك
-        if m.conversation.kind != Conversation.GROUP:
+        if m.conversation.kind not in SHARED:
             raise ValidationError(_('هذه ليست مجموعة'))
         leave_group(target.user, target, actor=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -252,6 +346,8 @@ def member_detail(request, pk, user_id):
     role = request.data.get('role')
     if role not in (Membership.ADMIN, Membership.MEMBER):
         raise ValidationError({'role': 'admin | member'})
+    if role == Membership.ADMIN and m.conversation.kind == Conversation.CHANNEL and not services.can_broadcast(target.user):
+        raise PermissionDenied(_('مشرفو القناة من التدريسيين والإداريين فقط'))
     target.role = role
     target.save(update_fields=['role'])
     return Response(MemberSerializer(target).data)
@@ -279,6 +375,7 @@ def messages(request, pk):
         page = list(qs.order_by('-id')[:limit])[::-1]
         receipts = services.receipts_for(conv)
         return Response(MessageSerializer(page, many=True, context={'receipts': receipts}).data)
+    require_can_post(m)
     return Response(send_message(request, conv), status=status.HTTP_201_CREATED)
 
 

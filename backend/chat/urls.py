@@ -6,6 +6,8 @@ urlpatterns = [
     path('conversations/', views.conversations),
     path('conversations/saved/', views.saved),
     path('conversations/groups/', views.create_group),
+    path('channels/', views.channels),
+    path('channels/<int:pk>/subscribe/', views.subscribe),
     path('conversations/<int:pk>/', views.conversation_detail),
     path('conversations/<int:pk>/members/', views.members),
     path('conversations/<int:pk>/members/<int:user_id>/', views.member_detail),

@@ -83,6 +83,8 @@ export function preview(m: Message | null, meId?: number): { icon?: IconName; te
 const SYSTEM_PATTERNS: [RegExp, string][] = [
   [/^(.+) أنشأ المجموعة "(.*)"$/, '{0} created the group "{1}"'],
   [/^(.+) غيّر اسم المجموعة إلى "(.*)"$/, '{0} renamed the group to "{1}"'],
+  [/^(.+) أنشأ القناة "(.*)"$/, '{0} created the channel "{1}"'],
+  [/^(.+) غيّر اسم القناة إلى "(.*)"$/, '{0} renamed the channel to "{1}"'],
   [/^(.+) أضاف (.+)$/, "{0} added {1}"],
   [/^(.+) أزال (.+)$/, "{0} removed {1}"],
   [/^(.+) غادر المجموعة$/, "{0} left the group"],
@@ -147,14 +149,14 @@ export function Avatar({ user, src, name, size = 48, online, ring, square }: {
   );
 }
 
-/** صورة المحادثة: مجموعة = صورتها، ثنائية = الطرف الآخر، محفوظة = علامة */
+/** صورة المحادثة: مجموعة أو قناة = صورتها، ثنائية = الطرف الآخر، محفوظة = علامة */
 export function ConvAvatar({ conv, other, size = 52, online }: { conv: Conversation; other: User | null; size?: number; online?: boolean }) {
   if (conv.kind === "saved") {
     return <div className="w-tint grid shrink-0 place-items-center rounded-full" style={{ width: size, height: size }}><Icon name="bookmark" size={size * 0.42} filled /></div>;
   }
-  if (conv.kind === "group") {
-    // مجموعة بلا صورة: دائرة بنفسجية فاتحة مع أيقونة أشخاص (كما في التصميم)
-    if (!conv.avatar) return <div className="w-tint grid shrink-0 place-items-center rounded-full" style={{ width: size, height: size }}><Icon name="users" size={size * 0.44} filled /></div>;
+  if (conv.kind === "group" || conv.kind === "channel") {
+    // مجموعة (أو قناة) بلا صورة: دائرة بنفسجية فاتحة مع أيقونة أشخاص (أو مكبّر صوت)
+    if (!conv.avatar) return <div className="w-tint grid shrink-0 place-items-center rounded-full" style={{ width: size, height: size }}><Icon name={conv.kind === "channel" ? "megaphone" : "users"} size={size * 0.44} filled={conv.kind === "group"} /></div>;
     return <Avatar src={conv.avatar} name={conv.title} size={size} user={null} />;
   }
   return <Avatar user={other} size={size} online={online} />;

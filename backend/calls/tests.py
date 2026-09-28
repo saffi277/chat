@@ -7,6 +7,7 @@ from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from chat.testing import open_chat
 from config.asgi import application
 
 from .models import Call
@@ -25,7 +26,7 @@ def register(username):
 class CallTests(TestCase):
     def setUp(self):
         self.ali, self.sara = register('ali'), register('sara')
-        self.conv = self.ali.post('/api/conversations/', {'user_id': self.sara.user['id']}, format='json').data['id']
+        self.conv = open_chat(self.ali, self.sara.user['id']).data['id']
 
     def test_answered_call(self, _):
         c = self.ali.post('/api/calls/', {'conversation_id': self.conv, 'kind': 'video'}, format='json').data
@@ -101,7 +102,7 @@ class IceServerTests(TestCase):
 class SignalingTests(TransactionTestCase):
     async def test_signal_relayed_only_within_call(self):
         ali, sara, omar = [await sync_to_async(register)(n) for n in ('ali', 'sara', 'omar')]
-        conv = (await sync_to_async(ali.post)('/api/conversations/', {'user_id': sara.user['id']}, format='json')).data
+        conv = (await sync_to_async(open_chat)(ali, sara.user['id'])).data
         with mock.patch('notifications.push.webpush'):
             call = (await sync_to_async(ali.post)('/api/calls/', {'conversation_id': conv['id']}, format='json')).data
         a = WebsocketCommunicator(application, f'/ws/presence/?token={ali.token}')

@@ -148,6 +148,8 @@ def calls(request):
     conv = m.conversation
     if conv.kind == Conversation.SAVED:
         raise ValidationError(_('لا يمكنك الاتصال بنفسك'))
+    if conv.kind == Conversation.CHANNEL:  # وإلا رنّ هاتف كل مشترك في القناة
+        raise ValidationError(_('لا توجد مكالمات في القنوات'))
     kind = request.data.get('kind', Call.AUDIO)
     if kind not in (Call.AUDIO, Call.VIDEO):
         raise ValidationError({'kind': 'audio | video'})

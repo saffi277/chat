@@ -83,3 +83,22 @@ class AuthToken(models.Model):
 
     def __str__(self):
         return f'{self.user} ({self.created:%Y-%m-%d})'
+
+
+class Contact(models.Model):
+    """
+    جهة اتصال: شخص أضفته بنفسك (كما في واتساب). لا يرى أحد قائمة كل الحسابات؛
+    تضيف الشخص بمعرّف تعرفه عنه (الرقم الجامعي، البريد، اسم المستخدم، أو رقم الهاتف).
+    """
+
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='contacts')
+    contact = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='contact_of')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['owner', 'contact'], name='unique_contact')]
+        verbose_name = 'جهة اتصال'
+        verbose_name_plural = 'جهات الاتصال'
+
+    def __str__(self):
+        return f'{self.owner} → {self.contact}'

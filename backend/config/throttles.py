@@ -28,3 +28,18 @@ class UserThrottle(_Switchable, UserRateThrottle):
 
 class AnonThrottle(_Switchable, AnonRateThrottle):
     pass
+
+
+class LookupThrottle(_Switchable, UserRateThrottle):
+    """
+    البحث عن حساب بمعرّفه وإضافة جهة اتصال: 30 في الدقيقة لكل مستخدم، حتى لا يجرّب أحدٌ آلاف المعرّفات.
+    scope خاص به: لو شارك عدّاد الطلبات العامة لحُسبت عليه كل طلبات التطبيق.
+    عرض قائمة جهات الاتصال (GET /api/contacts/) لا يُحسب.
+    """
+    scope = 'lookup'
+    rate = '30/min'
+
+    def allow_request(self, request, view):
+        if request.method == 'GET' and request.path.rstrip('/').endswith('/contacts'):
+            return True
+        return super().allow_request(request, view)

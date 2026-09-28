@@ -47,7 +47,9 @@ def notify_new_message(message, preview=None):
                     data = {'title': _('وَصل'), 'body': _('رسالة جديدة')}
                 else:
                     body = (preview(_) if preview else message.content)[:100]
-                    if conv.kind == 'group':
+                    if conv.kind == 'channel':  # القناة تتكلم باسمها لا باسم المشرف
+                        data = {'title': conv.title or _('قناة'), 'body': body}
+                    elif conv.kind == 'group':
                         data = {'title': conv.title or _('مجموعة'), 'body': f'{sender_name}: {body}'}
                     else:
                         data = {'title': sender_name, 'body': body}

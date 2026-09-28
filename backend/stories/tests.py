@@ -10,6 +10,8 @@ from django.utils import timezone
 from PIL import Image
 from rest_framework.test import APIClient
 
+from chat.testing import befriend
+
 from .models import Story
 
 MEDIA = tempfile.mkdtemp()
@@ -31,6 +33,7 @@ class StoryTests(TestCase):
 
     def test_story_flow(self):
         ali, sara = self.register('ali'), self.register('sara')
+        befriend(sara, ali.user['id'])  # الحالات لمن أعرفهم فقط
         buf = io.BytesIO()
         Image.new('RGB', (10, 10), 'blue').save(buf, 'PNG')
         img = SimpleUploadedFile('s.png', buf.getvalue(), content_type='image/png')

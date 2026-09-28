@@ -11,7 +11,7 @@ from rest_framework.response import Response
 
 from accounts.serializers import UserSerializer
 from chat.media import validate_upload
-from chat.services import send_to_contacts, send_to_users
+from chat.services import known_ids, send_to_contacts, send_to_users
 from config.media import signed_url
 
 from .models import Story, StoryView
@@ -32,7 +32,9 @@ class StorySerializer(serializers.ModelSerializer):
 
 
 def active_stories(request):
-    return (Story.objects.filter(expires_at__gt=timezone.now()).select_related('user__profile')
+    # حالاتي وحالات من أعرفهم فقط (جهات اتصالي ومن يشاركني محادثة)، لا حالات كل الجامعة
+    visible = {request.user.id, *known_ids(request.user.id)}
+    return (Story.objects.filter(expires_at__gt=timezone.now(), user_id__in=visible).select_related('user__profile')
             .annotate(views_count=Count('views'),
                       seen=Exists(StoryView.objects.filter(story=OuterRef('pk'), viewer=request.user))))
 
@@ -91,7 +93,8 @@ def story_detail(request, pk):
 
 @api_view(['POST'])
 def view_story(request, pk):
-    story = get_object_or_404(Story, pk=pk, expires_at__gt=timezone.now())
+    story = get_object_or_404(Story, pk=pk, expires_at__gt=timezone.now(),
+                              user_id__in={request.user.id, *known_ids(request.user.id)})
     if story.user_id != request.user.id:
         _view, created = StoryView.objects.get_or_create(story=story, viewer=request.user)
         if created:

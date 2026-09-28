@@ -2,6 +2,7 @@ import io
 import shutil
 import tempfile
 
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from PIL import Image
@@ -74,6 +75,9 @@ class UniversityLoginTests(TestCase):
         other = APIClient().post('/api/auth/register/', {'username': 'x', 'password': 'secret123'}, format='json').data
         c = APIClient()
         c.credentials(HTTP_AUTHORIZATION='Token ' + other['token'])
+        # لا يرى ملفه قبل أن يضيفه (لا تصفّح للحسابات بتجربة الأرقام)، ثم يضيفه برقمه الجامعي
+        self.assertEqual(c.get(f"/api/users/{self.user['id']}/").status_code, 404)
+        self.assertEqual(c.post('/api/contacts/', {'identifier': 'F-2041'}, format='json').status_code, 201)
         public = c.get(f"/api/users/{self.user['id']}/").data
         self.assertEqual(public['role'], 'faculty')
         self.assertNotIn('email', public)
@@ -156,3 +160,66 @@ class MyInfoTests(TestCase):
         me = ali.get('/api/auth/me/').data
         self.assertEqual((me['email'], me['display_name']), ('ali@asbat.edu.iq', 'علي'))  # لم يُحفظ شيء
         self.assertEqual(ali.patch('/api/auth/me/', {'email': 'not-an-email'}, format='json').status_code, 400)
+
+
+class ContactTests(TestCase):
+    """جهات الاتصال الخاصة: لا أحد يرى كل الحسابات، والإضافة بمعرّف تعرفه عن الشخص."""
+
+    def make(self, username, **extra):
+        r = APIClient().post('/api/auth/register/', {'username': username, 'password': 'secret123', **extra}, format='json')
+        c = APIClient()
+        c.credentials(HTTP_AUTHORIZATION='Token ' + r.data['token'])
+        c.user = r.data['user']
+        return c
+
+    def setUp(self):
+        cache.clear()  # «من أعرفهم» محفوظة في الكاش دقيقة؛ الاختبارات تعيد استعمال أرقام الحسابات
+        self.ali = self.make('ali')
+        self.sara = self.make('sara', email='sara@asbat.edu.iq', university_id='S-77')
+        self.omar = self.make('omar')
+        self.sara.patch('/api/auth/me/', {'phone': '+964 770 123 4567'}, format='json')
+
+    def test_nobody_is_visible_until_added(self):
+        self.assertEqual(self.ali.get('/api/users/').data, [])
+        self.assertEqual(self.ali.get('/api/users/?q=sa').data, [])
+        self.assertEqual(self.ali.get('/api/contacts/').data, [])
+        self.assertEqual(self.ali.get(f"/api/users/{self.sara.user['id']}/").status_code, 404)
+        # لا إضافة بالرقم الداخلي لشخص لا أعرفه
+        r = self.ali.post('/api/contacts/', {'user_id': self.sara.user['id']}, format='json')
+        self.assertEqual(r.status_code, 404)
+
+    def test_find_by_exact_identifier_only(self):
+        for q in ('S-77', 's-77', 'sara@asbat.edu.iq', 'sara', '@sara', '07701234567', '+964 770 123 4567'):
+            r = self.ali.get('/api/users/find/', {'q': q})
+            self.assertEqual((r.status_code, r.data.get('username')), (200, 'sara'), q)
+            self.assertFalse(r.data['is_contact'])
+        for q in ('sar', 'S-7', '770', ''):
+            self.assertEqual(self.ali.get('/api/users/find/', {'q': q}).status_code, 404, q)
+        self.assertEqual(self.ali.get('/api/users/find/', {'q': 'ali'}).status_code, 404)  # نفسي
+
+    def test_add_list_remove(self):
+        r = self.ali.post('/api/contacts/', {'identifier': 'S-77'}, format='json')
+        self.assertEqual((r.status_code, r.data['username'], r.data['is_contact']), (201, 'sara', True))
+        self.assertEqual(self.ali.post('/api/contacts/', {'identifier': 'sara'}, format='json').status_code, 200)
+        self.assertEqual([u['username'] for u in self.ali.get('/api/contacts/').data], ['sara'])
+        self.assertEqual([u['username'] for u in self.ali.get('/api/users/?q=sa').data], ['sara'])
+        self.assertTrue(self.ali.get(f"/api/users/{self.sara.user['id']}/").data['is_contact'])
+        # سارة لم تضفه لكنها تعرفه الآن (أضافها)، فتستطيع رؤيته والرد عليه، دون أن يظهر في جهات اتصالها
+        self.assertEqual(self.sara.get(f"/api/users/{self.ali.user['id']}/").data['is_contact'], False)
+        self.assertEqual(self.sara.get('/api/contacts/').data, [])
+        # عمر لا يرى أحداً منهما
+        self.assertEqual(self.omar.get('/api/users/').data, [])
+        self.assertEqual(self.ali.delete(f"/api/contacts/{self.sara.user['id']}/").status_code, 204)
+        self.assertEqual(self.ali.get('/api/contacts/').data, [])
+        self.assertEqual(self.ali.post('/api/conversations/', {'user_id': self.sara.user['id']}, format='json').status_code, 404)
+
+    def test_contacts_only_for_messaging_groups_and_stories(self):
+        # لا مراسلة ولا إضافة إلى مجموعة لغريب
+        self.assertEqual(self.ali.post('/api/conversations/', {'user_id': self.omar.user['id']}, format='json').status_code, 404)
+        g = self.ali.post('/api/conversations/groups/', {'title': 'ش', 'member_ids': [self.omar.user['id']]}, format='json').data
+        self.assertEqual(g['member_count'], 1)
+        # حالة عمر لا تظهر لعلي
+        self.omar.post('/api/stories/', {'kind': 'text', 'text': 'مرحبا'}, format='json')
+        self.assertEqual(self.ali.get('/api/stories/').data, [])
+        self.ali.post('/api/contacts/', {'identifier': 'omar'}, format='json')
+        self.assertEqual([g['user']['username'] for g in self.ali.get('/api/stories/').data], ['omar'])

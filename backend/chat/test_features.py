@@ -4,11 +4,13 @@ import tempfile
 from unittest import mock
 
 from channels.testing import WebsocketCommunicator
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, TransactionTestCase, override_settings
 from PIL import Image
 from rest_framework.test import APIClient
 
+from chat.testing import befriend, open_chat
 from config.asgi import application
 
 MEDIA = tempfile.mkdtemp()
@@ -21,9 +23,9 @@ def png():
 
 
 class Base:
-    def register(self, username, display=''):
+    def register(self, username, display='', role='student'):
         r = APIClient().post('/api/auth/register/', {'username': username, 'password': 'secret123',
-                                                     'display_name': display}, format='json')
+                                                     'display_name': display, 'role': role}, format='json')
         c = APIClient()
         c.credentials(HTTP_AUTHORIZATION='Token ' + r.data['token'])
         c.user = r.data['user']
@@ -41,6 +43,7 @@ class GroupTests(Base, TestCase):
 
     def setUp(self):
         self.ali, self.sara, self.omar = self.register('ali', 'علي'), self.register('sara', 'سارة'), self.register('omar')
+        befriend(self.ali, self.sara.user['id'], self.omar.user['id'])
 
     def test_group_lifecycle(self, _):
         r = self.ali.post('/api/conversations/groups/', {'title': 'رحلة إسطنبول',
@@ -67,7 +70,7 @@ class GroupTests(Base, TestCase):
         self.assertEqual(self.sara.get(f"/api/conversations/{g['id']}/").data['my_role'], 'admin')
 
     def test_filters_favorites_saved(self, _):
-        d = self.ali.post('/api/conversations/', {'user_id': self.sara.user['id']}, format='json').data
+        d = open_chat(self.ali, self.sara.user['id']).data
         g = self.ali.post('/api/conversations/groups/', {'title': 'فريق', 'member_ids': [self.sara.user['id']]},
                           format='json').data
         self.sara.post(f"/api/conversations/{d['id']}/messages/", {'content': 'هلو'}, format='json')
@@ -101,7 +104,7 @@ class GroupTests(Base, TestCase):
     def test_media_messages(self, push):
         self.sara.post('/api/push/subscribe/', {'endpoint': 'https://push.example.com/s',
                                                 'keys': {'p256dh': 'k', 'auth': 'a'}}, format='json')
-        d = self.ali.post('/api/conversations/', {'user_id': self.sara.user['id']}, format='json').data
+        d = open_chat(self.ali, self.sara.user['id']).data
         url = f"/api/conversations/{d['id']}/messages/"
         r = self.ali.post(url, {'file': png(), 'content': 'شوف'}, format='multipart')
         self.assertEqual((r.status_code, r.data['kind']), (201, 'image'), r.data)
@@ -122,7 +125,7 @@ class GroupTests(Base, TestCase):
         self.assertEqual((media['counts']['image'], media['counts']['voice'], len(media['results'])), (1, 1, 1))
 
     def test_reply_edit_delete_pagination(self, _):
-        d = self.ali.post('/api/conversations/', {'user_id': self.sara.user['id']}, format='json').data
+        d = open_chat(self.ali, self.sara.user['id']).data
         url = f"/api/conversations/{d['id']}/messages/"
         first = self.ali.post(url, {'content': 'أول رسالة'}, format='json').data
         r = self.sara.post(url, {'content': 'رد', 'reply_to': first['id']}, format='json').data
@@ -142,7 +145,7 @@ class GroupTests(Base, TestCase):
         self.assertLess(older[-1]['id'], page[0]['id'])
 
     def test_location_and_live(self, _):
-        d = self.ali.post('/api/conversations/', {'user_id': self.sara.user['id']}, format='json').data
+        d = open_chat(self.ali, self.sara.user['id']).data
         url = f"/api/conversations/{d['id']}/messages/"
         self.assertEqual(self.ali.post(url, {'kind': 'location', 'latitude': 200, 'longitude': 1},
                                        format='json').status_code, 400)
@@ -166,7 +169,7 @@ class GroupTests(Base, TestCase):
         self.assertEqual([u['username'] for u in self.sara.get('/api/users/?q=770').data], ['ali'])
 
     def test_pin_react_star_clear(self, _):
-        d = self.ali.post('/api/conversations/', {'user_id': self.sara.user['id']}, format='json').data
+        d = open_chat(self.ali, self.sara.user['id']).data
         g = self.ali.post('/api/conversations/groups/', {'title': 'الشلة', 'member_ids': [self.sara.user['id']]},
                           format='json').data
         m = self.ali.post(f"/api/conversations/{d['id']}/messages/", {'content': 'هلو'}, format='json').data
@@ -204,11 +207,79 @@ class GroupTests(Base, TestCase):
         self.assertEqual([x['content'] for x in self.ali.get(f"/api/conversations/{d['id']}/messages/").data], ['رجعت'])
 
 
+@override_settings(MEDIA_ROOT=MEDIA, PUSH_RUN_INLINE=True)
+@mock.patch('notifications.push.webpush')
+class ChannelTests(Base, TestCase):
+    """القنوات: ينشئها وينشر فيها التدريسيون والإداريون فقط، والمشتركون يقرؤون ويتفاعلون."""
+
+    def setUp(self):
+        cache.clear()
+        self.dr = self.register('dr_ali', 'د. علي', role='faculty')
+        self.sara, self.omar = self.register('sara'), self.register('omar')
+
+    def test_only_faculty_or_staff_create(self, _):
+        r = self.sara.post('/api/channels/', {'title': 'قناتي'}, format='json')
+        self.assertEqual(r.status_code, 403)
+        r = self.dr.post('/api/channels/', {'title': 'إعلانات الحاسوب', 'description': 'للمرحلة الثالثة'}, format='json')
+        self.assertEqual(r.status_code, 201, r.data)
+        self.assertEqual((r.data['kind'], r.data['my_role'], r.data['participants']), ('channel', 'admin', []))
+
+    def test_subscribers_read_but_cannot_post(self, push):
+        ch = self.dr.post('/api/channels/', {'title': 'إعلانات الحاسوب'}, format='json').data
+        found = self.sara.get('/api/channels/?q=الحاسوب').data
+        self.assertEqual([(c['title'], c['is_subscribed']) for c in found], [('إعلانات الحاسوب', False)])
+        # غير المشترك لا يقرأ
+        self.assertEqual(self.sara.get(f"/api/conversations/{ch['id']}/messages/").status_code, 404)
+        self.assertEqual(self.sara.post(f"/api/channels/{ch['id']}/subscribe/").status_code, 201)
+        self.sara.post('/api/push/subscribe/', {'endpoint': 'https://push.example.com/s', 'keys': {'p256dh': 'P', 'auth': 'A'}},
+                       format='json')
+        self.omar.post(f"/api/channels/{ch['id']}/subscribe/")
+        self.assertEqual(self.sara.get('/api/channels/').data[0]['member_count'], 3)
+        # المشترك لا ينشر
+        url = f"/api/conversations/{ch['id']}/messages/"
+        self.assertEqual(self.sara.post(url, {'content': 'مرحبا'}, format='json').status_code, 403)
+        post = self.dr.post(url, {'content': 'المحاضرة غداً الساعة 9'}, format='json')
+        self.assertEqual(post.status_code, 201)
+        self.assertEqual(post.data['status'], 'sent')  # لا علامات قراءة في القناة
+        msgs = self.sara.get(url).data
+        self.assertEqual(msgs[-1]['content'], 'المحاضرة غداً الساعة 9')
+        # الإشعار باسم القناة
+        payloads = [c.args[1] for c in push.call_args_list]
+        self.assertTrue(any('إعلانات الحاسوب' in p and 'المحاضرة غداً' in p for p in payloads))
+        # التفاعل مسموح
+        self.assertEqual(self.sara.post(f"/api/messages/{post.data['id']}/react/", {'emoji': '👍'}, format='json').status_code, 200)
+        # المشترك يرى المشرفين فقط، والمشرف يرى الجميع
+        self.assertEqual([m['user']['username'] for m in self.sara.get(f"/api/conversations/{ch['id']}/members/").data], ['dr_ali'])
+        self.assertEqual(len(self.dr.get(f"/api/conversations/{ch['id']}/members/").data), 3)
+        # المشتركون لا يصبحون «معارف» لبعضهم
+        self.assertEqual(self.sara.get('/api/users/').data, [])
+        # لا مكالمات في القناة (وإلا رنّ هاتف كل مشترك)
+        self.assertEqual(self.sara.post('/api/calls/', {'conversation_id': ch['id']}, format='json').status_code, 400)
+        # فلتر القنوات في القائمة
+        self.assertEqual([c['id'] for c in self.sara.get('/api/conversations/?filter=channels').data], [ch['id']])
+        self.assertEqual(self.sara.get('/api/conversations/?filter=groups').data, [])
+
+    def test_admins_must_be_faculty_or_staff(self, _):
+        ch = self.dr.post('/api/channels/', {'title': 'ق'}, format='json').data
+        self.sara.post(f"/api/channels/{ch['id']}/subscribe/")
+        staff = self.register('staff1', role='staff')
+        staff.post(f"/api/channels/{ch['id']}/subscribe/")
+        role = f"/api/conversations/{ch['id']}/members/"
+        self.assertEqual(self.dr.patch(f"{role}{self.sara.user['id']}/", {'role': 'admin'}, format='json').status_code, 403)
+        self.assertEqual(self.dr.patch(f"{role}{staff.user['id']}/", {'role': 'admin'}, format='json').status_code, 200)
+        self.assertEqual(staff.post(f"/api/conversations/{ch['id']}/messages/", {'content': 'تنبيه'}, format='json').status_code, 201)
+        # يغادر المشرفان: الطالبة لا ترث الإشراف
+        self.dr.delete(f"/api/channels/{ch['id']}/subscribe/")
+        staff.delete(f"/api/channels/{ch['id']}/subscribe/")
+        self.assertEqual(self.sara.get(f"/api/conversations/{ch['id']}/").data['my_role'], 'member')
+        self.assertEqual(self.sara.post(f"/api/conversations/{ch['id']}/messages/", {'content': 'x'}, format='json').status_code, 403)
+
+
 class DeliveredTests(Base, TransactionTestCase):
     async def test_delivered_when_device_connects(self):
         from asgiref.sync import sync_to_async
         ali, sara = await sync_to_async(self.register)('ali'), await sync_to_async(self.register)('sara')
-        d = await sync_to_async(ali.post)('/api/conversations/', {'user_id': sara.user['id']}, format='json')
+        d = await sync_to_async(open_chat)(ali, sara.user['id'])
         url = f"/api/conversations/{d.data['id']}/messages/"
         m = await sync_to_async(ali.post)(url, {'content': 'هلو'}, format='json')
         self.assertEqual(m.data['status'], 'sent')
@@ -248,7 +319,7 @@ class SecurityTests(Base, TestCase):
     def test_message_encrypted_at_rest(self, _):
         from django.db import connection
         ali, sara = self.register('ali'), self.register('sara')
-        d = ali.post('/api/conversations/', {'user_id': sara.user['id']}, format='json').data
+        d = open_chat(ali, sara.user['id']).data
         m = ali.post(f"/api/conversations/{d['id']}/messages/", {'content': 'سر: https://x.iq'}, format='json').data
         self.assertEqual(m['content'], 'سر: https://x.iq')  # الـ API يرجعها مفهومة
         with connection.cursor() as c:
@@ -265,7 +336,7 @@ class SecurityTests(Base, TestCase):
 
         from django.test import Client
         ali, sara = self.register('ali'), self.register('sara')
-        d = ali.post('/api/conversations/', {'user_id': sara.user['id']}, format='json').data
+        d = open_chat(ali, sara.user['id']).data
         data = b'%PDF-1.4 ' + bytes(range(256)) * 700  # أكبر من قطعة وحدة
         up = SimpleUploadedFile('خطة.pdf', data, content_type='application/pdf')
         m = ali.post(f"/api/conversations/{d['id']}/messages/", {'file': up, 'kind': 'file'}, format='multipart').data

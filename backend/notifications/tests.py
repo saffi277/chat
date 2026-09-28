@@ -3,6 +3,8 @@ from unittest import mock
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
+from chat.testing import open_chat
+
 from .models import PushSubscription
 
 SUB = {'endpoint': 'https://push.example.com/abc', 'keys': {'p256dh': 'BPUB', 'auth': 'AUTH'}}
@@ -35,7 +37,7 @@ class PushTests(TestCase):
         sara, s = self.register('sara')
         ali.post('/api/push/subscribe/', {**SUB, 'endpoint': 'https://push.example.com/ali'}, format='json')
         sara.post('/api/push/subscribe/', SUB, format='json')
-        cid = ali.post('/api/conversations/', {'user_id': s['id']}, format='json').data['id']
+        cid = open_chat(ali, s['id']).data['id']
         ali.post(f'/api/conversations/{cid}/messages/', {'content': 'هلو سارة'}, format='json')
         self.assertEqual(webpush.call_count, 1)
         info, payload = webpush.call_args.args
@@ -50,7 +52,7 @@ class PushTests(TestCase):
         ali, _ = self.register('ali')
         sara, s = self.register('sara')
         sara.post('/api/push/subscribe/', SUB, format='json')
-        cid = ali.post('/api/conversations/', {'user_id': s['id']}, format='json').data['id']
+        cid = open_chat(ali, s['id']).data['id']
         ali.post(f'/api/conversations/{cid}/messages/', {'content': 'hi'}, format='json')
         self.assertEqual(PushSubscription.objects.count(), 0)
 
@@ -60,7 +62,7 @@ class PushTests(TestCase):
         sara, s = self.register('sara')
         sara.post('/api/push/subscribe/', SUB, format='json')
         self.assertTrue(sara.patch('/api/auth/me/', {'hide_preview': True}, format='json').data['hide_preview'])
-        cid = ali.post('/api/conversations/', {'user_id': s['id']}, format='json').data['id']
+        cid = open_chat(ali, s['id']).data['id']
         ali.post(f'/api/conversations/{cid}/messages/', {'content': 'سر خطير'}, format='json')
         _, payload = webpush.call_args.args
         self.assertNotIn('سر خطير', payload)
@@ -74,7 +76,7 @@ class PushTests(TestCase):
         sara, s = self.register('sara')
         sara.post('/api/push/subscribe/', SUB, format='json')
         self.assertEqual(sara.patch('/api/auth/me/', {'language': 'en', 'hide_preview': True}, format='json').data['language'], 'en')
-        cid = ali.post('/api/conversations/', {'user_id': s['id']}, format='json').data['id']
+        cid = open_chat(ali, s['id']).data['id']
         ali.post(f'/api/conversations/{cid}/messages/', {'content': 'hi'}, format='json')
         self.assertIn('New message', webpush.call_args.args[1])
 
@@ -84,7 +86,7 @@ class PushTests(TestCase):
         ali, _ = self.register('ali')
         sara, s = self.register('sara')
         sara.post('/api/push/subscribe/', SUB, format='json')
-        cid = ali.post('/api/conversations/', {'user_id': s['id']}, format='json').data['id']
+        cid = open_chat(ali, s['id']).data['id']
         ali.post(f'/api/conversations/{cid}/messages/', {'content': 'hi'}, format='json')
         kwargs = webpush.call_args.kwargs
         contact = kwargs['vapid_claims']['sub']

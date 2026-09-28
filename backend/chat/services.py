@@ -8,9 +8,10 @@ from django.core.cache import cache
 from django.db.models import Max, OuterRef, Subquery
 from django.utils import timezone
 
+from accounts.models import Contact, Profile
 from notifications.push import notify_new_message
 
-from .models import Membership, Message
+from .models import Conversation, Membership, Message
 
 PREVIEWS = {
     Message.IMAGE: '📷 صورة',
@@ -67,25 +68,55 @@ def send_to_users(user_ids, payload):
         _send(user_group(user_id), payload)
 
 
+def _shared_ids(user_id):
+    """من يشاركني محادثة ثنائية أو مجموعة. (القنوات لا تُعرّف المشتركين ببعضهم: قد يكونون آلافاً لا يعرف أحدهم الآخر)"""
+    mine = (Membership.objects.filter(user_id=user_id).exclude(conversation__kind=Conversation.CHANNEL)
+            .values('conversation_id'))
+    return set(Membership.objects.filter(conversation_id__in=mine).exclude(user_id=user_id)
+               .values_list('user_id', flat=True).distinct())
+
+
 def contact_ids(user_id):
     """
-    الناس اللي يشاركون المستخدم أي محادثة (هم بس يهمهم إذا صار متصل أو نزّل حالة).
+    من يهمه أن يعرف حالتي (متصل الآن، أو نشرتُ حالة): من يشاركني محادثة، ومن أضافني أو أضفته جهة اتصال.
     قبل كنا نبث لكل الجامعة: 2000 متصل × 2000 = 4 مليون رسالة لما الكل يدخل سوه.
     نحفظها بالكاش دقيقة حتى ما نسأل قاعدة البيانات كل مرة.
     """
     key = f'contacts:{user_id}'
     ids = cache.get(key)
     if ids is None:
-        mine = Membership.objects.filter(user_id=user_id).values('conversation_id')
-        ids = list(Membership.objects.filter(conversation_id__in=mine).exclude(user_id=user_id)
-                   .values_list('user_id', flat=True).distinct())
+        ids = _shared_ids(user_id)
+        ids |= set(Contact.objects.filter(owner_id=user_id).values_list('contact_id', flat=True))
+        ids |= set(Contact.objects.filter(contact_id=user_id).values_list('owner_id', flat=True))
+        ids = sorted(ids)
         cache.set(key, ids, 60)
     return ids
 
 
+def known_ids(user_id):
+    """
+    من أستطيع رؤيته والبحث عنه ومراسلته وإضافته إلى مجموعة: جهات اتصالي، ومن يشاركني محادثة،
+    ومن أضافني جهةَ اتصال (حتى أستطيع الرد عليه). غيرهم لا يظهرون لي أبداً.
+    """
+    return set(contact_ids(user_id))
+
+
+def my_contact_ids(user_id):
+    """جهات الاتصال التي أضفتُها أنا فقط (ما يظهر في تبويب جهات الاتصال)."""
+    return set(Contact.objects.filter(owner_id=user_id).values_list('contact_id', flat=True))
+
+
 def forget_contacts(*user_ids):
-    """المحادثات تغيرت (مجموعة جديدة، عضو انضاف): نمسح الكاش."""
+    """المحادثات أو جهات الاتصال تغيرت (مجموعة جديدة، عضو انضاف، جهة اتصال جديدة): نمسح الكاش."""
     cache.delete_many([f'contacts:{u}' for u in user_ids])
+
+
+def can_broadcast(user):
+    """النشر في القنوات وإنشاؤها: للتدريسيين والإداريين فقط (ولمدير النظام)."""
+    if user.is_staff or user.is_superuser:
+        return True
+    profile = getattr(user, 'profile', None)
+    return bool(profile and profile.role in (Profile.FACULTY, Profile.STAFF))
 
 
 def send_to_contacts(user_id, payload, include_self=True):
@@ -119,6 +150,9 @@ def serialize_message(message):
 
 
 def receipts_for(conversation):
+    # القناة: لا علامات قراءة (قد يكون المشتركون آلافاً، وقراءتهم ليست شأن الناشر)
+    if conversation.kind == Conversation.CHANNEL:
+        return None
     return list(conversation.memberships.values('user_id', 'last_delivered_id', 'last_read_id'))
 
 
@@ -171,7 +205,7 @@ def mark_read(conversation, user):
     Membership.objects.filter(conversation=conversation, user=user, last_delivered_id__lt=last).update(
         last_delivered_id=last)
     # للمحادثات الثنائية نحدث is_read على الرسائل نفسها (الواجهة القديمة تعتمد عليه)
-    if conversation.kind != conversation.GROUP:
+    if conversation.kind == Conversation.DIRECT:
         conversation.messages.filter(is_read=False).exclude(sender=user).update(is_read=True)
     broadcast(conversation.id, {'type': 'read', 'reader_id': user.id, 'message_id': last})
     return updated

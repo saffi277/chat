@@ -178,3 +178,42 @@ msgstr "Staff"
 msgid "هذا إشعار تجريبي. الإشعارات تعمل ✅"
 msgstr "This is a test notification. Notifications are working ✅"
 
+
+msgid "لا يوجد حساب بهذا المعرّف"
+msgstr "No account with this identifier"
+
+msgid "هذا حسابك أنت"
+msgstr "That's your own account"
+
+msgid "لم نجد حساباً بهذا المعرّف. تأكد من الرقم الجامعي أو البريد أو اسم المستخدم"
+msgstr "No account found. Check the university ID, email or username"
+
+msgid "اكتب الرقم الجامعي أو البريد أو اسم المستخدم"
+msgstr "Enter the university ID, email or username"
+
+msgid "أضف هذا الشخص إلى جهات اتصالك أولاً"
+msgstr "Add this person to your contacts first"
+
+msgid "الشخص مطلوب"
+msgstr "Choose a person"
+
+msgid "قائمة غير صحيحة"
+msgstr "Invalid list"
+
+msgid "النشر في القناة لمشرفيها فقط"
+msgstr "Only channel admins can post here"
+
+msgid "إنشاء القنوات للتدريسيين والإداريين فقط"
+msgstr "Only faculty and staff can create channels"
+
+msgid "اسم القناة مطلوب"
+msgstr "Channel name is required"
+
+msgid "مشرفو القناة من التدريسيين والإداريين فقط"
+msgstr "Channel admins must be faculty or staff"
+
+msgid "قناة"
+msgstr "Channel"
+
+msgid "لا توجد مكالمات في القنوات"
+msgstr "Calls aren't available in channels"

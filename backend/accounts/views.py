@@ -1,3 +1,5 @@
+import re
+
 from django.contrib.auth import authenticate, get_user_model
 from django.db.models import Exists, OuterRef, Q
 from django.shortcuts import get_object_or_404
@@ -9,10 +11,10 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 
-from config.throttles import LoginThrottle
+from config.throttles import LoginThrottle, LookupThrottle
 
-from .models import Profile, SupportRequest
-from .serializers import MeSerializer, ProfileUpdateSerializer, RegisterSerializer, UserSerializer
+from .models import Contact, Profile, SupportRequest
+from .serializers import MeSerializer, ProfileUpdateSerializer, RegisterSerializer, UserSerializer, user_json
 from .tokens import issue_token
 
 User = get_user_model()
@@ -97,21 +99,27 @@ def me(request):
     return Response(MeSerializer(request.user).data)
 
 
+def with_contact_flag(users, mine):
+    """user_json + هل هو ضمن جهات اتصالي (لزر «إضافة إلى جهات الاتصال»)."""
+    return [{**user_json(u), 'is_contact': u.id in mine} for u in users]
+
+
 class UserListView(generics.ListAPIView):
     """
-    GET /api/users/?q=بحث&limit=50&offset=0 — المستخدمين عدا أنا.
-    بالجامعة آلاف المستخدمين، فما نرجعهم كلهم: 50 بالمرة (وأقصى شي 200)، واللي تحچي وياهم يطلعون أول.
+    GET /api/users/?q=بحث&limit=50&offset=0 — الناس الذين أعرفهم فقط:
+    جهات اتصالي، ومن يشاركني محادثة أو مجموعة، ومن أضافني. لا أحد يرى قائمة كل حسابات الجامعة؛
+    للوصول إلى شخص جديد تضيفه بمعرّف تعرفه عنه (/api/users/find/ ثم /api/contacts/).
     """
 
     serializer_class = UserSerializer
 
     def get_queryset(self):
-        from chat.models import Membership
+        from chat.services import known_ids
         me = self.request.user
-        my_convs = Membership.objects.filter(user=me).values('conversation_id')
-        is_contact = Exists(Membership.objects.filter(user=OuterRef('pk'), conversation_id__in=my_convs))
-        qs = (User.objects.exclude(id=me.id).select_related('profile')
-              .annotate(contact=is_contact).order_by('-contact', 'profile__display_name', 'username'))
+        self.mine = my_contact_ids(me.id)
+        qs = (User.objects.filter(id__in=known_ids(me.id)).select_related('profile')
+              .annotate(saved=Exists(Contact.objects.filter(owner=me, contact=OuterRef('pk'))))
+              .order_by('-saved', 'profile__display_name', 'username'))
         q = self.request.query_params.get('q', '').strip()  # ?q= بالاسم أو الرقم أو الرقم الجامعي
         if q:
             qs = qs.filter(Q(username__icontains=q) | Q(profile__display_name__icontains=q)
@@ -125,16 +133,105 @@ class UserListView(generics.ListAPIView):
         except ValueError:
             limit, offset = 50, 0
         page = self.get_queryset()[offset:offset + limit]
-        return Response(self.get_serializer(page, many=True).data)
+        return Response(with_contact_flag(page, self.mine))
+
+
+def my_contact_ids(user_id):
+    from chat.services import my_contact_ids as ids
+    return ids(user_id)
+
+
+def can_see(me, other_id):
+    from chat.services import known_ids
+    return other_id == me.id or other_id in known_ids(me.id)
 
 
 @api_view(['GET'])
 def user_detail(request, pk):
-    """صفحة جهة الاتصال."""
-    return Response(UserSerializer(get_object_or_404(User.objects.select_related('profile'), pk=pk)).data)
+    """صفحة جهة الاتصال: لمن أعرفه فقط (لا يمكن تصفّح الحسابات بتجربة الأرقام)."""
+    if not can_see(request.user, pk):
+        return Response({'detail': _('لا يوجد حساب بهذا المعرّف')}, status=status.HTTP_404_NOT_FOUND)
+    user = get_object_or_404(User.objects.select_related('profile'), pk=pk)
+    return Response(with_contact_flag([user], my_contact_ids(request.user.id))[0])
+
+
+def lookup(identifier):
+    """
+    نجد الحساب بمعرّف يعرفه صاحبه عنه بالضبط (لا بحث جزئي): الرقم الجامعي، أو البريد، أو اسم المستخدم،
+    أو رقم الهاتف. المطابقة التامة تمنع تصفّح الناس بكتابة حرف أو حرفين.
+    """
+    identifier = (identifier or '').strip().lstrip('@')
+    if not identifier:
+        return None
+    found = find_user(identifier)
+    if found:
+        return found
+    phone = re.sub(r'[\s\-()]', '', identifier)
+    if re.fullmatch(r'\+?\d{7,15}', phone):
+        # 07701234567 و +9647701234567 الرقم نفسه: نقارن آخر 10 أرقام بعد حذف الصفر المحلي
+        tail = phone.lstrip('+').lstrip('0')[-10:]
+        matches = list(User.objects.filter(profile__phone__endswith=tail)[:2])
+        return matches[0] if len(matches) == 1 else None
+    return None
+
+
+@api_view(['GET'])
+@throttle_classes([LookupThrottle])
+def find(request):
+    """GET /api/users/find/?q=<معرّف> ← الشخص (مع is_contact) أو 404. تمهيد لإضافته جهة اتصال."""
+    user = lookup(request.query_params.get('q'))
+    if not user or user == request.user:
+        msg = _('هذا حسابك أنت') if user else _('لم نجد حساباً بهذا المعرّف. تأكد من الرقم الجامعي أو البريد أو اسم المستخدم')
+        return Response({'detail': msg}, status=status.HTTP_404_NOT_FOUND)
+    user = User.objects.select_related('profile').get(pk=user.pk)
+    return Response(with_contact_flag([user], my_contact_ids(request.user.id))[0])
+
+
+@api_view(['GET', 'POST'])
+@throttle_classes([LookupThrottle])
+def contacts(request):
+    """
+    GET  ← جهات اتصالي (مرتبة بالاسم).
+    POST {"identifier": "..."} أو {"user_id": 5} ← إضافة. user_id مقبول فقط لمن أعرفه أصلاً
+    (عضو في مجموعتي، أو من راسلني)، وإلا فالمعرّف مطلوب.
+    """
+    from chat.services import forget_contacts
+    me = request.user
+    if request.method == 'GET':
+        users = (User.objects.filter(contact_of__owner=me).select_related('profile')
+                 .order_by('profile__display_name', 'username'))
+        return Response([{**user_json(u), 'is_contact': True} for u in users])
+    if request.data.get('identifier'):
+        other = lookup(request.data['identifier'])
+    else:
+        try:
+            other_id = int(request.data.get('user_id'))
+        except (TypeError, ValueError):
+            raise ValidationError({'identifier': _('اكتب الرقم الجامعي أو البريد أو اسم المستخدم')})
+        other = User.objects.filter(pk=other_id).first() if can_see(me, other_id) else None
+    if not other:
+        return Response({'detail': _('لم نجد حساباً بهذا المعرّف. تأكد من الرقم الجامعي أو البريد أو اسم المستخدم')},
+                        status=status.HTTP_404_NOT_FOUND)
+    if other == me:
+        raise ValidationError({'detail': _('هذا حسابك أنت')})
+    _obj, created = Contact.objects.get_or_create(owner=me, contact=other)
+    forget_contacts(me.id, other.id)
+    other = User.objects.select_related('profile').get(pk=other.pk)
+    return Response({**user_json(other), 'is_contact': True},
+                    status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+@api_view(['DELETE'])
+def contact_detail(request, user_id):
+    """إزالة من جهات اتصالي (المحادثات معه تبقى كما هي)."""
+    from chat.services import forget_contacts
+    Contact.objects.filter(owner=request.user, contact_id=user_id).delete()
+    forget_contacts(request.user.id, user_id)
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class HelpThrottle(AnonRateThrottle):
+    scope = 'help'  # عدّاد خاص (لا يشارك عدّاد الطلبات العامة)
     rate = '10/hour'
 
 

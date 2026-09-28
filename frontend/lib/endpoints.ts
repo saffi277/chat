@@ -4,6 +4,7 @@ import {
   api,
   type Call,
   type CallKind,
+  type ChannelInfo,
   type Conversation,
   type Me,
   type Member,
@@ -47,12 +48,33 @@ export const auth = {
 
 // ---------------------------------------------------------------- الناس
 export const users = {
+  /** الناس الذين أعرفهم فقط: جهات اتصالي ومن يشاركني محادثة (لا قائمة لكل الجامعة) */
   list: (q?: string) => api<User[]>(`/users/${qs({ q })}`),
   get: (id: number) => api<User>(`/users/${id}/`),
+  /** البحث عن حساب بمعرّف كامل: الرقم الجامعي أو البريد أو اسم المستخدم أو رقم الهاتف */
+  find: (identifier: string) => api<User>(`/users/find/${qs({ q: identifier })}`),
+};
+
+// ---------------------------------------------------------------- جهات الاتصال
+export const contacts = {
+  list: () => api<User[]>("/contacts/"),
+  /** بمعرّف (رقم جامعي، بريد، اسم مستخدم، هاتف) أو برقم شخص أعرفه أصلاً (عضو في مجموعتي) */
+  add: (who: { identifier: string } | { user_id: number }) => api<User>("/contacts/", "POST", who),
+  remove: (userId: number) => api(`/contacts/${userId}/`, "DELETE"),
+};
+
+// ---------------------------------------------------------------- القنوات
+export const channels = {
+  /** دليل قنوات الجامعة */
+  list: (q?: string) => api<ChannelInfo[]>(`/channels/${qs({ q })}`),
+  /** للتدريسيين والإداريين فقط */
+  create: (title: string, description = "") => api<Conversation>("/channels/", "POST", { title, description }),
+  subscribe: (id: number) => api<Conversation>(`/channels/${id}/subscribe/`, "POST"),
+  unsubscribe: (id: number) => api(`/channels/${id}/subscribe/`, "DELETE"),
 };
 
 // ---------------------------------------------------------------- المحادثات
-export type ChatFilter = "all" | "groups" | "favorites" | "unread" | "archived";
+export type ChatFilter = "all" | "groups" | "channels" | "favorites" | "unread" | "archived";
 
 export const conversations = {
   list: (filter: ChatFilter = "all", q?: string) => api<Conversation[]>(`/conversations/${qs({ filter, q })}`),

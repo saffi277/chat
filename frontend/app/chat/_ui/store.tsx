@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ApiError, getToken, logout, saveMe, type Call, type CallKind, type Conversation, type Me, type Message, type StoryGroup, type User } from "@/lib/api";
 import { CallSession } from "@/lib/call";
-import { auth, calls, conversations as convApi, messages as msgApi, stories as storyApi, users as usersApi } from "@/lib/endpoints";
+import { auth, calls, contacts as contactsApi, conversations as convApi, messages as msgApi, stories as storyApi, users as usersApi } from "@/lib/endpoints";
 import { setLang, t, useLang } from "@/lib/i18n";
 import { isDeviceError, permError } from "@/lib/permissions";
 import { syncPushSubscription } from "@/lib/push";
@@ -24,6 +24,9 @@ export type PanelState =
   | { type: "starred"; convId?: number }
   | { type: "location"; convId: number }
   | { type: "newGroup" }
+  | { type: "addContact" }
+  | { type: "newChannel" }
+  | { type: "channels" }
   | { type: "storyCompose" }
   | null;
 
@@ -44,6 +47,12 @@ export type CallUI = {
 type Ctx = {
   me: Me;
   users: User[];
+  /** جهات اتصالي (من أضفتهم أنا) */
+  contacts: User[];
+  isContact: (userId: number) => boolean;
+  /** أُضيف أو أُزيل من جهات الاتصال (بعد نجاح الطلب) */
+  contactAdded: (u: User) => void;
+  contactRemoved: (userId: number) => void;
   convs: Conversation[];
   stories: StoryGroup[];
   theme: "light" | "dark";
@@ -104,6 +113,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
   const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
   const [users, setUsers] = useState<User[]>([]);
+  const [contacts, setContacts] = useState<User[]>([]);
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [stories, setStories] = useState<StoryGroup[]>([]);
   const [tab, setTab] = useState<Tab>("chats");
@@ -194,12 +204,14 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
       return;
     }
     const wanted = Number(new URLSearchParams(window.location.search).get("c"));
-    Promise.all([auth.me(), usersApi.list(), convApi.list("all"), storyApi.feed()])
-      .then(([m, u, c, s]) => {
+    // جهات الاتصال ليست شرطاً لفتح التطبيق: إن تعذّر تحميلها تبقى القائمة فارغة
+    Promise.all([auth.me(), usersApi.list(), convApi.list("all"), storyApi.feed(), contactsApi.list().catch(() => [] as User[])])
+      .then(([m, u, c, s, k]) => {
         saveMe(m);
         setMe(m);
         setLang(m.language); // اللغة محفوظة بالحساب: تتبع المستخدم على كل أجهزته
         setUsers(u);
+        setContacts(k);
         setConvs(c);
         setStories(s);
         if (c.some((x) => x.id === wanted)) setActiveId(wanted);
@@ -222,6 +234,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
           const seen = new Date().toISOString();
           const upd = (u: User) => (u.id === e.user_id ? { ...u, is_online: e.is_online, last_seen: e.is_online ? u.last_seen : seen } : u);
           setUsers((list) => list.map(upd));
+          setContacts((list) => list.map(upd));
           setConvs((list) => list.map((c) => ({ ...c, participants: c.participants.map(upd) })));
           break;
         }
@@ -267,7 +280,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
           break;
         }
       }
-    }, { onOpen: (again) => { if (again) { softRefreshConvs(); usersApi.list().then(setUsers); checkRinging(); } } });
+    }, { onOpen: (again) => { if (again) { softRefreshConvs(); usersApi.list().then(setUsers); contactsApi.list().then(setContacts); checkRinging(); } } });
     socketRef.current = socket;
 
     // الضغط على إشعار والتطبيق مفتوح: الـ Service Worker يرسل الرابط بدل إعادة تحميل الصفحة
@@ -293,7 +306,18 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
   }, [router, signOut, endCallUI, checkRinging]);
 
   // ------------------------------------------------ مساعدات
-  const userById = useCallback((id: number) => users.find((u) => u.id === id) ?? (me?.id === id ? me : undefined), [users, me]);
+  const userById = useCallback((id: number) => users.find((u) => u.id === id) ?? contacts.find((u) => u.id === id) ?? (me?.id === id ? me : undefined), [users, contacts, me]);
+  const isContact = useCallback((id: number) => contacts.some((u) => u.id === id), [contacts]);
+  const contactAdded = useCallback((u: User) => {
+    const saved = { ...u, is_contact: true };
+    const byName = (a: User, b: User) => (a.display_name || a.username).localeCompare(b.display_name || b.username);
+    setContacts((list) => [...list.filter((x) => x.id !== u.id), saved].sort(byName));
+    setUsers((list) => [saved, ...list.filter((x) => x.id !== u.id)]);
+  }, []);
+  const contactRemoved = useCallback((id: number) => {
+    setContacts((list) => list.filter((x) => x.id !== id));
+    setUsers((list) => list.map((x) => (x.id === id ? { ...x, is_contact: false } : x)));
+  }, []);
   const otherOf = useCallback((c: Conversation) => {
     if (c.kind !== "direct") return null;
     const p = c.participants.find((x) => x.id !== me?.id) ?? c.participants[0];
@@ -441,7 +465,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
 
   if (!me) return <>{fallback}</>;
   const value: Ctx = {
-    me, users, convs, stories, theme, tab, setTab, activeId, openConv, openWith, openSaved, panel, setPanel,
+    me, users, contacts, isContact, contactAdded, contactRemoved, convs, stories, theme, tab, setTab, activeId, openConv, openWith, openSaved, panel, setPanel,
     storyViewer, setStoryViewer, userById, otherOf, refreshConvs, refreshStories, updateMe, signOut,
     call, startCall, acceptCall, declineCall, hangup, toggleMute, toggleCamera, enableVideo,
     startLiveShare, stopLiveShare, liveShares, toast, notify,

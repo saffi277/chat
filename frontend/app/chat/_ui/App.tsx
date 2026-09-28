@@ -12,8 +12,8 @@ import { ChatList, NavBar } from "./ChatList";
 import { Conversation } from "./Conversation";
 import { Icon } from "./icons";
 import { LocationPanel } from "./Location";
-import { PeopleView } from "./People";
-import { ContactPanel, GroupPanel, MediaPanel, NewGroupPanel, StarredPanel } from "./Profiles";
+import { AddContactPanel, PeopleView } from "./People";
+import { ChannelsPanel, ContactPanel, GroupPanel, MediaPanel, NewChannelPanel, NewGroupPanel, StarredPanel } from "./Profiles";
 import { SettingsView } from "./Settings";
 import { StoriesView, StoryComposer, StoryViewer } from "./Stories";
 import { useWasl, WaslProvider } from "./store";
@@ -103,6 +103,9 @@ function Shell() {
       {panel?.type === "starred" && <StarredPanel convId={panel.convId} />}
       {panel?.type === "location" && <LocationPanel convId={panel.convId} />}
       {panel?.type === "newGroup" && <NewGroupPanel />}
+      {panel?.type === "addContact" && <AddContactPanel />}
+      {panel?.type === "newChannel" && <NewChannelPanel />}
+      {panel?.type === "channels" && <ChannelsPanel />}
       {panel?.type === "storyCompose" && <StoryComposer />}
       {storyViewer && <StoryViewer />}
       {call && <CallOverlay />}

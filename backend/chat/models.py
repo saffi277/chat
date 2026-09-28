@@ -8,16 +8,19 @@ from .fields import EncryptedTextField, get_encrypted_storage
 
 
 class Conversation(models.Model):
-    """محادثة: بين شخصين (direct)، أو مجموعة (group)، أو "الرسائل المحفوظة" (saved) وحدك."""
+    """
+    محادثة: بين شخصين (direct)، أو مجموعة (group)، أو "الرسائل المحفوظة" (saved) وحدك،
+    أو قناة (channel): ينشر فيها مشرفوها فقط (تدريسيون وإداريون)، والمشتركون يقرؤون ويتفاعلون.
+    """
 
-    DIRECT, GROUP, SAVED = 'direct', 'group', 'saved'
-    KINDS = [(DIRECT, 'محادثة ثنائية'), (GROUP, 'مجموعة'), (SAVED, 'الرسائل المحفوظة')]
+    DIRECT, GROUP, SAVED, CHANNEL = 'direct', 'group', 'saved', 'channel'
+    KINDS = [(DIRECT, 'محادثة ثنائية'), (GROUP, 'مجموعة'), (SAVED, 'الرسائل المحفوظة'), (CHANNEL, 'قناة')]
 
     kind = models.CharField(max_length=10, choices=KINDS, default=DIRECT)
     # ManyToMany عن طريق جدول وسيط (Membership) حتى نحفظ معلومات لكل عضو: دوره، المفضلة، شكد قرا...
     participants = models.ManyToManyField(
         settings.AUTH_USER_MODEL, through='Membership', related_name='conversations')
-    # للمجموعات بس
+    # للمجموعات والقنوات فقط
     title = models.CharField(max_length=80, blank=True)
     description = models.CharField(max_length=300, blank=True)
     avatar = models.ImageField(upload_to='groups/', blank=True, null=True)

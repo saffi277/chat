@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Profile, SupportRequest
+from .models import Contact, Profile, SupportRequest
 
 
 @admin.register(Profile)
@@ -23,3 +23,10 @@ class SupportRequestAdmin(admin.ModelAdmin):
     @admin.action(description='تم الحل')
     def mark_handled(self, request, queryset):
         queryset.update(handled=True)
+
+
+@admin.register(Contact)
+class ContactAdmin(admin.ModelAdmin):
+    list_display = ['owner', 'contact', 'created_at']
+    search_fields = ['owner__username', 'contact__username']
+    raw_id_fields = ['owner', 'contact']

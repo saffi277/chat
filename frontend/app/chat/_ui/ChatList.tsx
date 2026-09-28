@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import type { Conversation } from "@/lib/api";
+import { canBroadcast, type Conversation } from "@/lib/api";
 import { useLang, useT } from "@/lib/i18n";
 import { ConvAvatar, Empty, listTime, nameOf, preview } from "./bits";
 import { CallLog } from "./Calls";
@@ -8,11 +8,12 @@ import { Icon, type IconName } from "./icons";
 import { PushBanner } from "./Settings";
 import { useWasl, type Tab } from "./store";
 
-type Filter = "all" | "unread" | "groups" | "calls";
+type Filter = "all" | "unread" | "groups" | "channels" | "calls";
 const filters: { id: Filter; label: string }[] = [
   { id: "all", label: "الكل" },
   { id: "unread", label: "غير مقروءة" },
   { id: "groups", label: "المجموعات" },
+  { id: "channels", label: "القنوات" },
   { id: "calls", label: "المكالمات" },
 ];
 
@@ -63,7 +64,7 @@ export function SearchBox({ value, onChange, placeholder }: { value: string; onC
 }
 
 export function ChatList() {
-  const { convs, setTab, setPanel, openSaved, otherOf } = useWasl();
+  const { me, convs, setTab, setPanel, openSaved, otherOf } = useWasl();
   const t = useT();
   const [filter, setFilter] = useState<Filter>("all");
   const [q, setQ] = useState("");
@@ -72,7 +73,7 @@ export function ChatList() {
   const query = q.trim().toLowerCase();
   const shown = convs
     .filter((c) => c.kind !== "saved")
-    .filter((c) => (filter === "groups" ? c.kind === "group" : filter === "unread" ? c.unread_count > 0 : true))
+    .filter((c) => (filter === "groups" ? c.kind === "group" : filter === "channels" ? c.kind === "channel" : filter === "unread" ? c.unread_count > 0 : true))
     .filter((c) => !query || title(c).toLowerCase().includes(query) || c.last_message?.content.toLowerCase().includes(query));
 
   return (
@@ -81,6 +82,8 @@ export function ChatList() {
         <ScreenHeader title={t("المحادثات")} menu={[
           { icon: "chats", label: t("محادثة جديدة"), run: () => setTab("people") },
           { icon: "users", label: t("مجموعة جديدة"), run: () => setPanel({ type: "newGroup" }) },
+          ...(canBroadcast(me) ? [{ icon: "megaphone" as IconName, label: t("قناة جديدة"), run: () => setPanel({ type: "newChannel" }) }] : []),
+          { icon: "search", label: t("استكشاف القنوات"), run: () => setPanel({ type: "channels" }) },
           { icon: "bookmark", label: t("الرسائل المحفوظة"), run: openSaved },
           { icon: "star", label: t("الرسائل المميزة"), run: () => setPanel({ type: "starred" }) },
           { icon: "stories", label: t("الحالات"), run: () => setTab("stories") },
@@ -102,8 +105,12 @@ export function ChatList() {
             <PushBanner />
             {shown.map((c) => <ChatRow key={c.id} conv={c} />)}
             {shown.length === 0 && (
-              <Empty icon="chats" title={t(query ? "لا توجد نتائج" : filter === "all" ? "لم تبدأ أي محادثة بعد" : "لا يوجد شيء هنا")}
-                text={filter === "all" && !query ? t("انتقل إلى جهات الاتصال واختر شخصاً لتبدأ.") : undefined} />
+              <Empty icon={filter === "channels" ? "megaphone" : "chats"} title={t(query ? "لا توجد نتائج" : filter === "all" ? "لم تبدأ أي محادثة بعد" : filter === "channels" ? "لم تشترك في أي قناة بعد" : "لا يوجد شيء هنا")}
+                text={filter === "all" && !query ? t("انتقل إلى جهات الاتصال واختر شخصاً لتبدأ.") : undefined}>
+                {filter === "channels" && !query && (
+                  <button onClick={() => setPanel({ type: "channels" })} className="w-accent mt-4 rounded-full px-5 py-2.5 text-sm font-bold">{t("استكشاف القنوات")}</button>
+                )}
+              </Empty>
             )}
           </>
         )}
@@ -121,7 +128,7 @@ export function ChatRow({ conv, subtitle }: { conv: Conversation; subtitle?: str
   const last = conv.last_message;
   // بلا "أنت:"، فعلامات ✓✓ تكفي (كما في التصميم)
   const p = conv.kind === "saved" && !last ? { text: t("مساحتك الخاصة") } : preview(last);
-  const mine = last && last.sender.id === me.id && last.kind !== "system" && last.kind !== "call";
+  const mine = last && last.sender.id === me.id && last.kind !== "system" && last.kind !== "call" && conv.kind !== "channel";
   const groupSender = conv.kind === "group" && last && last.sender.id !== me.id && last.kind !== "system" && last.kind !== "call" ? `${nameOf(last.sender)}: ` : "";
   const unread = conv.unread_count > 0;
   const callColor = last?.kind === "call" ? (/فائتة|مرفوضة/.test(last.content) ? "var(--danger)" : "var(--call)") : undefined;

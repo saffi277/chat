@@ -43,7 +43,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             if text:
                 # create_message نفسها تبث الرسالة للكل
                 await self.send_text_message(text, content.get('reply_to'))
-        elif content.get('type') == 'typing':
+        elif content.get('type') == 'typing' and self.can_post:
             await self.channel_layer.group_send(
                 self.group, {'type': 'chat.event', 'payload': {'type': 'typing', 'user_id': self.user.id,
                                                               'name': self.display_name}})
@@ -54,11 +54,18 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
     @database_sync_to_async
     def is_participant(self):
-        return Membership.objects.filter(conversation_id=self.conv_id, user=self.user).exists()
+        m = Membership.objects.filter(conversation_id=self.conv_id, user=self.user).select_related('conversation').first()
+        # القناة: المشترك يستقبل فقط (لا يرسل ولا يظهر «يكتب الآن»)
+        self.can_post = bool(m) and (m.conversation.kind != Conversation.CHANNEL or m.role == Membership.ADMIN)
+        return m is not None
 
     @database_sync_to_async
     def send_text_message(self, text, reply_to):
         conv = Conversation.objects.get(pk=self.conv_id)
+        # نتحقق من جديد في كل رسالة: ربما أُلغي إشرافه والاتصال مفتوح
+        if conv.kind == Conversation.CHANNEL and not Membership.objects.filter(
+                conversation=conv, user=self.user, role=Membership.ADMIN).exists():
+            return
         reply = Message.objects.filter(pk=reply_to, conversation=conv).first() if reply_to else None
         create_message(conv, self.user, text, reply_to=reply)
 

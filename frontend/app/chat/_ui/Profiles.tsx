@@ -1,8 +1,8 @@
 "use client";
 // ملف جهة الاتصال، معلومات المجموعة، الوسائط المشتركة، إنشاء مجموعة
 import { useEffect, useRef, useState } from "react";
-import { mediaUrl, ROLE_LABELS, type Member, type Message, type User } from "@/lib/api";
-import { conversations as convApi, messages as msgApi, users as usersApi } from "@/lib/endpoints";
+import { canBroadcast, mediaUrl, ROLE_LABELS, type ChannelInfo, type Member, type Message, type User } from "@/lib/api";
+import { channels as channelsApi, contacts as contactsApi, conversations as convApi, messages as msgApi, users as usersApi } from "@/lib/endpoints";
 import { dateLocale, t as tr, useLang, useT } from "@/lib/i18n";
 import { Avatar, Chip, ConvAvatar, fileSize, IconButton, lastSeenText, listTime, nameOf, Panel, preview, Section } from "./bits";
 import { Icon, type IconName } from "./icons";
@@ -125,7 +125,7 @@ function useClearChat() {
 // ------------------------------------------------------------ ملف جهة الاتصال
 export function ContactPanel({ userId }: { userId: number }) {
   const t = useT();
-  const { userById, convs, openWith, startCall, setPanel, refreshConvs, notify } = useWasl();
+  const { userById, convs, openWith, startCall, setPanel, refreshConvs, notify, isContact, contactAdded, contactRemoved } = useWasl();
   const [user, setUser] = useState<User | null>(userById(userId) ?? null);
   const [menu, setMenu] = useState(false);
   const [info, setInfo] = useState(false);
@@ -151,8 +151,26 @@ export function ContactPanel({ userId }: { userId: number }) {
     refreshConvs();
   };
 
+  const saved = isContact(userId);
+  const toggleContact = async () => {
+    setMenu(false);
+    try {
+      if (saved) {
+        if (!confirm(t("إزالة {name} من جهات اتصالك؟ تبقى المحادثة كما هي.", { name: nameOf(u) }))) return;
+        await contactsApi.remove(userId);
+        contactRemoved(userId);
+      } else {
+        contactAdded(await contactsApi.add({ user_id: userId }));
+        notify(t("أُضيف {name} إلى جهات اتصالك", { name: nameOf(u) }));
+      }
+    } catch (e) {
+      notify((e as Error).message);
+    }
+  };
+
   const menuItems: { icon: IconName; label: string; run: () => void }[] = [
     { icon: "info", label: t(info ? "إخفاء المعلومات" : "معلومات الاتصال"), run: () => { setMenu(false); setInfo((v) => !v); } },
+    { icon: saved ? "userMinus" : "userPlus", label: t(saved ? "إزالة من جهات الاتصال" : "إضافة إلى جهات الاتصال"), run: toggleContact },
     { icon: "bookmark", label: t(conv?.is_favorite ? "إزالة من المفضلة" : "إضافة إلى المفضلة"), run: () => pref("is_favorite") },
     { icon: "pinned", label: t(conv?.is_pinned ? "إلغاء التثبيت" : "تثبيت المحادثة"), run: () => pref("is_pinned") },
   ];
@@ -179,6 +197,11 @@ export function ContactPanel({ userId }: { userId: number }) {
           {u.is_online && <span className="h-2 w-2 rounded-full" style={{ background: "var(--online)" }} />}{lastSeenText(u)}
         </p>
         {u.role && <span className="w-tint mt-2 rounded-full px-3 py-0.5 text-xs font-bold">{t(ROLE_LABELS[u.role])}</span>}
+        {!saved && (
+          <button onClick={toggleContact} className="w-accent mt-3 flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold">
+            <Icon name="userPlus" size={16} />{t("إضافة إلى جهات الاتصال")}
+          </button>
+        )}
       </div>
       <div className="mt-5 flex gap-2">
         <Action icon="chats" label={t("مراسلة")} active onClick={() => openWith(userId)} />
@@ -259,7 +282,7 @@ export function StarredPanel({ convId }: { convId?: number }) {
   );
 }
 
-// ------------------------------------------------------------ معلومات المجموعة
+// ------------------------------------------------------------ معلومات المجموعة أو القناة
 export function GroupPanel({ convId }: { convId: number }) {
   const t = useT();
   const { convs, me, setPanel, refreshConvs, openConv, notify } = useWasl();
@@ -276,6 +299,8 @@ export function GroupPanel({ convId }: { convId: number }) {
   }, [convId]);
   if (!conv) return null;
   const admin = conv.my_role === "admin";
+  // القناة: المشترك يرى المشرفين فقط، والمشرف يرى المشتركين ويعيّن مشرفين من التدريسيين والإداريين
+  const channel = conv.kind === "channel";
 
   const act = async (fn: () => Promise<unknown>) => {
     try {
@@ -287,9 +312,9 @@ export function GroupPanel({ convId }: { convId: number }) {
   };
 
   return (
-    <Panel title={t("معلومات المجموعة")} onClose={() => setPanel(null)}>
+    <Panel title={t(channel ? "معلومات القناة" : "معلومات المجموعة")} onClose={() => setPanel(null)}>
       <div className="flex flex-col items-center pt-2 text-center">
-        <button className="relative" disabled={!admin} onClick={() => avatarPick.current?.click()} aria-label={t("تغيير صورة المجموعة")}>
+        <button className="relative" disabled={!admin} onClick={() => avatarPick.current?.click()} aria-label={t(channel ? "تغيير صورة القناة" : "تغيير صورة المجموعة")}>
           <ConvAvatar conv={conv} other={null} size={112} />
           {admin && <span className="w-accent absolute bottom-1 end-1 grid h-9 w-9 place-items-center rounded-full"><Icon name="camera" size={17} /></span>}
         </button>
@@ -305,17 +330,17 @@ export function GroupPanel({ convId }: { convId: number }) {
             {admin && <button onClick={() => setEditTitle(conv.title)} aria-label={t("تعديل الاسم")} className="w-muted"><Icon name="edit" size={17} /></button>}
           </h3>
         )}
-        <p className="w-muted mt-0.5 text-sm">{t("مجموعة • {n} أعضاء", { n: conv.member_count })}</p>
+        <p className="w-muted mt-0.5 text-sm">{channel ? t("قناة • المشتركون: {n}", { n: conv.member_count }) : t("مجموعة • {n} أعضاء", { n: conv.member_count })}</p>
         {conv.description && <p className="mt-2 text-sm" dir="auto">{conv.description}</p>}
       </div>
       <div className="mt-5 flex gap-2">
-        <Action icon="chats" label={t("مراسلة")} active onClick={() => { setPanel(null); openConv(convId); }} />
-        {admin && <Action icon="userPlus" label={t("إضافة أعضاء")} onClick={() => setAdding(true)} />}
+        <Action icon={channel ? "megaphone" : "chats"} label={t(channel ? "المنشورات" : "مراسلة")} active onClick={() => { setPanel(null); openConv(convId); }} />
+        {admin && <Action icon="userPlus" label={t(channel ? "إضافة مشتركين" : "إضافة أعضاء")} onClick={() => setAdding(true)} />}
         <Action icon="pinned" label={t(conv.is_pinned ? "إلغاء التثبيت" : "تثبيت")} onClick={() => act(() => convApi.setPrefs(convId, { is_pinned: !conv.is_pinned }))} />
         <Action icon={conv.is_muted ? "bellOff" : "bell"} label={t(conv.is_muted ? "إلغاء الكتم" : "كتم الإشعارات")} onClick={() => act(() => convApi.setPrefs(convId, { is_muted: !conv.is_muted }))} />
       </div>
       <MediaCard convId={convId} />
-      <Section title={t("أعضاء المجموعة ({n})", { n: members.length })}>
+      <Section title={channel ? (admin ? t("المشتركون ({n})", { n: members.length }) : t("المشرفون")) : t("أعضاء المجموعة ({n})", { n: members.length })}>
         {members.map((m) => (
           <div key={m.user.id} className="relative flex items-center gap-3 py-2">
             <Avatar user={m.user} size={42} online={m.user.is_online} />
@@ -329,11 +354,14 @@ export function GroupPanel({ convId }: { convId: number }) {
             )}
             {memberMenu === m.user.id && (
               <div className="w-strong w-shadow absolute end-0 top-12 z-10 w-48 rounded-2xl p-1.5 text-sm" style={{ border: "1px solid var(--border)" }}>
-                <button className="w-hover w-full rounded-xl px-3 py-2 text-start font-bold" onClick={() => { setMemberMenu(null); act(() => convApi.setRole(convId, m.user.id, m.role === "admin" ? "member" : "admin")); }}>
-                  {t(m.role === "admin" ? "إلغاء الإشراف" : "تعيين مشرفاً")}
-                </button>
+                {/* مشرفو القناة ينشرون فيها، فلا يكونون إلا من التدريسيين والإداريين */}
+                {(!channel || m.role === "admin" || canBroadcast(m.user)) && (
+                  <button className="w-hover w-full rounded-xl px-3 py-2 text-start font-bold" onClick={() => { setMemberMenu(null); act(() => convApi.setRole(convId, m.user.id, m.role === "admin" ? "member" : "admin")); }}>
+                    {t(m.role === "admin" ? "إلغاء الإشراف" : "تعيين مشرفاً")}
+                  </button>
+                )}
                 <button className="w-hover w-full rounded-xl px-3 py-2 text-start font-bold" style={{ color: "var(--danger)" }} onClick={() => { setMemberMenu(null); act(() => convApi.removeMember(convId, m.user.id)); }}>
-                  {t("إزالة من المجموعة")}
+                  {t(channel ? "إزالة من القناة" : "إزالة من المجموعة")}
                 </button>
               </div>
             )}
@@ -343,12 +371,12 @@ export function GroupPanel({ convId }: { convId: number }) {
       <Card>
         <div className="w-divide">
           <NavRow icon="trash" label={t("حذف المحادثة")} danger onClick={() => clearChat(convId)} />
-          <NavRow icon="logout" label={t("مغادرة المجموعة")} danger
-            onClick={() => { if (confirm(t("هل تريد مغادرة المجموعة؟"))) act(async () => { await convApi.leave(convId); setPanel(null); openConv(null); }); }} />
+          <NavRow icon="logout" label={t(channel ? "إلغاء الاشتراك" : "مغادرة المجموعة")} danger
+            onClick={() => { if (confirm(t(channel ? "هل تريد إلغاء الاشتراك في القناة؟" : "هل تريد مغادرة المجموعة؟"))) act(async () => { await convApi.leave(convId); setPanel(null); openConv(null); }); }} />
         </div>
       </Card>
       {adding && (
-        <PickPeople title={t("إضافة أعضاء")} exclude={members.map((m) => m.user.id)} confirmLabel={t("إضافة")}
+        <PickPeople title={t(channel ? "إضافة مشتركين" : "إضافة أعضاء")} exclude={members.map((m) => m.user.id)} confirmLabel={t("إضافة")}
           onCancel={() => setAdding(false)} onConfirm={(ids) => act(() => convApi.addMembers(convId, ids)).then(() => setAdding(false))} />
       )}
     </Panel>
@@ -414,6 +442,93 @@ export function NewGroupPanel() {
       <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("اسم المجموعة")}
         className="w-input mb-2 h-12 rounded-full px-4 text-base font-bold outline-none" />
     </PickPeople>
+  );
+}
+
+// ------------------------------------------------------------ القنوات
+/** قناة جديدة: للتدريسيين والإداريين. ينشر فيها المشرفون فقط، ويشترك فيها الطلاب ليقرؤوا */
+export function NewChannelPanel() {
+  const t = useT();
+  const { setPanel, refreshConvs, openConv, setTab, notify } = useWasl();
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [busy, setBusy] = useState(false);
+  const create = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim()) return notify(t("اكتب اسم القناة"));
+    setBusy(true);
+    try {
+      const c = await channelsApi.create(title.trim(), description.trim());
+      await refreshConvs();
+      setPanel(null);
+      setTab("chats");
+      openConv(c.id);
+    } catch (err) {
+      notify((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Panel title={t("قناة جديدة")} onClose={() => setPanel(null)}>
+      <div className="mt-2 flex flex-col items-center text-center">
+        <span className="w-tint grid h-20 w-20 place-items-center rounded-full"><Icon name="megaphone" size={36} /></span>
+        <p className="w-muted mt-3 text-sm leading-7">{t("القناة للإعلانات: تنشر فيها أنت ومن تعيّنه مشرفاً من التدريسيين والإداريين، ويقرأ المشتركون ويتفاعلون دون أن يرسلوا.")}</p>
+      </div>
+      <form onSubmit={create} className="mt-4 grid gap-2">
+        <input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("اسم القناة")} maxLength={80} dir="auto"
+          className="w-input h-12 rounded-full px-4 text-base font-bold outline-none" style={{ color: "var(--text)" }} />
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("وصف القناة (اختياري)")} maxLength={300} rows={3} dir="auto"
+          className="w-input rounded-3xl px-4 py-3 text-base outline-none" style={{ color: "var(--text)" }} />
+        <button type="submit" disabled={busy || !title.trim()} className="w-accent mt-2 rounded-full py-3 font-bold disabled:opacity-50">{t("إنشاء القناة")}</button>
+      </form>
+    </Panel>
+  );
+}
+
+/** دليل قنوات الجامعة: بحث واشتراك */
+export function ChannelsPanel() {
+  const t = useT();
+  const { setPanel, refreshConvs, openConv, setTab, notify } = useWasl();
+  const [q, setQ] = useState("");
+  const [list, setList] = useState<ChannelInfo[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const timer = setTimeout(() => channelsApi.list(q.trim()).then((l) => alive && setList(l)).catch(() => alive && setList([])), 250);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [q]);
+  const open = async (c: ChannelInfo) => {
+    try {
+      if (!c.is_subscribed) await channelsApi.subscribe(c.id);
+      await refreshConvs();
+      setPanel(null);
+      setTab("chats");
+      openConv(c.id);
+    } catch (err) {
+      notify((err as Error).message);
+    }
+  };
+  return (
+    <Panel title={t("استكشاف القنوات")} onClose={() => setPanel(null)}>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("ابحث عن قناة...")} aria-label={t("بحث")} dir="auto"
+        className="w-input mb-2 mt-1 h-12 w-full rounded-full px-4 text-base outline-none" style={{ color: "var(--text)" }} />
+      {list === null && <p className="w-muted py-8 text-center text-sm">{t("جارٍ التحميل...")}</p>}
+      {list?.length === 0 && <p className="w-muted py-8 text-center text-sm">{t(q.trim() ? "لا توجد نتائج" : "لا توجد قنوات بعد")}</p>}
+      {list?.map((c) => (
+        <div key={c.id} className="flex items-center gap-3 py-2.5">
+          {c.avatar ? <Avatar src={c.avatar} name={c.title} size={50} /> : (
+            <span className="w-tint grid h-[50px] w-[50px] shrink-0 place-items-center rounded-full"><Icon name="megaphone" size={22} /></span>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-bold" dir="auto">{c.title}</div>
+            <div className="w-muted truncate text-[13px]" dir="auto">{c.description || t("المشتركون: {n}", { n: c.member_count })}</div>
+          </div>
+          <button onClick={() => open(c)} className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold ${c.is_subscribed ? "w-card" : "w-accent"}`}>
+            {t(c.is_subscribed ? "فتح" : "اشتراك")}
+          </button>
+        </div>
+      ))}
+    </Panel>
   );
 }
 

@@ -2,6 +2,7 @@ from channels.testing import WebsocketCommunicator
 from django.test import TransactionTestCase
 from rest_framework.test import APIClient
 
+from chat.testing import open_chat
 from config.asgi import application
 
 
@@ -18,11 +19,15 @@ class ChatFlowTests(TransactionTestCase):
         sara, sara_data = self.register('sara')
 
         self.assertEqual(APIClient().get('/api/users/').status_code, 401)
-        users = ali.get('/api/users/').data
-        self.assertEqual([u['username'] for u in users], ['sara'])
+        # لا أحد يرى حسابات الجامعة كلها: قبل الإضافة لا يعرف علي أحداً، ولا يستطيع مراسلة سارة
+        self.assertEqual(ali.get('/api/users/').data, [])
+        self.assertEqual(ali.post('/api/conversations/', {'user_id': sara_data['user']['id']}, format='json').status_code, 404)
 
-        conv = ali.post('/api/conversations/', {'user_id': sara_data['user']['id']}, format='json')
+        conv = open_chat(ali, sara_data['user']['id'])
+        users = ali.get('/api/users/').data
+        self.assertEqual([(u['username'], u['is_contact']) for u in users], [('sara', True)])
         self.assertEqual(conv.status_code, 201)
+        # سارة لم تضفه، لكنه أضافها وراسلها فتستطيع الرد
         again = sara.post('/api/conversations/', {'user_id': ali_data['user']['id']}, format='json')
         self.assertEqual(again.data['id'], conv.data['id'])
 
@@ -39,7 +44,7 @@ class ChatFlowTests(TransactionTestCase):
     async def test_websocket_message(self):
         from asgiref.sync import sync_to_async
         (ali, a), (sara, s) = await sync_to_async(self.register)('ali'), await sync_to_async(self.register)('sara')
-        conv = await sync_to_async(ali.post)('/api/conversations/', {'user_id': s['user']['id']}, format='json')
+        conv = await sync_to_async(open_chat)(ali, s['user']['id'])
         path = f"/ws/chat/{conv.data['id']}/?token="
 
         c1 = WebsocketCommunicator(application, path + a['token'])

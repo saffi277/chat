@@ -144,9 +144,15 @@ class ConversationSerializer(serializers.ModelSerializer):
                                    is_archived=obj.my_archived, is_pinned=obj.pinned, cleared_at=obj.cleared,
                                    last_read_id=obj.my_read, user_id=self.context['request'].user.id)
         me = self.context['request'].user
+        if obj.kind == Conversation.CHANNEL:  # لا نحمّل آلاف المشتركين لنجد صفّي
+            if not hasattr(obj, '_my_row'):
+                obj._my_row = obj.memberships.filter(user=me).first()
+            return obj._my_row
         return next((m for m in self._memberships(obj) if m.user_id == me.id), None)
 
     def _receipts(self, obj):
+        if obj.kind == Conversation.CHANNEL:
+            return None  # القناة بلا علامات قراءة
         if obj.kind == Conversation.GROUP and hasattr(obj, 'others_read'):
             # بدل كل الأعضاء: "أقل واحد قرا/وصله" يكفي حتى نعرف ✓ أو ✓✓ أو ✓✓ أزرق لرسالتي
             if obj.others_read is None:
@@ -168,8 +174,8 @@ class ConversationSerializer(serializers.ModelSerializer):
 
     def get_participants(self, obj):
         # بالقائمة: المجموعة ما نرجع أعضاءها (ممكن 40 أو 400 شخص بكل طلب). تفاصيلهم من /members/
-        if obj.kind == Conversation.GROUP and self.context.get('compact'):
-            return []
+        if obj.kind == Conversation.CHANNEL or (obj.kind == Conversation.GROUP and self.context.get('compact')):
+            return []  # القناة: المشتركون خاصّون (والمشرفون من /members/)
         return [user_json(m.user) for m in self._memberships(obj)]
 
     def get_title(self, obj):
@@ -183,6 +189,8 @@ class ConversationSerializer(serializers.ModelSerializer):
     def get_member_count(self, obj):
         if hasattr(obj, 'n_members'):
             return obj.n_members
+        if obj.kind == Conversation.CHANNEL:
+            return obj.memberships.count()
         return len(self._memberships(obj))
 
     def get_my_role(self, obj):
