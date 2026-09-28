@@ -4,6 +4,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 from django.conf import settings
 from django.db import close_old_connections
+from django.utils import translation
+from django.utils.translation import gettext as _
 from pywebpush import WebPushException, webpush
 
 from .models import PushSubscription
@@ -16,30 +18,43 @@ _pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix='push')
 
 
 def notify_new_message(message, preview=None):
-    """ندز إشعار لكل عضو بالمحادثة غير المرسل (وغير اللي كاتمها)، على كل أجهزته."""
+    """
+    نرسل إشعاراً لكل عضو في المحادثة عدا المرسل (ومن كتمها)، على كل أجهزته.
+    preview(tr) تعيد النص المختصر مترجماً، فكل مستلم يصله الإشعار بلغته.
+    """
     sender = message.sender
     profile = getattr(sender, 'profile', None)
     sender_name = (profile.display_name if profile and profile.display_name else sender.username)
     conv = message.conversation
-    body = (preview or message.content)[:100]
     if conv.kind == 'saved':
         return
-    if conv.kind == 'group':
-        title, body = conv.title or 'مجموعة', f'{sender_name}: {body}'
-    else:
-        title = sender_name
-    base = {'conversation': message.conversation_id, 'url': f'/chat?c={message.conversation_id}',
-            'tag': f'conversation-{message.conversation_id}'}
-    # العربي بدون ترميز \uXXXX = إشعار أصغر
-    full = json.dumps({**base, 'title': title, 'body': body}, ensure_ascii=False)
-    # للي مفعل "إخفاء محتوى الإشعار": لا اسم المرسل ولا النص، حتى لو أحد شاف شاشة الموبايل المقفولة
-    hidden = json.dumps({**base, 'title': 'وَصل', 'body': 'رسالة جديدة'}, ensure_ascii=False)
     subs = list(PushSubscription.objects.filter(
         user__memberships__conversation_id=message.conversation_id,
         user__memberships__is_muted=False).exclude(user=sender).select_related('user__profile'))
     if not subs:
         return
-    jobs = [(sub, hidden if _hides(sub.user) else full) for sub in subs]
+    base = {'conversation': message.conversation_id, 'url': f'/chat?c={message.conversation_id}',
+            'tag': f'conversation-{message.conversation_id}'}
+    payloads = {}  # (اللغة، مخفي؟) ← نص الإشعار: نبنيه مرة واحدة لكل تركيبة
+
+    def payload_for(user):
+        key = (_language(user), _hides(user))
+        if key not in payloads:
+            with translation.override(key[0]):
+                if key[1]:
+                    # "إخفاء محتوى الإشعار": لا اسم المرسل ولا النص، حتى لو رأى أحد شاشة الهاتف المقفلة
+                    data = {'title': _('وَصل'), 'body': _('رسالة جديدة')}
+                else:
+                    body = (preview(_) if preview else message.content)[:100]
+                    if conv.kind == 'group':
+                        data = {'title': conv.title or _('مجموعة'), 'body': f'{sender_name}: {body}'}
+                    else:
+                        data = {'title': sender_name, 'body': body}
+            # العربية دون ترميز \uXXXX = إشعار أصغر
+            payloads[key] = json.dumps({**base, **data}, ensure_ascii=False)
+        return payloads[key]
+
+    jobs = [(sub, payload_for(sub.user)) for sub in subs]
     if getattr(settings, 'PUSH_RUN_INLINE', False):
         _send_all(jobs)
     else:
@@ -50,6 +65,17 @@ def notify_new_message(message, preview=None):
 def _hides(user):
     profile = getattr(user, 'profile', None)
     return bool(profile and profile.hide_preview)
+
+
+def _language(user):
+    profile = getattr(user, 'profile', None)
+    return profile.language if profile else 'ar'
+
+
+def in_language(user, build):
+    """ينفّذ build() بلغة المستخدم (مثلاً: نص إشعار المكالمة الواردة)."""
+    with translation.override(_language(user)):
+        return build()
 
 
 def send_to_user(user, payload_dict):

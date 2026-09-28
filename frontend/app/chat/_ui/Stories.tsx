@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { mediaUrl, type StoryItem, type User } from "@/lib/api";
 import { stories as storyApi } from "@/lib/endpoints";
+import { useT } from "@/lib/i18n";
 import { Avatar, Chip, Empty, IconButton, listTime, nameOf, Panel } from "./bits";
 import { Icon } from "./icons";
 import { useWasl } from "./store";
@@ -19,6 +20,7 @@ function compact(n: number) {
 }
 
 export function StoriesView() {
+  const t = useT();
   const { stories, me, setPanel, setStoryViewer, setTab } = useWasl();
   const [kind, setKind] = useState<Kind>("all");
   const mine = stories.find((g) => g.is_me);
@@ -32,9 +34,9 @@ export function StoriesView() {
     <div className="flex h-full flex-col">
       <header className="px-4 pt-[max(1rem,env(safe-area-inset-top))]">
         <div className="flex items-center gap-2">
-          <IconButton icon="back" label="رجوع" onClick={() => setTab("settings")} />
-          <h1 className="flex-1 text-[22px] font-extrabold">الحالات</h1>
-          <button onClick={() => setPanel({ type: "storyCompose" })} aria-label="حالة جديدة" title="حالة جديدة"
+          <IconButton icon="back" label={t("رجوع")} onClick={() => setTab("settings")} />
+          <h1 className="flex-1 text-[22px] font-extrabold">{t("الحالات")}</h1>
+          <button onClick={() => setPanel({ type: "storyCompose" })} aria-label={t("حالة جديدة")} title={t("حالة جديدة")}
             className="w-tint grid h-10 w-10 place-items-center rounded-full"><Icon name="plus" size={22} strokeWidth={2.4} /></button>
         </div>
         <div className="w-noscroll -mx-4 mt-4 flex gap-3 overflow-x-auto px-4">
@@ -42,10 +44,10 @@ export function StoriesView() {
             onClick={() => (mine ? setStoryViewer({ userId: me.id, index: 0 }) : setPanel({ type: "storyCompose" }))}>
             <div className="relative">
               <Avatar user={me} size={60} ring={mine ? true : undefined} />
-              <span className="w-accent absolute -bottom-0.5 -left-0.5 grid h-6 w-6 place-items-center rounded-full border-2" style={{ borderColor: "var(--panel-strong)" }}
+              <span className="w-accent absolute -bottom-0.5 -end-0.5 grid h-6 w-6 place-items-center rounded-full border-2" style={{ borderColor: "var(--panel-strong)" }}
                 onClick={(e) => { e.stopPropagation(); setPanel({ type: "storyCompose" }); }}><Icon name="plus" size={13} strokeWidth={3} /></span>
             </div>
-            <span className="w-muted">قصتي</span>
+            <span className="w-muted">{t("قصتي")}</span>
           </button>
           {stories.filter((g) => !g.is_me).map((g) => (
             <button key={g.user.id} className="grid shrink-0 justify-items-center gap-1 text-[11px]" onClick={() => setStoryViewer({ userId: g.user.id, index: 0 })}>
@@ -55,19 +57,19 @@ export function StoriesView() {
           ))}
         </div>
         <div className="w-noscroll -mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-1">
-          {kinds.map((k) => <Chip key={k.id} label={k.label} active={kind === k.id} onClick={() => setKind(k.id)} />)}
+          {kinds.map((k) => <Chip key={k.id} label={t(k.label)} active={kind === k.id} onClick={() => setKind(k.id)} />)}
         </div>
       </header>
       <div className="w-scroll mt-3 flex-1 overflow-y-auto px-3 pb-4">
         {cards.length === 0 ? (
-          <Empty icon="stories" title="ماكو حالات بعد" text="شارك صورة أو فيديو أو كلمة، وتختفي بعد 24 ساعة.">
-            <button onClick={() => setPanel({ type: "storyCompose" })} className="w-accent mt-4 rounded-full px-6 py-2.5 font-bold">أضف حالة</button>
+          <Empty icon="stories" title={t("لا توجد حالات بعد")} text={t("شارك صورة أو فيديو أو كلمة، وتختفي بعد 24 ساعة.")}>
+            <button onClick={() => setPanel({ type: "storyCompose" })} className="w-accent mt-4 rounded-full px-6 py-2.5 font-bold">{t("أضف حالة")}</button>
           </Empty>
         ) : (
           <div className="grid grid-cols-2 gap-3">
             {cards.map(({ s, index, user }) => (
               <button key={s.id} onClick={() => setStoryViewer({ userId: user.id, index })}
-                className="relative aspect-[3/4] overflow-hidden rounded-2xl text-right text-white">
+                className="relative aspect-[3/4] overflow-hidden rounded-2xl text-start text-white">
                 <StoryMedia s={s} thumb />
                 <span className="absolute inset-x-0 top-0 flex items-center gap-2 bg-gradient-to-b from-black/50 to-transparent p-2.5">
                   <Avatar user={user} size={28} />
@@ -92,7 +94,7 @@ function StoryMedia({ s, thumb }: { s: StoryItem; thumb?: boolean }) {
   if (s.kind === "text") {
     return (
       <div className="absolute inset-0 grid place-items-center p-4 text-center" style={{ background: `linear-gradient(135deg, ${s.background}, ${s.background}aa)` }}>
-        <p className={`${thumb ? "line-clamp-5 text-base" : "text-3xl"} font-extrabold leading-relaxed`}>{s.text}</p>
+        <p className={`${thumb ? "line-clamp-5 text-base" : "text-3xl"} font-extrabold leading-relaxed`} dir="auto">{s.text}</p>
       </div>
     );
   }
@@ -105,6 +107,7 @@ function StoryMedia({ s, thumb }: { s: StoryItem; thumb?: boolean }) {
 
 // ------------------------------------------------------------ عارض الحالات (شاشة كاملة)
 export function StoryViewer() {
+  const t = useT();
   const { stories, storyViewer, setStoryViewer, openWith, refreshStories } = useWasl();
   const [progress, setProgress] = useState(0);
   const [viewers, setViewers] = useState<{ user: User; viewed_at: string }[] | null>(null);
@@ -168,7 +171,7 @@ export function StoryViewer() {
         onPointerDown={() => setPaused(true)} onPointerUp={() => setPaused(false)}>
         <StoryMedia s={story} />
         {story.text && story.kind !== "text" && (
-          <p className="absolute inset-x-4 bottom-24 rounded-2xl bg-black/40 p-3 text-center font-bold backdrop-blur">{story.text}</p>
+          <p className="absolute inset-x-4 bottom-24 rounded-2xl bg-black/40 p-3 text-center font-bold backdrop-blur" dir="auto">{story.text}</p>
         )}
         <div className="absolute inset-x-3 top-[max(0.75rem,env(safe-area-inset-top))] flex gap-1" dir="ltr">
           {group.stories.map((s, i) => (
@@ -179,31 +182,31 @@ export function StoryViewer() {
         </div>
         <div className="absolute inset-x-3 top-[max(1.6rem,calc(env(safe-area-inset-top)+0.9rem))] flex items-center gap-3">
           <Avatar user={group.user} size={40} />
-          <div className="flex-1"><div className="font-bold">{group.is_me ? "قصتي" : nameOf(group.user)}</div><div className="text-xs opacity-80">{listTime(story.created_at)}</div></div>
-          <button onClick={close} className="grid h-10 w-10 place-items-center rounded-full bg-black/30" aria-label="إغلاق"><Icon name="x" /></button>
+          <div className="flex-1"><div className="font-bold">{group.is_me ? t("قصتي") : nameOf(group.user)}</div><div className="text-xs opacity-80">{listTime(story.created_at)}</div></div>
+          <button onClick={close} className="grid h-10 w-10 place-items-center rounded-full bg-black/30" aria-label={t("إغلاق")}><Icon name="x" /></button>
         </div>
-        {/* المناطق اللي تنضغط: يمين = السابقة، يسار = التالية (بالعربي) */}
-        <button className="absolute inset-y-20 right-0 w-1/3" aria-label="السابقة" onClick={() => go(-1)} />
-        <button className="absolute inset-y-20 left-0 w-1/3" aria-label="التالية" onClick={() => go(1)} />
+        {/* مناطق الضغط: البداية = السابقة، والنهاية = التالية (تنقلب مع اتجاه اللغة) */}
+        <button className="absolute inset-y-20 start-0 w-1/3" aria-label={t("السابقة")} onClick={() => go(-1)} />
+        <button className="absolute inset-y-20 end-0 w-1/3" aria-label={t("التالية")} onClick={() => go(1)} />
         <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-3 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           {group.is_me ? (
             <>
               <button onClick={() => storyApi.viewers(story.id).then(setViewers)} className="flex items-center gap-2 rounded-full bg-black/40 px-4 py-2 font-bold backdrop-blur">
-                <Icon name="eye" size={18} />{story.views_count} مشاهدة
+                <Icon name="eye" size={18} />{t("{n} مشاهدة", { n: story.views_count })}
               </button>
-              <button onClick={async () => { if (confirm("تحذف هاي الحالة؟")) { await storyApi.remove(story.id); await refreshStories(); close(); } }}
-                className="grid h-10 w-10 place-items-center rounded-full bg-black/40 backdrop-blur" aria-label="حذف"><Icon name="trash" size={18} /></button>
+              <button onClick={async () => { if (confirm(t("حذف هذه الحالة؟"))) { await storyApi.remove(story.id); await refreshStories(); close(); } }}
+                className="grid h-10 w-10 place-items-center rounded-full bg-black/40 backdrop-blur" aria-label={t("حذف")}><Icon name="trash" size={18} /></button>
             </>
           ) : (
             <button onClick={() => { close(); openWith(group.user.id); }} className="flex items-center gap-2 rounded-full bg-white/20 px-5 py-2.5 font-bold backdrop-blur">
-              <Icon name="reply" size={18} />رد
+              <Icon name="reply" size={18} />{t("رد")}
             </button>
           )}
         </div>
         {viewers && (
           <div className="absolute inset-x-0 bottom-0 max-h-[60%] overflow-y-auto rounded-t-[28px] bg-white p-4 text-slate-800" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-2 flex items-center justify-between"><h3 className="font-extrabold">شافها {viewers.length}</h3><button onClick={() => setViewers(null)}><Icon name="x" /></button></div>
-            {viewers.length === 0 && <p className="py-4 text-center text-sm text-slate-500">محد شافها بعد</p>}
+            <div className="mb-2 flex items-center justify-between"><h3 className="font-extrabold">{t("شاهدها {n}", { n: viewers.length })}</h3><button onClick={() => setViewers(null)}><Icon name="x" /></button></div>
+            {viewers.length === 0 && <p className="py-4 text-center text-sm text-slate-500">{t("لم يشاهدها أحد بعد")}</p>}
             {viewers.map((v) => (
               <div key={v.user.id} className="flex items-center gap-3 py-2">
                 <Avatar user={v.user} size={38} /><span className="flex-1 font-bold">{nameOf(v.user)}</span><span className="text-xs text-slate-500">{listTime(v.viewed_at)}</span>
@@ -220,6 +223,7 @@ export function StoryViewer() {
 const colors = ["#1f7bff", "#7c3aed", "#db2777", "#059669", "#ea580c", "#0f172a"];
 
 export function StoryComposer() {
+  const t = useT();
   const { setPanel, refreshStories, notify } = useWasl();
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -243,7 +247,7 @@ export function StoryComposer() {
   }
 
   return (
-    <Panel title="حالة جديدة" onClose={() => setPanel(null)}>
+    <Panel title={t("حالة جديدة")} onClose={() => setPanel(null)}>
       <div className="relative mx-auto aspect-[9/14] w-full max-w-xs overflow-hidden rounded-[28px] text-white shadow-xl"
         style={!file ? { background: `linear-gradient(135deg, ${bg}, ${bg}aa)` } : undefined}>
         {file && preview ? (
@@ -251,29 +255,29 @@ export function StoryComposer() {
             // eslint-disable-next-line @next/next/no-img-element -- معاينة محلية
             : <img src={preview} alt="" className="absolute inset-0 h-full w-full object-cover" />
         ) : (
-          <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={500} placeholder="اكتب حالتك..."
+          <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={500} placeholder={t("اكتب حالتك...")}
             className="absolute inset-0 resize-none bg-transparent p-6 pt-24 text-center text-2xl font-extrabold outline-none placeholder:text-white/60" />
         )}
       </div>
       {file ? (
-        <input value={text} onChange={(e) => setText(e.target.value)} placeholder="أضف تعليق..."
+        <input value={text} onChange={(e) => setText(e.target.value)} placeholder={t("أضف تعليقاً...")}
           className="w-input mt-4 h-12 w-full rounded-full px-4 text-base outline-none" />
       ) : (
         <div className="mt-4 flex justify-center gap-2">
           {colors.map((c) => (
-            <button key={c} onClick={() => setBg(c)} aria-label={`لون ${c}`} className={`h-9 w-9 rounded-full ${bg === c ? "ring-4 ring-white/70" : ""}`} style={{ background: c }} />
+            <button key={c} onClick={() => setBg(c)} aria-label={`${t("لون")} ${c}`} className={`h-9 w-9 rounded-full ${bg === c ? "ring-4 ring-white/70" : ""}`} style={{ background: c }} />
           ))}
         </div>
       )}
       <input ref={pick} type="file" accept="image/*,video/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); setPreview(URL.createObjectURL(f)); } e.target.value = ""; }} />
       <div className="mt-4 flex gap-2">
         {file ? (
-          <button onClick={() => { setFile(null); setPreview(null); }} className="w-card flex-1 rounded-full py-3 font-bold">نص بدل الصورة</button>
+          <button onClick={() => { setFile(null); setPreview(null); }} className="w-card flex-1 rounded-full py-3 font-bold">{t("نص بدل الصورة")}</button>
         ) : (
-          <button onClick={() => pick.current?.click()} className="w-card flex flex-1 items-center justify-center gap-2 rounded-full py-3 font-bold"><Icon name="image" size={18} />صورة أو فيديو</button>
+          <button onClick={() => pick.current?.click()} className="w-card flex flex-1 items-center justify-center gap-2 rounded-full py-3 font-bold"><Icon name="image" size={18} />{t("صورة أو فيديو")}</button>
         )}
         <button onClick={post} disabled={busy || (!file && !text.trim())} className="w-accent flex-1 rounded-full py-3 font-extrabold disabled:opacity-50">
-          {busy ? "جاري النشر..." : "نشر"}
+          {t(busy ? "جارٍ النشر..." : "نشر")}
         </button>
       </div>
     </Panel>

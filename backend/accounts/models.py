@@ -28,6 +28,9 @@ class Profile(models.Model):
     theme = models.CharField(max_length=20, choices=THEMES, default='default')
     # إخفاء نص الرسالة بالإشعار (يطلع "رسالة جديدة" بس): للي يخاف أحد يشوف شاشة موبايله
     hide_preview = models.BooleanField(default=False)
+    # لغة الواجهة (وتُستخدم أيضاً لنص الإشعارات التي تصله)
+    LANGUAGES = [('ar', 'العربية'), ('en', 'English')]
+    language = models.CharField(max_length=5, choices=LANGUAGES, default='ar')
     is_online = models.BooleanField(default=False)
     # كم تبويب/جهاز فاتح هسه. "غير متصل" بس لما يصير صفر
     connections = models.IntegerField(default=0)

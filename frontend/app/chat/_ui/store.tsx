@@ -9,6 +9,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, us
 import { ApiError, getToken, logout, saveMe, type Call, type CallKind, type Conversation, type Me, type Message, type StoryGroup, type User } from "@/lib/api";
 import { CallSession } from "@/lib/call";
 import { auth, calls, conversations as convApi, messages as msgApi, stories as storyApi, users as usersApi } from "@/lib/endpoints";
+import { setLang, t, useLang } from "@/lib/i18n";
 import { isDeviceError, permError } from "@/lib/permissions";
 import { syncPushSubscription } from "@/lib/push";
 import { openSocket, type LiveSocket } from "@/lib/socket";
@@ -86,7 +87,7 @@ function callError(err: unknown, kind: CallKind) {
 
 export function useWasl() {
   const ctx = useContext(WaslContext);
-  if (!ctx) throw new Error("useWasl خارج WaslProvider");
+  if (!ctx) throw new Error("useWasl must be used inside WaslProvider");
   return ctx;
 }
 
@@ -156,7 +157,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     onRemoteStream: (s: MediaStream) => setCall((c) => (c ? { ...c, remote: s } : c)),
     onState: (state: RTCPeerConnectionState) => {
       if (state === "connected") setCall((c) => (c ? { ...c, phase: "active", startedAt: c.startedAt ?? Date.now() } : c));
-      if (state === "failed") endCallUI("تعذر الاتصال");
+      if (state === "failed") endCallUI(t("تعذّر الاتصال"));
     },
   }), [endCallUI]);
 
@@ -171,6 +172,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
       .then(([m, u, c, s]) => {
         saveMe(m);
         setMe(m);
+        setLang(m.language); // اللغة محفوظة بالحساب: تتبع المستخدم على كل أجهزته
         setUsers(u);
         setConvs(c);
         setStories(s);
@@ -223,7 +225,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
         case "call_ended": {
           const cur = callRef.current;
           if (cur && cur.call.id === e.call_id && cur.phase !== "ended") {
-            endCallUI(e.status === "declined" ? "رفض المكالمة" : e.status === "missed" ? "ما رد" : "انتهت المكالمة");
+            endCallUI(t(e.status === "declined" ? "رُفضت المكالمة" : e.status === "missed" ? "لم يُجب" : "انتهت المكالمة"));
           }
           break;
         }
@@ -276,7 +278,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     if (callRef.current && callRef.current.phase !== "ended") return;
     const peer = otherOf(conv);
     if (!peer || !socketRef.current) {
-      notify("المكالمات حالياً بين شخصين بس");
+      notify(t("المكالمات حالياً بين شخصين فقط"));
       return;
     }
     const base: CallUI = { phase: "outgoing", call: { id: 0, kind, caller: meRef.current! } as unknown as Call, peer, session: null, local: null, remote: null, startedAt: null, muted: false, cameraOff: false };
@@ -320,7 +322,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     sessionRef.current = null;
     if (s) await s.hangup();
     else if (cur.call.id) await calls.end(cur.call.id).catch(() => {});
-    endCallUI("انتهت المكالمة");
+    endCallUI(t("انتهت المكالمة"));
   }, [endCallUI]);
 
   const toggleMute = useCallback(() => {
@@ -364,12 +366,13 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
 
   // عدد غير المقروء بعنوان التبويب
   const unread = convs.reduce((n, c) => n + c.unread_count, 0);
+  const lang = useLang();
   useEffect(() => {
-    document.title = unread ? `(${unread}) وَصل` : "وَصل | محادثاتك بمكان واحد";
+    document.title = unread ? `(${unread}) ${t("وَصل")}` : t("وَصل | محادثاتك في مكان واحد");
     // عدّاد على أيقونة التطبيق بالشاشة الرئيسية (أندرويد/آيفون لما يكون مثبت، وكروم بالحاسبة)
     const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
     (unread ? nav.setAppBadge?.(unread) : nav.clearAppBadge?.())?.catch(() => {});
-  }, [unread]);
+  }, [unread, lang]);
 
   if (!me) return <>{fallback}</>;
   const value: Ctx = {

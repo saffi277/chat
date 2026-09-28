@@ -5,6 +5,7 @@ from django.db.models import Count, DateTimeField, Exists, IntegerField, Min, Ou
 from django.db.models.functions import Coalesce
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.translation import gettext as _
 from rest_framework import status
 from rest_framework.decorators import api_view, throttle_classes
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -34,7 +35,7 @@ def my_membership(request, pk):
 
 def require_admin(membership):
     if membership.conversation.kind != Conversation.GROUP or membership.role != Membership.ADMIN:
-        raise PermissionDenied('بس المشرف يكدر يسوي هذا')
+        raise PermissionDenied(_('هذا الإجراء للمشرف فقط'))
 
 
 def conv_data(request, conv):
@@ -101,7 +102,7 @@ def conversations(request):
     # POST {"user_id": 5} → نرجع المحادثة الثنائية الموجودة أو ننشئ وحدة جديدة
     other = get_object_or_404(User, pk=request.data.get('user_id'))
     if other == request.user:
-        return Response({'detail': 'للرسائل لنفسك استخدم الرسائل المحفوظة'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'detail': _('لمراسلة نفسك استخدم الرسائل المحفوظة')}, status=status.HTTP_400_BAD_REQUEST)
     # filter مرتين = JOIN مرتين: محادثة ثنائية فيها أنا وفيها هو
     conv = (Conversation.objects.filter(kind=Conversation.DIRECT)
             .filter(memberships__user=request.user).filter(memberships__user=other).first())
@@ -128,7 +129,7 @@ def create_group(request):
     """POST {title, member_ids: [..], description?} (+ avatar إذا multipart)"""
     title = (request.data.get('title') or '').strip()
     if not title:
-        raise ValidationError({'title': 'اسم المجموعة مطلوب'})
+        raise ValidationError({'title': _('اسم المجموعة مطلوب')})
     ids = request.data.getlist('member_ids') if hasattr(request.data, 'getlist') else request.data.get('member_ids', [])
     members = list(User.objects.filter(id__in=ids).exclude(id=request.user.id))
     conv = Conversation.objects.create(
@@ -168,7 +169,7 @@ def conversation_detail(request, pk):
         if 'title' in request.data:
             title = (request.data.get('title') or '').strip()
             if not title:
-                raise ValidationError({'title': 'اسم المجموعة مطلوب'})
+                raise ValidationError({'title': _('اسم المجموعة مطلوب')})
             if title != conv.title:
                 services.system_message(conv, request.user, f'{name_of(request.user)} غيّر اسم المجموعة إلى "{title}"')
             conv.title = title[:80]
@@ -244,13 +245,13 @@ def member_detail(request, pk, user_id):
         if target.user_id != request.user.id:
             require_admin(m)  # تطلع بنفسك، أو المشرف يطلعك
         if m.conversation.kind != Conversation.GROUP:
-            raise ValidationError('هذي مو مجموعة')
+            raise ValidationError(_('هذه ليست مجموعة'))
         leave_group(target.user, target, actor=request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
     require_admin(m)
     role = request.data.get('role')
     if role not in (Membership.ADMIN, Membership.MEMBER):
-        raise ValidationError({'role': 'admin أو member'})
+        raise ValidationError({'role': 'admin | member'})
     target.role = role
     target.save(update_fields=['role'])
     return Response(MemberSerializer(target).data)
@@ -300,30 +301,30 @@ def send_message(request, conv):
 
     if kind == Message.TEXT:
         if not content:
-            raise ValidationError({'content': 'الرسالة فارغة'})
+            raise ValidationError({'content': _('الرسالة فارغة')})
     elif kind == Message.LOCATION:
         try:
             lat, lng = float(data.get('latitude')), float(data.get('longitude'))
         except (TypeError, ValueError):
-            raise ValidationError({'latitude': 'الإحداثيات مطلوبة'})
+            raise ValidationError({'latitude': _('الإحداثيات مطلوبة')})
         if not (-90 <= lat <= 90 and -180 <= lng <= 180):
-            raise ValidationError({'latitude': 'إحداثيات غلط'})
+            raise ValidationError({'latitude': _('إحداثيات غير صحيحة')})
         fields.update(latitude=lat, longitude=lng)
         minutes = data.get('live_minutes')
         if minutes:
             minutes = int(minutes)
             if not 1 <= minutes <= 8 * 60:
-                raise ValidationError({'live_minutes': 'من دقيقة لحد 8 ساعات'})
+                raise ValidationError({'live_minutes': _('من دقيقة واحدة حتى 8 ساعات')})
             fields['live_until'] = timezone.now() + timedelta(minutes=minutes)
     elif kind in (Message.IMAGE, Message.VIDEO, Message.VOICE, Message.FILE):
         if not upload:
-            raise ValidationError({'file': 'الملف مطلوب'})
+            raise ValidationError({'file': _('الملف مطلوب')})
         validate_upload(kind, upload)
         fields.update(file=upload, file_name=upload.name[:255], file_size=upload.size)
         if data.get('duration'):
             fields['duration'] = float(data['duration'])
     else:
-        raise ValidationError({'kind': 'نوع رسالة غير معروف'})
+        raise ValidationError({'kind': _('نوع رسالة غير معروف')})
     return services.create_message(conv, request.user, content, **fields)
 
 
@@ -331,9 +332,9 @@ def my_message(request, message_id):
     msg = get_object_or_404(Message.objects.select_related('conversation'), pk=message_id,
                             conversation__memberships__user=request.user)
     if msg.sender_id != request.user.id:
-        raise PermissionDenied('هذي مو رسالتك')
+        raise PermissionDenied(_('هذه ليست رسالتك'))
     if msg.deleted_at:
-        raise ValidationError('الرسالة محذوفة')
+        raise ValidationError(_('الرسالة محذوفة'))
     return msg
 
 
@@ -346,9 +347,9 @@ def message_detail(request, message_id):
         return Response(status=status.HTTP_204_NO_CONTENT)
     content = (request.data.get('content') or '').strip()
     if msg.kind not in (Message.TEXT, Message.IMAGE, Message.VIDEO, Message.FILE):
-        raise ValidationError('هذا النوع ما يتعدل')
+        raise ValidationError(_('لا يمكن تعديل هذا النوع'))
     if msg.kind == Message.TEXT and not content:
-        raise ValidationError({'content': 'الرسالة فارغة'})
+        raise ValidationError({'content': _('الرسالة فارغة')})
     msg.content = content
     msg.edited_at = timezone.now()
     msg.save(update_fields=['content', 'edited_at'])
@@ -360,14 +361,14 @@ def live_location(request, message_id):
     """الموقع المباشر: {"latitude", "longitude"} تحديث، أو {"stop": true} إيقاف."""
     msg = my_message(request, message_id)
     if msg.kind != Message.LOCATION or not msg.is_live:
-        raise ValidationError('هذا مو موقع مباشر شغال')
+        raise ValidationError(_('هذا ليس موقعاً مباشراً قيد المشاركة'))
     if request.data.get('stop'):
         msg.live_until = timezone.now()
     else:
         try:
             msg.latitude, msg.longitude = float(request.data['latitude']), float(request.data['longitude'])
         except (KeyError, TypeError, ValueError):
-            raise ValidationError({'latitude': 'الإحداثيات مطلوبة'})
+            raise ValidationError({'latitude': _('الإحداثيات مطلوبة')})
     msg.save(update_fields=['latitude', 'longitude', 'live_until'])
     return Response(services.message_changed(msg))
 
@@ -400,7 +401,7 @@ def shared_media(request, pk):
     counts = base.aggregate(**{k: Count('id', filter=q) for k, q in MEDIA_TYPES.items()})
     kind = request.query_params.get('type', 'media')
     if kind not in MEDIA_TYPES:
-        raise ValidationError({'type': 'نوع غير معروف'})
+        raise ValidationError({'type': _('نوع غير معروف')})
     qs = base.filter(MEDIA_TYPES[kind]).select_related('sender__profile').order_by('-id')
     if request.query_params.get('before'):
         qs = qs.filter(id__lt=request.query_params['before'])
@@ -420,10 +421,10 @@ def react(request, message_id):
     """POST {"emoji": "❤️"}: نفس الإيموجي مرة ثانية = يشيله، إيموجي ثاني = يبدله، وفارغ = يشيل."""
     msg = visible_message(request, message_id)
     if msg.deleted_at or msg.kind in (Message.SYSTEM, Message.CALL):
-        raise ValidationError('ما تكدر تتفاعل على هاي الرسالة')
+        raise ValidationError(_('لا يمكنك التفاعل مع هذه الرسالة'))
     emoji = (request.data.get('emoji') or '').strip()
     if len(emoji) > 16:
-        raise ValidationError({'emoji': 'إيموجي وحد بس'})
+        raise ValidationError({'emoji': _('إيموجي واحد فقط')})
     current = Reaction.objects.filter(message=msg, user=request.user).first()
     if current and (not emoji or current.emoji == emoji):
         current.delete()

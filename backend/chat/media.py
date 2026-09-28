@@ -5,6 +5,7 @@
 import mimetypes
 
 from PIL import Image
+from django.utils.translation import gettext as _
 from rest_framework.exceptions import ValidationError
 
 from .models import Message
@@ -28,16 +29,16 @@ def guess_kind(upload):
 
 def validate_upload(kind, upload):
     if kind not in LIMITS:
-        raise ValidationError({'kind': 'هذا النوع ما يقبل ملفات'})
+        raise ValidationError({'kind': _('هذا النوع لا يقبل ملفات')})
     if upload.size > LIMITS[kind]:
-        raise ValidationError({'file': f'الملف أكبر من {LIMITS[kind] // MB} ميگا'})
+        raise ValidationError({'file': _('الملف أكبر من {n} ميغابايت').format(n=LIMITS[kind] // MB)})
     if kind == Message.IMAGE:
         try:
             Image.open(upload).verify()
         except Exception:
-            raise ValidationError({'file': 'هذا مو صورة'})
+            raise ValidationError({'file': _('هذا الملف ليس صورة')})
         upload.seek(0)
     elif kind in PREFIX:
         ctype = upload.content_type or mimetypes.guess_type(upload.name)[0] or ''
         if not ctype.startswith(PREFIX[kind]):
-            raise ValidationError({'file': 'نوع الملف ما يطابق نوع الرسالة'})
+            raise ValidationError({'file': _('نوع الملف لا يطابق نوع الرسالة')})

@@ -1,0 +1,177 @@
+# ترجمة رسائل الخادم إلى الإنجليزية. المعرّف (msgid) هو النص العربي كما في الكود.
+# بعد أي تعديل: python locale/compile.py  (يولّد django.mo، ولا يحتاج إلى أدوات gettext)
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: en\n"
+
+msgid "رمز الدخول غير صالح"
+msgstr "Invalid sign-in token"
+
+msgid "انتهت الجلسة، سجّل الدخول من جديد"
+msgstr "Your session has expired. Please sign in again"
+
+msgid "هذا البريد مسجّل بحساب آخر"
+msgstr "This email is already used by another account"
+
+msgid "هذا الرقم الجامعي مسجّل بحساب آخر"
+msgstr "This university ID is already used by another account"
+
+msgid "رقم الهاتف أرقام فقط (ويجوز + في البداية)"
+msgstr "Phone number must be digits only (a leading + is allowed)"
+
+msgid "يجب أن تكون الصورة أصغر من 3 ميغابايت"
+msgstr "The photo must be smaller than 3 MB"
+
+msgid "بيانات الدخول غير صحيحة. تحقّق من البريد أو الرقم الجامعي وكلمة المرور"
+msgstr "Incorrect sign-in details. Check your email or university ID and password"
+
+msgid "هذا الحساب مسجّل بدور «{role}»، اختر الدور الصحيح"
+msgstr "This account is registered as “{role}”. Please choose the correct role"
+
+msgid "اكتب بريدك أو رقمك الجامعي"
+msgstr "Enter your email or university ID"
+
+msgid "اكتب المشكلة"
+msgstr "Describe the problem"
+
+msgid "وصل طلبك إلى الدعم الفني، وسيتواصلون معك قريباً"
+msgstr "Your request has reached technical support. They will contact you soon"
+
+msgid "لا يمكنك الاتصال بنفسك"
+msgstr "You can't call yourself"
+
+msgid "توجد مكالمة جارية في هذه المحادثة"
+msgstr "There is already a call in progress in this chat"
+
+msgid "مكالمة فيديو واردة"
+msgstr "Incoming video call"
+
+msgid "مكالمة صوتية واردة"
+msgstr "Incoming voice call"
+
+msgid "انتهت المكالمة"
+msgstr "The call has ended"
+
+msgid "لا يمكنك رفض هذه المكالمة"
+msgstr "You can't decline this call"
+
+msgid "هذا النوع لا يقبل ملفات"
+msgstr "This type doesn't accept files"
+
+msgid "الملف أكبر من {n} ميغابايت"
+msgstr "The file is larger than {n} MB"
+
+msgid "هذا الملف ليس صورة"
+msgstr "This file is not an image"
+
+msgid "نوع الملف لا يطابق نوع الرسالة"
+msgstr "The file type doesn't match the message type"
+
+msgid "الرسائل المحفوظة"
+msgstr "Saved messages"
+
+msgid "هذا الإجراء للمشرف فقط"
+msgstr "Only an admin can do this"
+
+msgid "لمراسلة نفسك استخدم الرسائل المحفوظة"
+msgstr "To message yourself, use Saved messages"
+
+msgid "اسم المجموعة مطلوب"
+msgstr "A group name is required"
+
+msgid "هذه ليست مجموعة"
+msgstr "This is not a group"
+
+msgid "الرسالة فارغة"
+msgstr "The message is empty"
+
+msgid "الإحداثيات مطلوبة"
+msgstr "Coordinates are required"
+
+msgid "إحداثيات غير صحيحة"
+msgstr "Invalid coordinates"
+
+msgid "من دقيقة واحدة حتى 8 ساعات"
+msgstr "From 1 minute up to 8 hours"
+
+msgid "الملف مطلوب"
+msgstr "A file is required"
+
+msgid "نوع رسالة غير معروف"
+msgstr "Unknown message type"
+
+msgid "هذه ليست رسالتك"
+msgstr "This isn't your message"
+
+msgid "الرسالة محذوفة"
+msgstr "The message was deleted"
+
+msgid "لا يمكن تعديل هذا النوع"
+msgstr "This type can't be edited"
+
+msgid "هذا ليس موقعاً مباشراً قيد المشاركة"
+msgstr "This is not an active live location"
+
+msgid "نوع غير معروف"
+msgstr "Unknown type"
+
+msgid "لا يمكنك التفاعل مع هذه الرسالة"
+msgstr "You can't react to this message"
+
+msgid "إيموجي واحد فقط"
+msgstr "Only one emoji"
+
+msgid "الرابط غير صالح أو منتهي الصلاحية"
+msgstr "The link is invalid or has expired"
+
+msgid "وَصل"
+msgstr "Wasl"
+
+msgid "رسالة جديدة"
+msgstr "New message"
+
+msgid "مجموعة"
+msgstr "Group"
+
+msgid "endpoint مطلوب"
+msgstr "endpoint is required"
+
+msgid "keys ناقصة"
+msgstr "keys are missing"
+
+msgid "الحالة فارغة"
+msgstr "The status is empty"
+
+msgid "لون بصيغة #RRGGBB"
+msgstr "Colour must be in #RRGGBB format"
+
+msgid "📷 صورة"
+msgstr "📷 Photo"
+
+msgid "🎬 فيديو"
+msgstr "🎬 Video"
+
+msgid "🎤 رسالة صوتية"
+msgstr "🎤 Voice message"
+
+msgid "📎 ملف"
+msgstr "📎 File"
+
+msgid "📍 موقع"
+msgstr "📍 Location"
+
+msgid "📍 موقع مباشر"
+msgstr "📍 Live location"
+
+msgid "🚫 تم حذف هذه الرسالة"
+msgstr "🚫 This message was deleted"
+
+msgid "طالب"
+msgstr "Student"
+
+msgid "تدريسي"
+msgstr "Faculty"
+
+msgid "إداري"
+msgstr "Staff"

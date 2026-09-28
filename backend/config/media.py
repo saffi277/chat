@@ -17,6 +17,7 @@ import time
 from django.conf import settings
 from django.http import Http404, HttpResponse, StreamingHttpResponse
 from django.utils._os import safe_join
+from django.utils.translation import gettext as _
 from django.views.static import serve
 
 from chat.crypto import decrypt_range, is_encrypted_file, plain_size
@@ -62,7 +63,7 @@ def _headers(response, path, ctype):
 
 def media(request, path):
     if path.startswith(PROTECTED) and not _valid(request, path):
-        return HttpResponse('الرابط غير صالح أو منتهي', status=403)
+        return HttpResponse(_('الرابط غير صالح أو منتهي الصلاحية'), status=403)
     try:
         full = safe_join(settings.MEDIA_ROOT, path)
         f = open(full, 'rb')

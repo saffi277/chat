@@ -96,18 +96,21 @@ def member_ids(conversation):
     return list(conversation.memberships.values_list('user_id', flat=True))
 
 
-def preview_text(message):
-    """النص المختصر اللي يطلع بالقائمة وبالإشعار."""
+def preview_text(message, tr=lambda text: text):
+    """
+    النص المختصر الذي يظهر في القائمة وفي الإشعار.
+    يُحفظ ويُبث بالعربية دائماً (والواجهة تترجمه)، أما الإشعار فيُترجم لكل مستلم: tr=gettext مع لغته.
+    """
     if message.deleted_at:
-        return '🚫 تم حذف هذه الرسالة'
+        return tr('🚫 تم حذف هذه الرسالة')
     if message.kind == Message.LOCATION and message.is_live:
-        return '📍 موقع مباشر'
+        return tr('📍 موقع مباشر')
     if message.kind == Message.CALL:
-        return f'📞 {message.content}'
+        return f'📞 {tr(message.content)}'
     base = PREVIEWS.get(message.kind)
     if base and message.content:
-        return f'{base}: {message.content}'
-    return base or message.content
+        return f'{tr(base)}: {message.content}'
+    return tr(base) if base else message.content
 
 
 def serialize_message(message):
@@ -141,7 +144,7 @@ def create_message(conversation, sender, content='', **fields):
     # لكل عضو على اتصاله العام: حتى تتحدث قائمته
     send_to_users(member_ids(conversation), {'type': 'inbox', 'message': data})
     if msg.kind not in QUIET:
-        notify_new_message(msg, preview_text(msg))
+        notify_new_message(msg, lambda tr: preview_text(msg, tr))
     return data
 
 

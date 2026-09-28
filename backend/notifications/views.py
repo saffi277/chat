@@ -1,4 +1,5 @@
 from rest_framework import status
+from django.utils.translation import gettext as _
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -18,14 +19,14 @@ def public_key(request):
 def subscribe(request):
     endpoint = request.data.get('endpoint')
     if not endpoint:
-        return Response({'detail': 'endpoint مطلوب'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'detail': _('endpoint مطلوب')}, status=status.HTTP_400_BAD_REQUEST)
     if request.method == 'DELETE':
         PushSubscription.objects.filter(endpoint=endpoint, user=request.user).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     keys = request.data.get('keys') or {}
     if not keys.get('p256dh') or not keys.get('auth'):
-        return Response({'detail': 'keys ناقصة'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'detail': _('keys ناقصة')}, status=status.HTTP_400_BAD_REQUEST)
     # نفس المتصفح ممكن يسجل دخول بحساب ثاني، فنربط الـ endpoint بالمستخدم الحالي
     PushSubscription.objects.update_or_create(
         endpoint=endpoint,

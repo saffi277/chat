@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "i18n:check": "python3 scripts/check-i18n.py"
   },
   "dependencies": {
     "next": "16.3.6",

@@ -35,7 +35,7 @@ export const auth = {
   me: () => api<Me>("/auth/me/"),
   /** تسجيل خروج: التوكن ينمسح من السيرفر (all = من كل الأجهزة) */
   logout: (all = false) => api("/auth/logout/", "POST", { all }),
-  updateMe: (data: Partial<Pick<Me, "display_name" | "bio" | "phone" | "city" | "mode" | "theme" | "hide_preview">>) =>
+  updateMe: (data: Partial<Pick<Me, "display_name" | "bio" | "phone" | "city" | "mode" | "theme" | "language" | "hide_preview">>) =>
     api<Me>("/auth/me/", "PATCH", data),
   setAvatar: (file: File | null) => {
     if (!file) return api<Me>("/auth/me/", "PATCH", { avatar: null });

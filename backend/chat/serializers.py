@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 from rest_framework import serializers
+from django.utils.translation import gettext as _
 
 from accounts.serializers import UserSerializer, iso, user_json
 from config.media import signed_url
@@ -173,7 +174,7 @@ class ConversationSerializer(serializers.ModelSerializer):
 
     def get_title(self, obj):
         if obj.kind == Conversation.SAVED:
-            return 'الرسائل المحفوظة'
+            return _('الرسائل المحفوظة')
         return obj.title  # بالمحادثة الثنائية فارغ: الواجهة تعرض اسم الطرف الثاني
 
     def get_avatar(self, obj):

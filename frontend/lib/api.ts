@@ -1,4 +1,5 @@
 // كل الاتصال بالـ Backend يمر من هنا: Request → API → Response (JSON)
+import { getLang, t, type Lang } from "./i18n";
 /**
  * عنوان السيرفر:
  *  - إذا محدد NEXT_PUBLIC_API_URL نستخدمه.
@@ -32,6 +33,7 @@ export type User = {
 
 /** الدور بالجامعة */
 export type Role = "student" | "faculty" | "staff";
+/** اسم الدور بالعربية (مرّره إلى t() للعرض بلغة المستخدم) */
 export const ROLE_LABELS: Record<Role, string> = { student: "طالب", faculty: "تدريسي", staff: "إداري" };
 
 /** الوضع: نهاري / ليلي / تلقائي (حسب الجهاز). مو ثيم */
@@ -39,7 +41,7 @@ export type Mode = "light" | "dark" | "system";
 /** الثيم = شكل التطبيق. هسه بس الأساسي، والثيمات الثانية تنضاف بعدين */
 export type Theme = "default";
 /** أنا: نفس User + إعداداتي الخاصة */
-export type Me = User & { mode: Mode; theme: Theme; email: string; university_id: string; hide_preview: boolean };
+export type Me = User & { mode: Mode; theme: Theme; language: Lang; email: string; university_id: string; hide_preview: boolean };
 
 export type MessageKind = "text" | "image" | "video" | "voice" | "file" | "location" | "system" | "call";
 /** sent = ✓ ، delivered = ✓✓ رمادي ، read = ✓✓ أزرق */
@@ -186,17 +188,19 @@ export async function api<T>(path: string, method = "GET", body?: unknown): Prom
       // FormData (رفع ملفات) المتصفح يحط نوعه بنفسه، والباقي JSON
       ...(body instanceof FormData ? {} : { "Content-Type": "application/json" }),
       ...(token ? { Authorization: `Token ${token}` } : {}),
+      // رسائل الخطأ من الخادم تأتي بلغة المستخدم
+      "Accept-Language": getLang(),
     },
     body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined, // Object → نص JSON
     });
   } catch {
     // الطلب ما وصل أصلاً (السيرفر طافي، أو CORS رفضه). التفاصيل تطلع بـ Console (F12)
-    throw new NetworkError("ما كدرنا نوصل للسيرفر. تأكد إن الباك اند شغال.");
+    throw new NetworkError(t("تعذّر الوصول إلى الخادم. تحقق من اتصالك بالإنترنت."));
   }
   const data = await res.json().catch(() => ({})); // نص JSON → Object
   if (!res.ok) {
     const detail = (data as { detail?: string }).detail;
-    throw new ApiError(res.status, detail || Object.values(data).flat().join(" ") || `خطأ ${res.status}`);
+    throw new ApiError(res.status, detail || Object.values(data).flat().join(" ") || t("خطأ {status}", { status: res.status }));
   }
   return data as T;
 }

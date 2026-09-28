@@ -2,6 +2,7 @@
 // الخطوات: نسجل Service Worker ← نطلب إذن المستخدم ← المتصفح يسوي "اشتراك" عند شركته
 // (Google/Apple/Mozilla) ← ندز الاشتراك للباك اند ← الباك اند يدز الإشعار لهذا الاشتراك.
 import { api } from "./api";
+import { t } from "./i18n";
 
 export type PushState = "unsupported" | "denied" | "off" | "on";
 
@@ -47,7 +48,7 @@ export async function enablePush(): Promise<PushState> {
     (await withTimeout(
       reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(public_key) }),
       15000,
-      "خدمة الإشعارات ما ردت. جرب مرة ثانية.",
+      t("لم تستجب خدمة الإشعارات. حاول مرة أخرى."),
     ));
   await api("/push/subscribe/", "POST", sub.toJSON());
   return "on";

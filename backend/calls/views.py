@@ -4,6 +4,7 @@ from django.conf import settings
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.translation import gettext as _
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view
 from rest_framework.exceptions import ValidationError
@@ -12,7 +13,7 @@ from rest_framework.response import Response
 from accounts.serializers import UserSerializer, profile_of
 from chat.models import Conversation, Membership, Message
 from chat.services import create_message, member_ids, send_to_users
-from notifications.push import send_to_user
+from notifications.push import in_language, send_to_user
 
 from .models import Call
 
@@ -61,6 +62,7 @@ def expire_ringing():
 
 
 def call_summary(call):
+    # يُحفظ بالعربية دائماً (رسالة في المحادثة يراها الطرفان)، والواجهة الإنجليزية تترجمه عند العرض
     kind = 'مكالمة فيديو' if call.kind == Call.VIDEO else 'مكالمة صوتية'
     if call.status == Call.MISSED:
         return f'{kind} فائتة'
@@ -99,22 +101,23 @@ def calls(request):
     m = get_object_or_404(Membership, conversation_id=request.data.get('conversation_id'), user=request.user)
     conv = m.conversation
     if conv.kind == Conversation.SAVED:
-        raise ValidationError('ما تكدر تتصل بنفسك')
+        raise ValidationError(_('لا يمكنك الاتصال بنفسك'))
     kind = request.data.get('kind', Call.AUDIO)
     if kind not in (Call.AUDIO, Call.VIDEO):
-        raise ValidationError({'kind': 'audio أو video'})
+        raise ValidationError({'kind': 'audio | video'})
     expire_ringing()
     if conv.calls.filter(status__in=[Call.RINGING, Call.ONGOING]).exists():
-        raise ValidationError('اكو مكالمة شغالة بهاي المحادثة')
+        raise ValidationError(_('توجد مكالمة جارية في هذه المحادثة'))
     call = Call.objects.create(conversation=conv, caller=request.user, kind=kind)
     call.joined.add(request.user)
     data = CallSerializer(call, context={'request': request}).data
     others = [uid for uid in member_ids(conv) if uid != request.user.id]
     send_to_users(others, {'type': 'call_incoming', 'call': data})
     name = profile_of(request.user).display_name or request.user.username
-    for member in conv.memberships.exclude(user=request.user).select_related('user'):
+    for member in conv.memberships.exclude(user=request.user).select_related('user__profile'):
+        body = in_language(member.user, lambda: _('مكالمة فيديو واردة') if kind == Call.VIDEO else _('مكالمة صوتية واردة'))
         send_to_user(member.user, {
-            'title': f'📞 {name}', 'body': 'مكالمة فيديو واردة' if kind == Call.VIDEO else 'مكالمة صوتية واردة',
+            'title': f'📞 {name}', 'body': body,
             'conversation': conv.id, 'url': f'/chat?c={conv.id}&call={call.id}', 'tag': f'call-{call.id}'})
     return Response({**data, 'ice_servers': ice_servers()}, status=status.HTTP_201_CREATED)
 
@@ -123,7 +126,7 @@ def calls(request):
 def answer(request, pk):
     call = my_call(request, pk)
     if call.status not in (Call.RINGING, Call.ONGOING):
-        raise ValidationError('المكالمة انتهت')
+        raise ValidationError(_('انتهت المكالمة'))
     if call.status == Call.RINGING:
         call.status, call.answered_at = Call.ONGOING, timezone.now()
         call.save(update_fields=['status', 'answered_at'])
@@ -137,7 +140,7 @@ def answer(request, pk):
 def decline(request, pk):
     call = my_call(request, pk)
     if call.status != Call.RINGING or call.caller_id == request.user.id:
-        raise ValidationError('ما تكدر ترفض هاي المكالمة')
+        raise ValidationError(_('لا يمكنك رفض هذه المكالمة'))
     # بالمجموعة الرفض يخصك إنت بس؛ بالثنائية تنتهي المكالمة
     if call.conversation.kind == Conversation.DIRECT:
         finish(call, Call.DECLINED)

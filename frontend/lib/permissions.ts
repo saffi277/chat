@@ -1,18 +1,20 @@
 /**
- * الأذونات: المايك (الرسائل الصوتية والمكالمات)، الكاميرا (مكالمات الفيديو)، الإشعارات، الموقع.
- * - المتصفح يطلب الإذن بس من ضغطة زر، وبس على https (أو localhost).
- * - إذا المستخدم رفض مرة، المتصفح ما يسأل مرة ثانية: لازم يفعلها بنفسه من الإعدادات، فنشرحله الخطوات.
+ * الأذونات: المايكروفون (الرسائل الصوتية والمكالمات)، الكاميرا (مكالمات الفيديو)، الإشعارات، الموقع.
+ * - المتصفح يطلب الإذن عند ضغطة زر فقط، وعلى https فقط (أو localhost).
+ * - إذا رفض المستخدم مرة، لا يسأل المتصفح ثانيةً: يجب أن يفعّله بنفسه من الإعدادات، لذا نشرح له الخطوات.
  */
+import { t } from "./i18n";
 import { enablePush, getPushState } from "./push";
 
 export type PermName = "microphone" | "camera" | "notifications" | "geolocation";
 export type PermState = "granted" | "denied" | "prompt" | "unsupported" | "insecure";
 
+/** اسم الإذن وسببه بالعربية (مرّرهما إلى t() للعرض) */
 export const PERM_LABELS: Record<PermName, { title: string; why: string }> = {
   microphone: { title: "المايكروفون", why: "للرسائل الصوتية والمكالمات" },
   camera: { title: "الكاميرا", why: "لمكالمات الفيديو والتصوير" },
-  notifications: { title: "الإشعارات", why: "توصلك الرسائل والمكالمات حتى لو التطبيق مسدود" },
-  geolocation: { title: "الموقع", why: "لمشاركة موقعك بالمحادثة" },
+  notifications: { title: "الإشعارات", why: "تصلك الرسائل والمكالمات حتى لو كان التطبيق مغلقاً" },
+  geolocation: { title: "الموقع", why: "لمشاركة موقعك في المحادثة" },
 };
 
 export function platform(): "ios" | "android" | "desktop" {
@@ -22,7 +24,7 @@ export function platform(): "ios" | "android" | "desktop" {
   return /Android/.test(ua) ? "android" : "desktop";
 }
 
-/** مثبت كتطبيق (من الشاشة الرئيسية)؟ الآيفون ما يسمح بالإشعارات إلا بهاي الحالة */
+/** هل هو مثبّت كتطبيق (من الشاشة الرئيسية)؟ الآيفون لا يسمح بالإشعارات إلا في هذه الحالة */
 export function isStandalone() {
   if (typeof window === "undefined") return false;
   return window.matchMedia("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
@@ -33,7 +35,7 @@ async function query(name: "microphone" | "camera" | "geolocation"): Promise<Per
     const status = await navigator.permissions.query({ name: name as PermissionName });
     return status.state as PermState;
   } catch {
-    return "prompt"; // بعض المتصفحات (مثل سفاري القديم) ما تدعم السؤال عن الحالة
+    return "prompt"; // بعض المتصفحات (مثل سفاري القديم) لا تدعم الاستعلام عن الحالة
   }
 }
 
@@ -49,7 +51,7 @@ export async function permState(name: PermName): Promise<PermState> {
   return query(name);
 }
 
-/** يطلب الإذن (لازم من ضغطة زر). يرجع الحالة الجديدة */
+/** يطلب الإذن (يجب أن يكون من ضغطة زر). يعيد الحالة الجديدة */
 export async function requestPerm(name: PermName): Promise<PermState> {
   const current = await permState(name);
   if (current === "insecure" || current === "unsupported") return current;
@@ -63,7 +65,7 @@ export async function requestPerm(name: PermName): Promise<PermState> {
       return "granted";
     }
     const stream = await navigator.mediaDevices.getUserMedia(name === "camera" ? { video: true } : { audio: true });
-    stream.getTracks().forEach((t) => t.stop()); // بس نريد الإذن، مو التسجيل
+    stream.getTracks().forEach((tr) => tr.stop()); // نريد الإذن فقط، لا التسجيل
     return "granted";
   } catch (e) {
     return (e as Error).name === "NotAllowedError" || (e as GeolocationPositionError).code === 1 ? "denied" : permState(name);
@@ -72,39 +74,39 @@ export async function requestPerm(name: PermName): Promise<PermState> {
 
 const MEDIA_ERRORS = ["NotAllowedError", "SecurityError", "NotFoundError", "OverconstrainedError", "NotReadableError", "AbortError"];
 
-/** الخطأ من المتصفح (إذن/جهاز)؟ لو لا، هو خطأ من السيرفر ونعرض رسالته مثل ما هي */
+/** هل الخطأ من المتصفح (إذن/جهاز)؟ إن لم يكن، فهو من الخادم ونعرض رسالته كما هي */
 export function isDeviceError(e: unknown) {
   if (typeof window !== "undefined" && !window.isSecureContext) return true;
   const err = e as Error & { code?: number };
   return MEDIA_ERRORS.includes(err?.name) || (typeof err?.code === "number" && "PERMISSION_DENIED" in (err as object));
 }
 
-/** رسالة عربية واضحة لأي خطأ من المايك/الكاميرا/الموقع */
+/** رسالة واضحة لأي خطأ من المايكروفون/الكاميرا/الموقع */
 export function permError(e: unknown, name: PermName): string {
   const err = e as Error & { code?: number };
-  const label = PERM_LABELS[name].title;
-  if (typeof window !== "undefined" && !window.isSecureContext) return `${label} يحتاج رابط آمن (https). افتح التطبيق من الرابط الرسمي.`;
+  const label = t(PERM_LABELS[name].title);
+  if (typeof window !== "undefined" && !window.isSecureContext) return t("{label} يحتاج إلى رابط آمن (https). افتح التطبيق من الرابط الرسمي.", { label });
   if (err?.name === "NotAllowedError" || err?.name === "SecurityError" || err?.code === 1) {
-    return `ممنوع الوصول لـ${label}. ${howToEnable(name)}`;
+    return `${t("الوصول إلى {label} ممنوع.", { label })} ${howToEnable(name)}`;
   }
-  if (err?.name === "NotFoundError" || err?.name === "OverconstrainedError") return `ما لگينا ${label} بهذا الجهاز.`;
-  if (err?.name === "NotReadableError") return `${label} مستخدم من تطبيق ثاني. سده وجرب مرة ثانية.`;
-  if (name === "geolocation" && err?.code === 3) return "تحديد الموقع طوّل. اطلع لمكان مفتوح أو شغّل الـ GPS وجرب مرة ثانية.";
-  if (name === "geolocation" && err?.code === 2) return "ما گدرنا نحدد موقعك. تأكد إن الـ GPS شغال.";
-  return `ما گدرنا نشغل ${label}. جرب مرة ثانية.`;
+  if (err?.name === "NotFoundError" || err?.name === "OverconstrainedError") return t("لم نجد {label} في هذا الجهاز.", { label });
+  if (err?.name === "NotReadableError") return t("{label} مستخدم من تطبيق آخر. أغلقه وحاول مرة أخرى.", { label });
+  if (name === "geolocation" && err?.code === 3) return t("استغرق تحديد الموقع وقتاً طويلاً. انتقل إلى مكان مفتوح أو شغّل الـ GPS وحاول مرة أخرى.");
+  if (name === "geolocation" && err?.code === 2) return t("تعذّر تحديد موقعك. تأكد من أن الـ GPS يعمل.");
+  return t("تعذّر تشغيل {label}. حاول مرة أخرى.", { label });
 }
 
-/** خطوات تفعيل الإذن بعد ما انرفض (حسب الجهاز) */
+/** خطوات تفعيل الإذن بعد رفضه (بحسب الجهاز) */
 export function howToEnable(name: PermName): string {
-  const label = PERM_LABELS[name].title;
+  const label = t(PERM_LABELS[name].title);
   switch (platform()) {
     case "ios":
       return name === "notifications"
-        ? "بالآيفون: أضف التطبيق للشاشة الرئيسية أول (زر المشاركة ← إضافة إلى الشاشة الرئيسية)، وبعدين الإعدادات ← الإشعارات ← وَصل."
-        : `بالآيفون: الإعدادات ← Safari ← ${label} ← سماح (أو اضغط "aA" بشريط العنوان ← إعدادات موقع الويب).`;
+        ? t("في الآيفون: أضف التطبيق إلى الشاشة الرئيسية أولاً (زر المشاركة ← إضافة إلى الشاشة الرئيسية)، ثم الإعدادات ← الإشعارات ← وَصل.")
+        : t("في الآيفون: الإعدادات ← Safari ← {label} ← سماح (أو اضغط \"aA\" في شريط العنوان ← إعدادات موقع الويب).", { label });
     case "android":
-      return `بالأندرويد: اضغط 🔒 يم الرابط ← الأذونات ← ${label} ← سماح، وبعدين حدّث الصفحة.`;
+      return t("في الأندرويد: اضغط 🔒 بجانب الرابط ← الأذونات ← {label} ← سماح، ثم حدّث الصفحة.", { label });
     default:
-      return `اضغط 🔒 يم الرابط بالمتصفح ← ${label} ← سماح، وبعدين حدّث الصفحة.`;
+      return t("اضغط 🔒 بجانب الرابط في المتصفح ← {label} ← سماح، ثم حدّث الصفحة.", { label });
   }
 }

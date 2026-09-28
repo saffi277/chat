@@ -67,3 +67,13 @@ class PushTests(TestCase):
         self.assertNotIn('ali', payload)
         self.assertIn('رسالة جديدة', payload)
         self.assertIn(f'/chat?c={cid}', payload)
+
+    @mock.patch('notifications.push.webpush')
+    def test_push_uses_each_recipients_language(self, webpush):
+        ali, _ = self.register('ali')
+        sara, s = self.register('sara')
+        sara.post('/api/push/subscribe/', SUB, format='json')
+        self.assertEqual(sara.patch('/api/auth/me/', {'language': 'en', 'hide_preview': True}, format='json').data['language'], 'en')
+        cid = ali.post('/api/conversations/', {'user_id': s['id']}, format='json').data['id']
+        ali.post(f'/api/conversations/{cid}/messages/', {'content': 'hi'}, format='json')
+        self.assertIn('New message', webpush.call_args.args[1])

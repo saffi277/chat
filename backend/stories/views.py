@@ -3,6 +3,7 @@ import re
 from django.db.models import Count, Exists, OuterRef
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.translation import gettext as _
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view
 from rest_framework.exceptions import ValidationError
@@ -57,7 +58,7 @@ def stories(request):
             result.append(((not is_me, all_seen, -latest.timestamp()), {
                 'user': UserSerializer(g['user']).data, 'is_me': is_me, 'all_seen': all_seen,
                 'stories': StorySerializer(g['stories'], many=True).data}))
-        return Response([item for _, item in sorted(result, key=lambda r: r[0])])
+        return Response([item for _key, item in sorted(result, key=lambda r: r[0])])
 
     # POST: multipart file=<صورة/فيديو> + text اختياري، أو JSON {"kind": "text", "text": "...", "background": "#hex"}
     upload = request.FILES.get('file')
@@ -69,10 +70,10 @@ def stories(request):
                                      duration=request.data.get('duration') or None)
     else:
         if not text:
-            raise ValidationError({'text': 'الحالة فارغة'})
+            raise ValidationError({'text': _('الحالة فارغة')})
         background = request.data.get('background') or '#5b5cf0'
         if not re.fullmatch(r'#[0-9a-fA-F]{6}', background):
-            raise ValidationError({'background': 'لون بصيغة #RRGGBB'})
+            raise ValidationError({'background': _('لون بصيغة #RRGGBB')})
         story = Story.objects.create(user=request.user, kind=Story.TEXT, text=text, background=background)
     # نبلغ المتصلين حتى تطلع الحلقة الملونة حول صورته
     send_to_contacts(request.user.id, {'type': 'story', 'user_id': request.user.id})
@@ -92,7 +93,7 @@ def story_detail(request, pk):
 def view_story(request, pk):
     story = get_object_or_404(Story, pk=pk, expires_at__gt=timezone.now())
     if story.user_id != request.user.id:
-        _, created = StoryView.objects.get_or_create(story=story, viewer=request.user)
+        _view, created = StoryView.objects.get_or_create(story=story, viewer=request.user)
         if created:
             send_to_users([story.user_id], {'type': 'story_viewed', 'story_id': story.id, 'viewer_id': request.user.id})
     return Response({'ok': True})

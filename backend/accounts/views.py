@@ -1,6 +1,7 @@
 from django.contrib.auth import authenticate, get_user_model
 from django.db.models import Exists, OuterRef, Q
 from django.shortcuts import get_object_or_404
+from django.utils.translation import gettext as _
 from rest_framework import generics, status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny
@@ -46,13 +47,13 @@ def login(request):
     found = find_user(request.data.get('identifier') or request.data.get('username'))
     user = found and authenticate(username=found.username, password=request.data.get('password'))
     if not user:
-        return Response({'detail': 'بيانات الدخول غلط. تأكد من البريد أو الرقم الجامعي وكلمة المرور'},
+        return Response({'detail': _('بيانات الدخول غير صحيحة. تحقّق من البريد أو الرقم الجامعي وكلمة المرور')},
                         status=status.HTTP_400_BAD_REQUEST)
-    profile, _ = Profile.objects.get_or_create(user=user)
+    profile, _created = Profile.objects.get_or_create(user=user)
     role = request.data.get('role')
     if role and role != profile.role:
         # نتحقق بعد كلمة المرور، حتى ما نكشف دور أي حساب لأي أحد
-        return Response({'detail': f'هذا الحساب مسجل كـ «{profile.get_role_display()}»، اختار الدور الصحيح',
+        return Response({'detail': _('هذا الحساب مسجّل بدور «{role}»، اختر الدور الصحيح').format(role=_(profile.get_role_display())),
                          'role': profile.role}, status=status.HTTP_400_BAD_REQUEST)
     # كل دخول (كل جهاز) إله توكن جديد، ونحفظ الهاش مالته بس
     token = issue_token(user, request.META.get('HTTP_USER_AGENT', ''))
@@ -73,7 +74,7 @@ def logout(request):
 def me(request):
     # request.user انعرف من الـ Token اللي بالـ Header
     if request.method == 'PATCH':
-        profile, _ = Profile.objects.get_or_create(user=request.user)
+        profile, _created = Profile.objects.get_or_create(user=request.user)
         old_avatar = profile.avatar.name if profile.avatar else None
         # partial=True: نعدل بس الحقول اللي انرسلت
         serializer = ProfileUpdateSerializer(profile, data=request.data, partial=True)
@@ -135,15 +136,15 @@ def help_request(request):
     الطلب يوصل للإداري بلوحة الإدارة (/admin)، وهو يعيّن رمز جديد أو يتواصل ويا صاحبه."""
     kind = request.data.get('kind')
     if kind not in (SupportRequest.PASSWORD, SupportRequest.SUPPORT):
-        return Response({'kind': 'password أو support'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'kind': 'password | support'}, status=status.HTTP_400_BAD_REQUEST)
     identifier = (request.data.get('identifier') or '').strip()[:150]
     contact = (request.data.get('contact') or '').strip()[:150]
     message = (request.data.get('message') or '').strip()[:2000]
     if kind == SupportRequest.PASSWORD and not identifier:
-        return Response({'identifier': 'اكتب بريدك أو رقمك الجامعي'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'identifier': _('اكتب بريدك أو رقمك الجامعي')}, status=status.HTTP_400_BAD_REQUEST)
     if kind == SupportRequest.SUPPORT and not message:
-        return Response({'message': 'اكتب شنو المشكلة'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'message': _('اكتب المشكلة')}, status=status.HTTP_400_BAD_REQUEST)
     SupportRequest.objects.create(kind=kind, identifier=identifier, contact=contact, message=message,
                                   user=find_user(identifier))
     # نفس الجواب سواء لگينا الحساب أو لا، حتى ما نكشف منو مسجل
-    return Response({'detail': 'وصل طلبك للدعم الفني، راح يتواصلون وياك قريباً'}, status=status.HTTP_201_CREATED)
+    return Response({'detail': _('وصل طلبك إلى الدعم الفني، وسيتواصلون معك قريباً')}, status=status.HTTP_201_CREATED)

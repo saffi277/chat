@@ -2,6 +2,7 @@
 // خانة الكتابة: نص، إيموجي، إرفاق (صورة/فيديو/ملف/موقع)، تسجيل صوت، رد وتعديل
 import { useEffect, useRef, useState } from "react";
 import type { Message } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 import { messages as msgApi } from "@/lib/endpoints";
 import { permError } from "@/lib/permissions";
 import type { LiveSocket } from "@/lib/socket";
@@ -19,6 +20,7 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent }: {
   onDone: () => void;
   onSent: (m: Message) => void;
 }) {
+  const t = useT();
   const { setPanel, notify } = useWasl();
   const [text, setText] = useState("");
   const [menu, setMenu] = useState<"emoji" | "attach" | null>(null);
@@ -51,8 +53,8 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent }: {
   // عداد التسجيل
   useEffect(() => {
     if (!rec) return;
-    const t = setInterval(() => setRec((r) => (r ? { ...r, secs: (Date.now() - r.start) / 1000 } : r)), 250);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setRec((r) => (r ? { ...r, secs: (Date.now() - r.start) / 1000 } : r)), 250);
+    return () => clearInterval(timer);
   }, [rec]);
 
   function onType(v: string) {
@@ -112,13 +114,13 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent }: {
   async function startRecording() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find((t) => MediaRecorder.isTypeSupported(t));
+      const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find((mime) => MediaRecorder.isTypeSupported(mime));
       const r = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
       chunks.current = [];
       cancelRec.current = false;
       r.ondataavailable = (e) => e.data.size && chunks.current.push(e.data);
       r.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
+        stream.getTracks().forEach((track) => track.stop());
         const secs = (Date.now() - start) / 1000;
         setRec(null);
         if (cancelRec.current || secs < 0.8) return;
@@ -147,28 +149,28 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent }: {
     <div className="relative rounded-t-[26px] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 md:rounded-none md:border-t md:w-line"
       style={{ background: "var(--panel)", boxShadow: "0 -6px 24px rgba(40, 36, 90, .06)" }}>
       {(reply || editing) && (
-        <div className="w-card mb-2 flex items-center gap-3 rounded-xl border-r-4 px-3 py-2" style={{ borderColor: "var(--accent)" }}>
+        <div className="w-card mb-2 flex items-center gap-3 rounded-xl border-s-4 px-3 py-2" style={{ borderColor: "var(--accent)" }}>
           <Icon name={editing ? "edit" : "reply"} size={18} className="w-accent-text" />
           <div className="min-w-0 flex-1 text-xs">
-            <div className="w-accent-text font-extrabold">{editing ? "تعديل الرسالة" : `رد على ${nameOf((reply as Message).sender)}`}</div>
-            <div className="w-muted truncate">{(editing ?? reply)!.content || "مرفق"}</div>
+            <div className="w-accent-text font-extrabold">{editing ? t("تعديل الرسالة") : t("رد على {name}", { name: nameOf((reply as Message).sender) })}</div>
+            <div className="w-muted truncate">{(editing ?? reply)!.content || t("مرفق")}</div>
           </div>
-          <button onClick={onDone} aria-label="إلغاء" className="w-muted"><Icon name="x" size={18} /></button>
+          <button onClick={onDone} aria-label={t("إلغاء")} className="w-muted"><Icon name="x" size={18} /></button>
         </div>
       )}
 
       {menu === "emoji" && (
-        <div className="w-strong w-shadow absolute bottom-full left-16 z-10 mb-2 grid w-[292px] max-w-[calc(100vw-5rem)] grid-cols-8 gap-1 rounded-2xl p-2" style={{ border: "1px solid var(--border)" }}>
+        <div className="w-strong w-shadow absolute bottom-full end-16 z-10 mb-2 grid w-[292px] max-w-[calc(100vw-5rem)] grid-cols-8 gap-1 rounded-2xl p-2" style={{ border: "1px solid var(--border)" }}>
           {EMOJIS.map((e) => (
-            <button key={e} className="rounded-lg p-1 text-xl hover:bg-black/5" onClick={() => { setText((t) => t + e); input.current?.focus(); }}>{e}</button>
+            <button key={e} className="rounded-lg p-1 text-xl hover:bg-black/5" onClick={() => { setText((cur) => cur + e); input.current?.focus(); }}>{e}</button>
           ))}
         </div>
       )}
       {menu === "attach" && (
-        <div className="w-strong w-shadow absolute bottom-full left-3 z-10 mb-2 grid w-56 gap-1 rounded-2xl p-2" style={{ border: "1px solid var(--border)" }}>
-          <AttachItem icon="image" label="صورة أو فيديو" onClick={() => mediaPick.current?.click()} />
-          <AttachItem icon="file" label="ملف" onClick={() => filePick.current?.click()} />
-          <AttachItem icon="pin" label="الموقع" onClick={() => { setMenu(null); setPanel({ type: "location", convId }); }} />
+        <div className="w-strong w-shadow absolute bottom-full end-3 z-10 mb-2 grid w-56 gap-1 rounded-2xl p-2" style={{ border: "1px solid var(--border)" }}>
+          <AttachItem icon="image" label={t("صورة أو فيديو")} onClick={() => mediaPick.current?.click()} />
+          <AttachItem icon="file" label={t("ملف")} onClick={() => filePick.current?.click()} />
+          <AttachItem icon="pin" label={t("الموقع")} onClick={() => { setMenu(null); setPanel({ type: "location", convId }); }} />
         </div>
       )}
       <input ref={mediaPick} type="file" accept="image/*,video/*" hidden onChange={(e) => { pickMedia(e.target.files?.[0]); e.target.value = ""; }} />
@@ -176,42 +178,42 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent }: {
       <input ref={filePick} type="file" hidden onChange={(e) => { const f = e.target.files?.[0]; setMenu(null); if (f) upload(f, { kind: "file" }); e.target.value = ""; }} />
 
       {rec ? (
-        <div className="flex items-center gap-3 p-0.5 pr-3">
+        <div className="flex items-center gap-3 p-0.5 ps-3">
           <span className="h-3 w-3 animate-pulse rounded-full" style={{ background: "var(--danger)" }} />
-          <span className="flex-1 text-sm font-bold">جاري التسجيل {duration(rec.secs)}</span>
-          <button onClick={() => stopRecording(true)} aria-label="إلغاء التسجيل" className="grid h-11 w-11 place-items-center rounded-full w-card"><Icon name="trash" size={19} /></button>
-          <button onClick={() => stopRecording(false)} aria-label="إرسال التسجيل" className="w-accent grid h-12 w-12 place-items-center rounded-full"><Icon name="send" size={20} /></button>
+          <span className="flex-1 text-sm font-bold">{t("جارٍ التسجيل {time}", { time: duration(rec.secs) })}</span>
+          <button onClick={() => stopRecording(true)} aria-label={t("إلغاء التسجيل")} className="grid h-11 w-11 place-items-center rounded-full w-card"><Icon name="trash" size={19} /></button>
+          <button onClick={() => stopRecording(false)} aria-label={t("إرسال التسجيل")} className="w-accent grid h-12 w-12 place-items-center rounded-full"><Icon name="send" size={20} /></button>
         </div>
       ) : (
         // من اليمين: المايك/الإرسال، خانة الكتابة ويا 🙂، المعرض، الكاميرا، ＋
         <form onSubmit={(e) => { e.preventDefault(); sendText(); }} className="flex items-center gap-1.5">
           {hasText || editing ? (
-            <button type="submit" disabled={busy || !hasText} aria-label={editing ? "حفظ التعديل" : "إرسال"}
+            <button type="submit" disabled={busy || !hasText} aria-label={t(editing ? "حفظ التعديل" : "إرسال")}
               className="w-accent grid h-12 w-12 shrink-0 place-items-center rounded-full disabled:opacity-50"><Icon name={editing ? "check" : "send"} size={21} /></button>
           ) : (
-            <button type="button" onClick={startRecording} disabled={busy} aria-label="تسجيل رسالة صوتية"
+            <button type="button" onClick={startRecording} disabled={busy} aria-label={t("تسجيل رسالة صوتية")}
               className="w-accent grid h-12 w-12 shrink-0 place-items-center rounded-full disabled:opacity-50"><Icon name="mic" size={22} /></button>
           )}
-          <div className="w-input flex h-12 min-w-0 flex-1 items-center rounded-full pr-4">
+          <div className="w-input flex h-12 min-w-0 flex-1 items-center rounded-full ps-4">
             <input ref={input} value={text} onChange={(e) => onType(e.target.value)} onFocus={() => setMenu(null)}
-              placeholder="اكتب رسالة..." enterKeyHint="send" aria-label="الرسالة" dir="auto"
+              placeholder={t("اكتب رسالة...")} enterKeyHint="send" aria-label={t("الرسالة")} dir="auto"
               className="h-full min-w-0 flex-1 bg-transparent text-base outline-none md:text-sm" style={{ color: "var(--text)" }} />
-            <button type="button" aria-label="إيموجي" onClick={() => setMenu(menu === "emoji" ? null : "emoji")}
+            <button type="button" aria-label={t("إيموجي")} onClick={() => setMenu(menu === "emoji" ? null : "emoji")}
               className="w-muted grid h-10 w-10 shrink-0 place-items-center rounded-full"><Icon name="smile" size={22} /></button>
           </div>
           {!editing && (
             <>
-              <button type="button" aria-label="صورة أو فيديو" onClick={() => { setMenu(null); mediaPick.current?.click(); }}
+              <button type="button" aria-label={t("صورة أو فيديو")} onClick={() => { setMenu(null); mediaPick.current?.click(); }}
                 className="w-muted grid h-10 w-9 shrink-0 place-items-center rounded-full"><Icon name="image" size={22} /></button>
-              <button type="button" aria-label="الكاميرا" onClick={() => { setMenu(null); cameraPick.current?.click(); }}
+              <button type="button" aria-label={t("الكاميرا")} onClick={() => { setMenu(null); cameraPick.current?.click(); }}
                 className="w-muted grid h-10 w-9 shrink-0 place-items-center rounded-full"><Icon name="camera" size={22} /></button>
-              <button type="button" aria-label="إرفاق" onClick={() => setMenu(menu === "attach" ? null : "attach")}
+              <button type="button" aria-label={t("إرفاق")} onClick={() => setMenu(menu === "attach" ? null : "attach")}
                 className="w-accent grid h-11 w-11 shrink-0 place-items-center rounded-full"><Icon name="plus" size={22} strokeWidth={2.4} /></button>
             </>
           )}
         </form>
       )}
-      {busy && <p className="w-muted mt-1 text-center text-xs">جاري الإرسال...</p>}
+      {busy && <p className="w-muted mt-1 text-center text-xs">{t("جارٍ الإرسال...")}</p>}
 
       {pending && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setPending(null)}>
@@ -223,10 +225,10 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent }: {
               <video src={pending.url} controls className="max-h-[55dvh] w-full rounded-2xl bg-black" />
             )}
             <div className="mt-3 flex items-center gap-2">
-              <input value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="أضف تعليق..." dir="auto"
+              <input value={caption} onChange={(e) => setCaption(e.target.value)} placeholder={t("أضف تعليقاً...")} dir="auto"
                 className="w-input h-12 flex-1 rounded-full px-4 text-base outline-none md:text-sm" />
               <button disabled={busy} onClick={async () => { const p = pending; setPending(null); await upload(p.file, { kind: p.kind, caption }); }}
-                className="w-accent grid h-12 w-12 place-items-center rounded-full" aria-label="إرسال"><Icon name="send" size={20} /></button>
+                className="w-accent grid h-12 w-12 place-items-center rounded-full" aria-label={t("إرسال")}><Icon name="send" size={20} /></button>
             </div>
           </div>
         </div>

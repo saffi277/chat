@@ -1,4 +1,5 @@
 from rest_framework import exceptions
+from django.utils.translation import gettext as _
 from rest_framework.authentication import BaseAuthentication, get_authorization_header
 
 from .tokens import user_for_token
@@ -14,10 +15,10 @@ class HashedTokenAuthentication(BaseAuthentication):
         if not auth or auth[0].lower() != self.keyword.lower().encode():
             return None
         if len(auth) != 2:
-            raise exceptions.AuthenticationFailed('توكن غير صالح')
+            raise exceptions.AuthenticationFailed(_('رمز الدخول غير صالح'))
         found = user_for_token(auth[1].decode(errors='ignore'))
         if not found:
-            raise exceptions.AuthenticationFailed('انتهت الجلسة، سجل دخول من جديد')
+            raise exceptions.AuthenticationFailed(_('انتهت الجلسة، سجّل الدخول من جديد'))
         return found
 
     def authenticate_header(self, request):

@@ -114,3 +114,23 @@ class UniversityLoginTests(TestCase):
         reqs = list(SupportRequest.objects.order_by('id'))
         self.assertEqual([(x.kind, x.user_id) for x in reqs],
                          [('password', self.user['id']), ('password', None), ('support', None)])
+
+
+class LanguageTests(TestCase):
+    """رسائل الخادم تعود بلغة الواجهة (ترويسة Accept-Language)، والعربية هي الافتراضية."""
+
+    def test_errors_follow_accept_language(self):
+        c = APIClient()
+        body = {'identifier': 'nobody', 'password': 'wrong-pass', 'role': 'student'}
+        ar = c.post('/api/auth/login/', body, format='json', HTTP_ACCEPT_LANGUAGE='ar')
+        en = c.post('/api/auth/login/', body, format='json', HTTP_ACCEPT_LANGUAGE='en')
+        self.assertIn('بيانات الدخول غير صحيحة', ar.data['detail'])
+        self.assertIn('Incorrect sign-in details', en.data['detail'])
+
+    def test_language_is_saved_on_the_profile(self):
+        r = APIClient().post('/api/auth/register/', {'username': 'lang_user', 'password': 'secret123'}, format='json')
+        c = APIClient()
+        c.credentials(HTTP_AUTHORIZATION='Token ' + r.data['token'])
+        self.assertEqual(c.get('/api/auth/me/').data['language'], 'ar')
+        self.assertEqual(c.patch('/api/auth/me/', {'language': 'en'}, format='json').data['language'], 'en')
+        self.assertEqual(c.patch('/api/auth/me/', {'language': 'fr'}, format='json').status_code, 400)

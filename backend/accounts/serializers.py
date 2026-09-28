@@ -1,6 +1,7 @@
 # Serializer = يحول بين كائن Python و JSON (بالاتجاهين) ويتحقق من البيانات
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
+from django.utils.translation import gettext as _
 
 from .models import Profile
 
@@ -88,14 +89,14 @@ class MeSerializer(UserSerializer):
 
     class Meta(UserSerializer.Meta):
         # البريد والرقم الجامعي خاصين: يطلعن إلي بس، مو للناس
-        fields = UserSerializer.Meta.fields + ['mode', 'theme', 'email', 'university_id', 'hide_preview']
+        fields = UserSerializer.Meta.fields + ['mode', 'theme', 'language', 'email', 'university_id', 'hide_preview']
 
     def get_university_id(self, user):
         return profile_of(user).university_id
 
     def to_representation(self, user):
         p = profile_of(user)
-        return {**user_json(user), 'mode': p.mode, 'theme': p.theme, 'email': user.email,
+        return {**user_json(user), 'mode': p.mode, 'theme': p.theme, 'language': p.language, 'email': user.email,
                 'university_id': p.university_id, 'hide_preview': p.hide_preview}
 
     def get_mode(self, user):
@@ -119,13 +120,13 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate_email(self, value):
         value = value.strip().lower()
         if value and User.objects.filter(email__iexact=value).exists():
-            raise serializers.ValidationError('هذا البريد مسجل بحساب ثاني')
+            raise serializers.ValidationError(_('هذا البريد مسجّل بحساب آخر'))
         return value
 
     def validate_university_id(self, value):
         value = value.strip()
         if value and Profile.objects.filter(university_id__iexact=value).exists():
-            raise serializers.ValidationError('هذا الرقم الجامعي مسجل بحساب ثاني')
+            raise serializers.ValidationError(_('هذا الرقم الجامعي مسجّل بحساب آخر'))
         return value
 
     def create(self, validated_data):
@@ -143,7 +144,7 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ['display_name', 'avatar', 'bio', 'phone', 'city', 'mode', 'theme', 'hide_preview']
+        fields = ['display_name', 'avatar', 'bio', 'phone', 'city', 'mode', 'theme', 'language', 'hide_preview']
 
     def validate_display_name(self, value):
         return value.strip()
@@ -151,10 +152,10 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
     def validate_phone(self, value):
         value = value.strip().replace(' ', '')
         if value and not value.lstrip('+').isdigit():
-            raise serializers.ValidationError('رقم الهاتف أرقام بس (ويجوز + بالبداية)')
+            raise serializers.ValidationError(_('رقم الهاتف أرقام فقط (ويجوز + في البداية)'))
         return value
 
     def validate_avatar(self, value):
         if value and value.size > 3 * 1024 * 1024:
-            raise serializers.ValidationError('الصورة لازم تكون أصغر من 3 ميگا')
+            raise serializers.ValidationError(_('يجب أن تكون الصورة أصغر من 3 ميغابايت'))
         return value

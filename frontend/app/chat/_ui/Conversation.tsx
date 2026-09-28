@@ -1,15 +1,16 @@
 "use client";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Conversation as Conv, Message } from "@/lib/api";
+import { t as tr, useT } from "@/lib/i18n";
 import { conversations as convApi, messages as msgApi } from "@/lib/endpoints";
 import { openSocket, type LiveSocket, type SocketStatus } from "@/lib/socket";
 import { MessageBody, ReplyQuote, SenderName, Ticks } from "./Bubbles";
-import { clock, ConvAvatar, dayLabel, IconButton, lastSeenText, nameOf } from "./bits";
+import { clock, ConvAvatar, dayLabel, IconButton, lastSeenText, nameOf, systemText } from "./bits";
 import { Composer } from "./Composer";
 import { Icon, type IconName } from "./icons";
 import { useWasl } from "./store";
 
-// نضيف أو نبدل رسالة بالقائمة حسب الـ id
+// نضيف رسالة إلى القائمة أو نستبدلها بحسب المعرّف
 const upsert = (list: Message[], m: Message) => {
   const i = list.findIndex((x) => x.id === m.id);
   if (i === -1) return [...list, m].sort((a, b) => a.id - b.id);
@@ -19,6 +20,7 @@ const upsert = (list: Message[], m: Message) => {
 };
 
 export function Conversation({ conv }: { conv: Conv }) {
+  const t = useT();
   const { me, otherOf, openConv, setPanel, startCall, liveShares, stopLiveShare, startLiveShare, refreshConvs, notify } = useWasl();
   const [msgs, setMsgs] = useState<Message[]>([]);
   const [hasMore, setHasMore] = useState(false);
@@ -72,7 +74,7 @@ export function Conversation({ conv }: { conv: Conv }) {
         const c = convRef.current;
         const u = c.participants.find((p) => p.id === e.user_id);
         const who = e.name || (u ? nameOf(u) : "");
-        setTyping(c.kind === "group" && who ? `${who} يكتب...` : "يكتب الآن...");
+        setTyping(c.kind === "group" && who ? tr("{name} يكتب...", { name: who }) : tr("يكتب الآن..."));
         clearTimeout(typingTimer.current);
         typingTimer.current = setTimeout(() => setTyping(null), 2200);
       } else if ((e.type === "read" || e.type === "delivered") && (e.type === "read" ? e.reader_id : e.user_id) !== me.id) {
@@ -129,7 +131,7 @@ export function Conversation({ conv }: { conv: Conv }) {
   }
 
   const title = conv.kind === "direct" ? (other ? nameOf(other) : "") : conv.title;
-  const status = conn !== "open" ? "جاري الاتصال..." : typing ?? (conv.kind === "group" ? `${conv.member_count} أعضاء` : conv.kind === "saved" ? "مساحتك الخاصة" : other ? lastSeenText(other) : "");
+  const status = conn !== "open" ? t("جارٍ الاتصال...") : typing ?? (conv.kind === "group" ? t("{n} أعضاء", { n: conv.member_count }) : conv.kind === "saved" ? t("مساحتك الخاصة") : other ? lastSeenText(other) : "");
   const openInfo = () => (conv.kind === "group" ? setPanel({ type: "group", convId: id }) : other ? setPanel({ type: "contact", userId: other.id }) : setPanel({ type: "media", convId: id }));
 
   async function togglePref(key: "is_favorite" | "is_muted" | "is_archived" | "is_pinned") {
@@ -141,7 +143,7 @@ export function Conversation({ conv }: { conv: Conv }) {
 
   async function clearChat() {
     setMoreOpen(false);
-    if (!confirm("تحذف المحادثة من عندك؟ الطرف الثاني تبقى عنده.")) return;
+    if (!confirm(t("حذف المحادثة من عندك؟ ستبقى لدى الطرف الآخر."))) return;
     await convApi.clear(id).catch((e) => notify(e.message));
     await refreshConvs();
     openConv(null);
@@ -160,33 +162,33 @@ export function Conversation({ conv }: { conv: Conv }) {
     const on = !starred.has(m.id);
     await (on ? msgApi.star(m.id) : msgApi.unstar(m.id)).catch(() => {});
     setStarred((s) => { const n = new Set(s); if (on) n.add(m.id); else n.delete(m.id); return n; });
-    notify(on ? "انضافت للرسائل المميزة ⭐" : "انشالت من الرسائل المميزة");
+    notify(on ? t("أُضيفت إلى الرسائل المميزة ⭐") : t("أُزيلت من الرسائل المميزة"));
   }
 
   const menuItems: { icon: IconName; label: string; run: () => void; danger?: boolean }[] = [
-    { icon: "info", label: conv.kind === "group" ? "معلومات المجموعة" : "معلومات الاتصال", run: () => { setMoreOpen(false); openInfo(); } },
-    { icon: "image", label: "الوسائط والملفات", run: () => { setMoreOpen(false); setPanel({ type: "media", convId: id }); } },
-    { icon: "pin", label: "مشاركة الموقع", run: () => { setMoreOpen(false); setPanel({ type: "location", convId: id }); } },
-    { icon: "star", label: "الرسائل المميزة", run: () => { setMoreOpen(false); setPanel({ type: "starred", convId: id }); } },
+    { icon: "info", label: t(conv.kind === "group" ? "معلومات المجموعة" : "معلومات الاتصال"), run: () => { setMoreOpen(false); openInfo(); } },
+    { icon: "image", label: t("الوسائط والملفات"), run: () => { setMoreOpen(false); setPanel({ type: "media", convId: id }); } },
+    { icon: "pin", label: t("مشاركة الموقع"), run: () => { setMoreOpen(false); setPanel({ type: "location", convId: id }); } },
+    { icon: "star", label: t("الرسائل المميزة"), run: () => { setMoreOpen(false); setPanel({ type: "starred", convId: id }); } },
     ...(conv.kind !== "saved" ? [
-      { icon: "pinned" as IconName, label: conv.is_pinned ? "إلغاء التثبيت" : "تثبيت المحادثة", run: () => togglePref("is_pinned") },
-      { icon: "bookmark" as IconName, label: conv.is_favorite ? "إزالة من المفضلة" : "إضافة للمفضلة", run: () => togglePref("is_favorite") },
-      { icon: (conv.is_muted ? "bell" : "bellOff") as IconName, label: conv.is_muted ? "إلغاء الكتم" : "كتم الإشعارات", run: () => togglePref("is_muted") },
-      { icon: "archive" as IconName, label: conv.is_archived ? "إلغاء الأرشفة" : "أرشفة المحادثة", run: () => togglePref("is_archived") },
-      { icon: "trash" as IconName, label: "حذف المحادثة", run: clearChat, danger: true },
+      { icon: "pinned" as IconName, label: t(conv.is_pinned ? "إلغاء التثبيت" : "تثبيت المحادثة"), run: () => togglePref("is_pinned") },
+      { icon: "bookmark" as IconName, label: t(conv.is_favorite ? "إزالة من المفضلة" : "إضافة إلى المفضلة"), run: () => togglePref("is_favorite") },
+      { icon: (conv.is_muted ? "bell" : "bellOff") as IconName, label: t(conv.is_muted ? "إلغاء الكتم" : "كتم الإشعارات"), run: () => togglePref("is_muted") },
+      { icon: "archive" as IconName, label: t(conv.is_archived ? "إلغاء الأرشفة" : "أرشفة المحادثة"), run: () => togglePref("is_archived") },
+      { icon: "trash" as IconName, label: t("حذف المحادثة"), run: clearChat, danger: true },
     ] : []),
   ];
 
   return (
     <div className="flex h-full min-h-0 flex-col" onClick={() => { setMenuFor(null); setMoreOpen(false); }}>
-      {/* الهيدر */}
+      {/* الترويسة */}
       <header className="w-shadow relative z-10 flex items-center gap-2 rounded-b-[26px] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:rounded-none md:shadow-none md:border-b md:w-line"
         style={{ background: "var(--panel)" }}>
-        <IconButton icon="back" label="رجوع" onClick={() => openConv(null)} className="md:hidden" plain size={34} />
-        <button onClick={openInfo} className="flex min-w-0 flex-1 items-center gap-3 text-right">
+        <IconButton icon="back" label={t("رجوع")} onClick={() => openConv(null)} className="md:hidden" plain size={34} />
+        <button onClick={openInfo} className="flex min-w-0 flex-1 items-center gap-3 text-start">
           <ConvAvatar conv={conv} other={other} size={46} />
           <div className="min-w-0">
-            <div className="truncate text-[16px] font-bold">{title}</div>
+            <div className="truncate text-[16px] font-bold" dir="auto">{title}</div>
             <div className="w-muted flex items-center gap-1.5 truncate text-xs" style={{ color: conn !== "open" ? "#f59e0b" : typing ? "var(--accent)" : undefined }}>
               {conn === "open" && !typing && other?.is_online && <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: "var(--online)" }} />}
               {status}
@@ -195,14 +197,14 @@ export function Conversation({ conv }: { conv: Conv }) {
         </button>
         {conv.kind === "direct" && (
           <>
-            <IconButton icon="video" label="مكالمة فيديو" onClick={() => startCall(conv, "video")} size={42} />
-            <IconButton icon="phone" label="مكالمة صوتية" onClick={() => startCall(conv, "audio")} size={42} />
+            <IconButton icon="video" label={t("مكالمة فيديو")} onClick={() => startCall(conv, "video")} size={42} />
+            <IconButton icon="phone" label={t("مكالمة صوتية")} onClick={() => startCall(conv, "audio")} size={42} />
           </>
         )}
         <div className="relative" onClick={(e) => e.stopPropagation()}>
-          <IconButton icon="more" label="المزيد" onClick={() => setMoreOpen((o) => !o)} plain size={34} />
+          <IconButton icon="more" label={t("المزيد")} onClick={() => setMoreOpen((o) => !o)} plain size={34} />
           {moreOpen && (
-            <div className="w-strong w-shadow absolute left-0 top-12 z-20 w-60 rounded-2xl p-1.5" style={{ border: "1px solid var(--border)" }}>
+            <div className="w-strong w-shadow absolute end-0 top-12 z-20 w-60 rounded-2xl p-1.5" style={{ border: "1px solid var(--border)" }}>
               {menuItems.map((it) => (
                 <button key={it.label} onClick={it.run} className="w-hover flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold"
                   style={it.danger ? { color: "var(--danger)" } : undefined}>
@@ -216,15 +218,15 @@ export function Conversation({ conv }: { conv: Conv }) {
 
       {/* الرسائل */}
       <div ref={scroller} onScroll={onScroll}
-        // الصور تحمل بعد الرسائل وتطول الصفحة: إذا كنا تحت نبقى تحت
+        // الصور تُحمَّل بعد الرسائل فتطول الصفحة: إن كنا في الأسفل نبقى فيه
         onLoadCapture={() => { const el = scroller.current; if (el && stick.current) el.scrollTop = el.scrollHeight; }}
         className="w-scroll min-h-0 flex-1 overflow-y-auto px-3 pb-2 md:px-6">
-        {loading && <p className="w-muted py-10 text-center text-sm">جاري التحميل...</p>}
-        {hasMore && !loading && <button onClick={loadOlder} className="w-chip mx-auto my-3 block rounded-full px-4 py-1.5 text-xs">رسائل أقدم</button>}
+        {loading && <p className="w-muted py-10 text-center text-sm">{t("جارٍ التحميل...")}</p>}
+        {hasMore && !loading && <button onClick={loadOlder} className="w-chip mx-auto my-3 block rounded-full px-4 py-1.5 text-xs">{t("رسائل أقدم")}</button>}
         {!loading && msgs.length === 0 && (
           <div className="w-panel mx-auto mt-10 max-w-xs rounded-2xl p-5 text-center text-sm">
-            <p className="font-bold">{conv.kind === "saved" ? "احفظ هنا أي شي تريده" : "ابدأ المحادثة 👋"}</p>
-            <p className="w-muted mt-1 text-xs">الرسائل توصل فوراً، ويا الصور والرسائل الصوتية.</p>
+            <p className="font-bold">{t(conv.kind === "saved" ? "احفظ هنا ما تشاء" : "ابدأ المحادثة 👋")}</p>
+            <p className="w-muted mt-1 text-xs">{t("تصل الرسائل فوراً، ومعها الصور والرسائل الصوتية.")}</p>
           </div>
         )}
         {msgs.map((m, i) => {
@@ -243,7 +245,7 @@ export function Conversation({ conv }: { conv: Conv }) {
                 <div className="my-3 flex justify-center">
                   <span className="flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs" style={{ background: "var(--pill)" }}>
                     {m.kind === "call" && <Icon name="phone" size={13} className="w-call" />}
-                    {m.content}{m.kind === "call" && <span className="w-muted">• {clock(m.created_at)}</span>}
+                    <span dir="auto">{systemText(m.content)}</span>{m.kind === "call" && <span className="w-muted">• {clock(m.created_at)}</span>}
                   </span>
                 </div>
               ) : (
@@ -258,10 +260,10 @@ export function Conversation({ conv }: { conv: Conv }) {
                       {mine && !m.is_deleted && <Ticks m={m} />}
                       <span>{clock(m.created_at)}</span>
                       {starred.has(m.id) && <Icon name="star" size={11} filled />}
-                      {m.edited_at && !m.is_deleted && <span>معدّلة</span>}
+                      {m.edited_at && !m.is_deleted && <span>{t("معدّلة")}</span>}
                     </div>
                     {m.reactions.length > 0 && (
-                      <div className={`absolute -bottom-3.5 flex gap-0.5 rounded-full px-1.5 py-0.5 text-[13px] ${mine ? "right-3" : "left-3"}`}
+                      <div className={`absolute -bottom-3.5 flex gap-0.5 rounded-full px-1.5 py-0.5 text-[13px] ${mine ? "start-3" : "end-3"}`}
                         style={{ background: "var(--panel)", boxShadow: "var(--shadow)" }}>
                         {m.reactions.map((r) => (
                           <button key={r.emoji} onClick={(e) => { e.stopPropagation(); react(m, r.emoji); }}
@@ -276,7 +278,7 @@ export function Conversation({ conv }: { conv: Conv }) {
                         onReact={(e) => react(m, e)} starred={starred.has(m.id)} onStar={() => toggleStar(m)}
                         onReply={() => { setEditing(null); setReply(m); }}
                         onEdit={() => { setReply(null); setEditing(m); }}
-                        onDelete={async () => { if (confirm("تحذف الرسالة عند الكل؟")) await msgApi.remove(m.id).catch((e) => notify(e.message)); }}
+                        onDelete={async () => { if (confirm(t("حذف الرسالة لدى الجميع؟"))) await msgApi.remove(m.id).catch((e) => notify(e.message)); }}
                         onResumeLive={m.is_live && mine && !liveShares.includes(m.id) ? () => startLiveShare(m) : undefined} />
                     )}
                   </div>
@@ -302,7 +304,7 @@ export function Conversation({ conv }: { conv: Conv }) {
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-4" onClick={() => setLightbox(null)}>
           {/* eslint-disable-next-line @next/next/no-img-element -- عرض الصورة كاملة */}
           <img src={lightbox} alt="" className="max-h-full max-w-full rounded-2xl object-contain" />
-          <button className="absolute left-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white/15 text-white" aria-label="إغلاق"><Icon name="x" /></button>
+          <button className="absolute end-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white/15 text-white" aria-label={t("إغلاق")}><Icon name="x" /></button>
         </div>
       )}
     </div>
@@ -315,22 +317,23 @@ function MessageMenu({ m, mine, meId, onClose, onReply, onEdit, onDelete, onResu
   m: Message; mine: boolean; meId: number; onClose: () => void; onReply: () => void; onEdit: () => void; onDelete: () => void;
   onResumeLive?: () => void; onReact: (emoji: string) => void; starred: boolean; onStar: () => void;
 }) {
+  const t = useT();
   const myReaction = m.reactions.find((r) => r.user_ids.includes(meId))?.emoji;
   const items: { icon: IconName; label: string; run: () => void; danger?: boolean }[] = [
-    { icon: "reply", label: "رد", run: onReply },
-    { icon: "star", label: starred ? "إلغاء التمييز" : "تمييز بنجمة", run: onStar },
-    ...(m.content ? [{ icon: "copy" as IconName, label: "نسخ", run: () => navigator.clipboard?.writeText(m.content) }] : []),
-    ...(mine && ["text", "image", "video", "file"].includes(m.kind) ? [{ icon: "edit" as IconName, label: "تعديل", run: onEdit }] : []),
-    ...(onResumeLive ? [{ icon: "navigation" as IconName, label: "تحديث موقعي من هذا الجهاز", run: onResumeLive }] : []),
-    ...(mine ? [{ icon: "trash" as IconName, label: "حذف للكل", run: onDelete, danger: true }] : []),
+    { icon: "reply", label: t("رد"), run: onReply },
+    { icon: "star", label: t(starred ? "إلغاء التمييز" : "تمييز بنجمة"), run: onStar },
+    ...(m.content ? [{ icon: "copy" as IconName, label: t("نسخ"), run: () => navigator.clipboard?.writeText(m.content) }] : []),
+    ...(mine && ["text", "image", "video", "file"].includes(m.kind) ? [{ icon: "edit" as IconName, label: t("تعديل"), run: onEdit }] : []),
+    ...(onResumeLive ? [{ icon: "navigation" as IconName, label: t("تحديث موقعي من هذا الجهاز"), run: onResumeLive }] : []),
+    ...(mine ? [{ icon: "trash" as IconName, label: t("حذف للجميع"), run: onDelete, danger: true }] : []),
   ];
   return (
-    <div className={`w-strong w-shadow absolute top-full z-20 mt-1 w-60 rounded-2xl p-1.5 text-sm ${mine ? "left-0" : "right-0"}`}
+    <div className={`w-strong w-shadow absolute top-full z-20 mt-1 w-60 rounded-2xl p-1.5 text-sm ${mine ? "end-0" : "start-0"}`}
       style={{ border: "1px solid var(--border)", color: "var(--text)" }} onClick={(e) => e.stopPropagation()}>
       {m.kind !== "system" && m.kind !== "call" && (
-        <div className="w-line mb-1 flex justify-between border-b px-1 pb-1.5" role="group" aria-label="تفاعل">
+        <div className="w-line mb-1 flex justify-between border-b px-1 pb-1.5" role="group" aria-label={t("تفاعل")}>
           {QUICK.map((e) => (
-            <button key={e} onClick={() => { onClose(); onReact(e); }} aria-label={`تفاعل ${e}`} aria-pressed={myReaction === e}
+            <button key={e} onClick={() => { onClose(); onReact(e); }} aria-label={`${t("تفاعل")} ${e}`} aria-pressed={myReaction === e}
               className={`grid h-9 w-9 place-items-center rounded-full text-xl transition hover:scale-110 ${myReaction === e ? "w-tint" : ""}`}>{e}</button>
           ))}
         </div>

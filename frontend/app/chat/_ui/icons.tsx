@@ -1,4 +1,4 @@
-// أيقونات بخط واحد (مثل مكتبة lucide) حتى يكون الشكل متناسق بكل الشاشات
+// أيقونات بخط واحد (مثل مكتبة lucide) ليكون الشكل متناسقاً في كل الشاشات
 const paths: Record<string, React.ReactNode> = {
   search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></>,
   plus: <path d="M12 5v14M5 12h14" />,
@@ -12,7 +12,7 @@ const paths: Record<string, React.ReactNode> = {
   image: <><rect x="3" y="3" width="18" height="18" rx="3" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" /></>,
   file: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6Z" /><path d="M14 2v6h6" /></>,
   pin: <><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></>,
-  back: <path d="m9 18 6-6-6-6" />, // بالعربي "رجوع" يأشر لليمين
+  back: <path d="m9 18 6-6-6-6" />, // في العربية يشير "رجوع" إلى اليمين
   sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></>,
   moon: <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />,
   device: <><rect x="6" y="2" width="12" height="20" rx="2.5" /><path d="M11 18h2" /></>,
@@ -70,9 +70,12 @@ const paths: Record<string, React.ReactNode> = {
 
 export type IconName = keyof typeof paths;
 
+// أيقونات لها اتجاه (مرسومة للعربية): تنعكس أفقياً في الواجهة الإنجليزية (wasl.css: .dir-icon)
+const DIRECTIONAL = new Set<IconName>(["back", "chevron", "reply"]);
+
 export function Icon({ name, size = 20, className = "", strokeWidth = 1.9, filled, style }: { name: IconName; size?: number; className?: string; strokeWidth?: number; filled?: boolean; style?: React.CSSProperties }) {
   return (
-    <svg viewBox="0 0 24 24" width={size} height={size} className={className} style={style} fill={filled ? "currentColor" : "none"} stroke="currentColor"
+    <svg viewBox="0 0 24 24" width={size} height={size} className={DIRECTIONAL.has(name) ? `dir-icon ${className}` : className} style={style} fill={filled ? "currentColor" : "none"} stroke="currentColor"
       strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {paths[name]}
     </svg>

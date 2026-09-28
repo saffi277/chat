@@ -68,6 +68,8 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    # اللغة من ترويسة Accept-Language (الواجهة ترسل لغة المستخدم): رسائل الخطأ تعود بالعربية أو الإنجليزية
+    "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -139,7 +141,10 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = "en-us"
+# العربية هي الافتراضية، والإنجليزية ثانية. ترجمات رسائلنا في backend/locale/en/LC_MESSAGES/django.po
+LANGUAGE_CODE = "ar"
+LANGUAGES = [("ar", "العربية"), ("en", "English")]
+LOCALE_PATHS = [BASE_DIR / "locale"]
 
 TIME_ZONE = "UTC"
 

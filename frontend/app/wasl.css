@@ -209,3 +209,6 @@
 @media (min-width: 1024px) and (max-height: 840px) { .p-fit { zoom: .8; } }
 @media (min-width: 1024px) and (max-height: 780px) { .p-fit { zoom: .75; } }
 @media (min-width: 1024px) and (max-height: 730px) { .p-fit { zoom: .7; } }
+
+/* الواجهة الإنجليزية (من اليسار إلى اليمين): أيقونات الاتجاه (رجوع، التالي، رد) تنعكس */
+[dir="ltr"] .dir-icon { transform: scaleX(-1); }
