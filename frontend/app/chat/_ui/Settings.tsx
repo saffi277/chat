@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ROLE_LABELS, type Mode } from "@/lib/api";
 import { auth } from "@/lib/endpoints";
+import { howToEnable, isStandalone, PERM_LABELS, permState, platform, requestPerm, type PermName, type PermState } from "@/lib/permissions";
 import { disablePush, enablePush, getPushState, type PushState } from "@/lib/push";
 import { Avatar, nameOf, Section, Toggle } from "./bits";
 import { Icon } from "./icons";
@@ -89,7 +90,19 @@ export function SettingsView() {
           </div>
         </Section>
 
-        <Section><PushToggle /></Section>
+        <Section title="الإشعارات">
+          <PushToggle />
+          <div className="w-line mt-3 flex items-center gap-3 border-t pt-3">
+            <Icon name="eye" size={20} className="w-accent-text" />
+            <div className="flex-1">
+              <p className="font-bold">إخفاء محتوى الإشعار</p>
+              <p className="w-muted text-xs leading-5">يطلع &quot;رسالة جديدة&quot; بس، بدون اسم المرسل ولا النص</p>
+            </div>
+            <Toggle on={me.hide_preview} label="إخفاء محتوى الإشعار" onChange={(v) => !busy && run(() => auth.updateMe({ hide_preview: v }))} />
+          </div>
+        </Section>
+
+        <Section title="الأذونات"><PermissionsList /></Section>
 
         <section className="mt-3 overflow-hidden rounded-[22px]" style={{ background: "var(--panel)", boxShadow: "var(--soft-shadow)" }}>
           <button onClick={() => setTab("stories")} className="w-hover flex w-full items-center gap-3 px-4 py-3.5 font-semibold">
@@ -112,6 +125,63 @@ export function SettingsView() {
           <Icon name="logout" size={19} />تسجيل الخروج
         </button>
       </div>
+    </div>
+  );
+}
+
+const permIcons: Record<PermName, "mic" | "video" | "bell" | "pin"> = { microphone: "mic", camera: "video", notifications: "bell", geolocation: "pin" };
+const stateLabels: Record<PermState, string> = {
+  granted: "مسموح", denied: "ممنوع", prompt: "ما انطلب بعد", unsupported: "غير مدعوم", insecure: "يحتاج https",
+};
+
+/** الأذونات: حالة كل واحد وزر "سماح". المتصفح يسأل بس من ضغطة زر، وإذا انرفض نشرح شلون يتفعل */
+function PermissionsList() {
+  const names: PermName[] = ["microphone", "camera", "notifications", "geolocation"];
+  const [states, setStates] = useState<Partial<Record<PermName, PermState>>>({});
+  const [busy, setBusy] = useState<PermName | null>(null);
+  useEffect(() => {
+    Promise.all(names.map(async (n) => [n, await permState(n)] as const)).then((all) => setStates(Object.fromEntries(all)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function ask(n: PermName) {
+    setBusy(n);
+    const s = await requestPerm(n).catch((): PermState => "prompt");
+    setStates((cur) => ({ ...cur, [n]: s }));
+    setBusy(null);
+  }
+
+  return (
+    <div className="space-y-3">
+      {names.map((n, i) => {
+        const s = states[n];
+        return (
+          <div key={n} className={i ? "w-line border-t pt-3" : ""}>
+            <div className="flex items-center gap-3">
+              <Icon name={permIcons[n]} size={20} className="w-accent-text" />
+              <div className="min-w-0 flex-1">
+                <p className="font-bold">{PERM_LABELS[n].title}</p>
+                <p className="w-muted text-xs leading-5">{PERM_LABELS[n].why}</p>
+              </div>
+              {s === "prompt" ? (
+                <button disabled={busy === n} onClick={() => ask(n)} className="w-accent rounded-full px-4 py-1.5 text-xs font-bold disabled:opacity-50">
+                  {busy === n ? "..." : "سماح"}
+                </button>
+              ) : s ? (
+                <span className="rounded-full px-2.5 py-1 text-[11px] font-bold"
+                  style={{ background: `color-mix(in srgb, var(${s === "granted" ? "--online" : "--danger"}) 15%, transparent)`, color: `var(${s === "granted" ? "--online" : "--danger"})` }}>
+                  {stateLabels[s]}
+                </span>
+              ) : null}
+            </div>
+            {s === "denied" && <p className="w-tint mt-2 rounded-xl p-2.5 text-xs leading-6">{howToEnable(n)}</p>}
+            {s === "insecure" && <p className="w-tint mt-2 rounded-xl p-2.5 text-xs leading-6">افتح التطبيق من رابط https حتى يشتغل {PERM_LABELS[n].title}.</p>}
+            {s === "unsupported" && n === "notifications" && platform() === "ios" && !isStandalone() && (
+              <p className="w-tint mt-2 rounded-xl p-2.5 text-xs leading-6">{howToEnable("notifications")}</p>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -153,10 +223,28 @@ export function PushToggle() {
 export function PushBanner() {
   const [state, setState] = useState<PushState | null>(null);
   const [hidden, setHidden] = useState(false);
+  const [ios, setIos] = useState(false);
   useEffect(() => {
-    getPushState().then(setState);
+    getPushState().then((st) => {
+      setState(st);
+      setIos(platform() === "ios" && !isStandalone());
+    });
   }, []);
-  if (state !== "off" || hidden) return null;
+  if (hidden) return null;
+  // الآيفون ما يدز إشعارات لموقع بسفاري: لازم ينضاف للشاشة الرئيسية ويتفتح من هناك (iOS 16.4+)
+  if (ios && state !== "on") {
+    return (
+      <div className="w-card mx-4 mb-2 flex items-start gap-3 rounded-2xl p-3">
+        <span className="w-accent grid h-10 w-10 shrink-0 place-items-center rounded-full"><Icon name="device" size={18} /></span>
+        <div className="min-w-0 flex-1 text-xs leading-5">
+          <p className="font-extrabold">ثبّت وَصل على الآيفون حتى توصلك الإشعارات</p>
+          <p className="w-muted">اضغط زر المشاركة <b>⬆︎</b> بسفاري ← <b>إضافة إلى الشاشة الرئيسية</b>، وافتح التطبيق من الأيقونة.</p>
+        </div>
+        <button className="w-muted" aria-label="إخفاء" onClick={() => setHidden(true)}><Icon name="x" size={16} /></button>
+      </div>
+    );
+  }
+  if (state !== "off") return null;
   return (
     <div className="w-card mx-4 mb-2 flex items-center gap-3 rounded-2xl p-3">
       <span className="w-accent grid h-10 w-10 shrink-0 place-items-center rounded-full"><Icon name="bell" size={18} /></span>

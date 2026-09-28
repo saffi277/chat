@@ -53,3 +53,17 @@ class PushTests(TestCase):
         cid = ali.post('/api/conversations/', {'user_id': s['id']}, format='json').data['id']
         ali.post(f'/api/conversations/{cid}/messages/', {'content': 'hi'}, format='json')
         self.assertEqual(PushSubscription.objects.count(), 0)
+
+    @mock.patch('notifications.push.webpush')
+    def test_hide_preview_hides_sender_and_text(self, webpush):
+        ali, _ = self.register('ali')
+        sara, s = self.register('sara')
+        sara.post('/api/push/subscribe/', SUB, format='json')
+        self.assertTrue(sara.patch('/api/auth/me/', {'hide_preview': True}, format='json').data['hide_preview'])
+        cid = ali.post('/api/conversations/', {'user_id': s['id']}, format='json').data['id']
+        ali.post(f'/api/conversations/{cid}/messages/', {'content': 'سر خطير'}, format='json')
+        _, payload = webpush.call_args.args
+        self.assertNotIn('سر خطير', payload)
+        self.assertNotIn('ali', payload)
+        self.assertIn('رسالة جديدة', payload)
+        self.assertIn(f'/chat?c={cid}', payload)

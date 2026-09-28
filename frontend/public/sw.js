@@ -14,6 +14,8 @@ self.addEventListener("push", (event) => {
         (c) => c.focused && c.visibilityState === "visible" && new URL(c.url).searchParams.get("c") === String(data.conversation),
       );
       if (watching) return;
+      // نقطة على أيقونة التطبيق (الرقم الدقيق يتحدث لما ينفتح التطبيق)
+      if (self.navigator.setAppBadge) self.navigator.setAppBadge().catch(() => {});
       return self.registration.showNotification(data.title, {
         body: data.body,
         icon: "/icons/icon-192.png",

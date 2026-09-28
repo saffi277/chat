@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Message } from "@/lib/api";
 import { messages as msgApi } from "@/lib/endpoints";
+import { permError } from "@/lib/permissions";
 import type { LiveSocket } from "@/lib/socket";
 import { duration, nameOf } from "./bits";
 import { Icon } from "./icons";
@@ -130,8 +131,8 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent }: {
       r.start();
       recorder.current = r;
       setRec({ start, secs: 0 });
-    } catch {
-      notify("لازم تسمح باستخدام المايك حتى تسجل");
+    } catch (e) {
+      notify(permError(e, "microphone"));
     }
   }
   function stopRecording(cancel = false) {

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { messages as msgApi } from "@/lib/endpoints";
+import { permError } from "@/lib/permissions";
 import { Avatar, MiniMap, Panel } from "./bits";
 import { Icon } from "./icons";
 import { useWasl } from "./store";
@@ -28,7 +29,7 @@ export function LocationPanel({ convId }: { convId: number }) {
     }
     navigator.geolocation.getCurrentPosition(
       (p) => setPos({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      () => setError("ما كدرنا نعرف موقعك. تأكد إنك سامح للمتصفح يستخدم الموقع."),
+      (e) => setError(permError(e, "geolocation")),
       { enableHighAccuracy: true, timeout: 15000 },
     );
   }, []);

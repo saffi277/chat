@@ -9,6 +9,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, us
 import { ApiError, getToken, logout, saveMe, type Call, type CallKind, type Conversation, type Me, type Message, type StoryGroup, type User } from "@/lib/api";
 import { CallSession } from "@/lib/call";
 import { auth, calls, conversations as convApi, messages as msgApi, stories as storyApi, users as usersApi } from "@/lib/endpoints";
+import { isDeviceError, permError } from "@/lib/permissions";
 import { syncPushSubscription } from "@/lib/push";
 import { openSocket, type LiveSocket } from "@/lib/socket";
 
@@ -78,6 +79,11 @@ type Ctx = {
 
 const WaslContext = createContext<Ctx | null>(null);
 
+/** خطأ المكالمة: إذا من المايك/الكاميرا نشرح شلون يسمح، وإلا رسالة السيرفر */
+function callError(err: unknown, kind: CallKind) {
+  return isDeviceError(err) ? permError(err, kind === "video" ? "camera" : "microphone") : (err as Error).message;
+}
+
 export function useWasl() {
   const ctx = useContext(WaslContext);
   if (!ctx) throw new Error("useWasl خارج WaslProvider");
@@ -120,7 +126,8 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
 
   const notify = useCallback((text: string) => {
     setToast(text);
-    setTimeout(() => setToast((t) => (t === text ? null : t)), 3500);
+    // الرسائل الطويلة (مثل خطوات تفعيل الإذن) تبقى وقت أطول حتى تنقرا
+    setTimeout(() => setToast((t) => (t === text ? null : t)), Math.max(3500, text.length * 70));
   }, []);
 
   const signOut = useCallback(() => {
@@ -280,7 +287,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
       setCall((c) => (c ? { ...c, call: session.call, session, local: session.local } : c));
     } catch (err) {
       setCall(null);
-      notify(err instanceof Error && err.name === "NotAllowedError" ? "لازم تسمح بالمايك/الكاميرا" : (err as Error).message);
+      notify(callError(err, kind));
     }
   }, [otherOf, handlers, notify]);
 
@@ -295,7 +302,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     } catch (err) {
       setCall(null);
       calls.decline(cur.call.id).catch(() => {});
-      notify(err instanceof Error && err.name === "NotAllowedError" ? "لازم تسمح بالمايك/الكاميرا" : (err as Error).message);
+      notify(callError(err, cur.call.kind));
     }
   }, [handlers, notify]);
 
@@ -359,6 +366,9 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
   const unread = convs.reduce((n, c) => n + c.unread_count, 0);
   useEffect(() => {
     document.title = unread ? `(${unread}) وَصل` : "وَصل | محادثاتك بمكان واحد";
+    // عدّاد على أيقونة التطبيق بالشاشة الرئيسية (أندرويد/آيفون لما يكون مثبت، وكروم بالحاسبة)
+    const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+    (unread ? nav.setAppBadge?.(unread) : nav.clearAppBadge?.())?.catch(() => {});
   }, [unread]);
 
   if (!me) return <>{fallback}</>;

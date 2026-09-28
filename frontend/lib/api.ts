@@ -39,7 +39,7 @@ export type Mode = "light" | "dark" | "system";
 /** الثيم = شكل التطبيق. هسه بس الأساسي، والثيمات الثانية تنضاف بعدين */
 export type Theme = "default";
 /** أنا: نفس User + إعداداتي الخاصة */
-export type Me = User & { mode: Mode; theme: Theme; email: string; university_id: string };
+export type Me = User & { mode: Mode; theme: Theme; email: string; university_id: string; hide_preview: boolean };
 
 export type MessageKind = "text" | "image" | "video" | "voice" | "file" | "location" | "system" | "call";
 /** sent = ✓ ، delivered = ✓✓ رمادي ، read = ✓✓ أزرق */

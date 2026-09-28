@@ -28,23 +28,28 @@ def notify_new_message(message, preview=None):
         title, body = conv.title or 'مجموعة', f'{sender_name}: {body}'
     else:
         title = sender_name
-    payload = json.dumps({
-        'title': title,
-        'body': body,
-        'conversation': message.conversation_id,
-        'url': f'/chat?c={message.conversation_id}',
-        'tag': f'conversation-{message.conversation_id}',
-    }, ensure_ascii=False)  # العربي بدون ترميز \uXXXX = إشعار أصغر
+    base = {'conversation': message.conversation_id, 'url': f'/chat?c={message.conversation_id}',
+            'tag': f'conversation-{message.conversation_id}'}
+    # العربي بدون ترميز \uXXXX = إشعار أصغر
+    full = json.dumps({**base, 'title': title, 'body': body}, ensure_ascii=False)
+    # للي مفعل "إخفاء محتوى الإشعار": لا اسم المرسل ولا النص، حتى لو أحد شاف شاشة الموبايل المقفولة
+    hidden = json.dumps({**base, 'title': 'وَصل', 'body': 'رسالة جديدة'}, ensure_ascii=False)
     subs = list(PushSubscription.objects.filter(
         user__memberships__conversation_id=message.conversation_id,
-        user__memberships__is_muted=False).exclude(user=sender))
+        user__memberships__is_muted=False).exclude(user=sender).select_related('user__profile'))
     if not subs:
         return
+    jobs = [(sub, hidden if _hides(sub.user) else full) for sub in subs]
     if getattr(settings, 'PUSH_RUN_INLINE', False):
-        _send_all(subs, payload)
+        _send_all(jobs)
     else:
         # بالخلفية حتى الرسالة ما تتأخر بانتظار خدمة الإشعارات
-        _pool.submit(_send_all, subs, payload)
+        _pool.submit(_send_all, jobs)
+
+
+def _hides(user):
+    profile = getattr(user, 'profile', None)
+    return bool(profile and profile.hide_preview)
 
 
 def send_to_user(user, payload_dict):
@@ -53,15 +58,17 @@ def send_to_user(user, payload_dict):
     if not subs:
         return
     payload = json.dumps(payload_dict, ensure_ascii=False)
+    jobs = [(sub, payload) for sub in subs]
     if getattr(settings, 'PUSH_RUN_INLINE', False):
-        _send_all(subs, payload)
+        _send_all(jobs)
     else:
-        _pool.submit(_send_all, subs, payload)
+        _pool.submit(_send_all, jobs)
 
 
-def _send_all(subs, payload):
+def _send_all(jobs):
+    """jobs = [(اشتراك, نص الإشعار)]: كل مستخدم يوصله الإشعار حسب إعداده."""
     dead = []
-    for sub in subs:
+    for sub, payload in jobs:
         try:
             webpush(sub.as_subscription_info(), payload,
                     vapid_private_key=get_signer(),
