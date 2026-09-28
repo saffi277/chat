@@ -11,3 +11,5 @@ deploy/.env
 backend/staticfiles/
 backend/message_key
 backend/keys/
+.run/
+.tools/
