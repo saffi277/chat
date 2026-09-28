@@ -1,6 +1,7 @@
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from urllib.parse import urlparse
 
 from django.conf import settings
 from django.db import close_old_connections
@@ -51,7 +52,7 @@ def notify_new_message(message, preview=None):
                     else:
                         data = {'title': sender_name, 'body': body}
             # العربية دون ترميز \uXXXX = إشعار أصغر
-            payloads[key] = json.dumps({**base, **data}, ensure_ascii=False)
+            payloads[key] = json.dumps({**base, **data, 'lang': key[0]}, ensure_ascii=False)
         return payloads[key]
 
     jobs = [(sub, payload_for(sub.user)) for sub in subs]
@@ -91,21 +92,48 @@ def send_to_user(user, payload_dict):
         _pool.submit(_send_all, jobs)
 
 
+def _deliver(sub, payload):
+    """
+    يرسل إشعاراً واحداً ويعيد النتيجة: {ok, host, status, reason}.
+    Urgency: high = تسليم فوري (خدمة Apple تؤجل غير العاجل لتوفير البطارية).
+    """
+    host = urlparse(sub.endpoint).hostname or ''
+    try:
+        webpush(sub.as_subscription_info(), payload,
+                vapid_private_key=get_signer(),
+                vapid_claims={'sub': settings.VAPID_CONTACT},
+                ttl=60 * 60 * 24, headers={'Urgency': 'high'})
+        return {'ok': True, 'host': host, 'status': 201, 'reason': ''}
+    except WebPushException as exc:
+        response = getattr(exc, 'response', None)
+        status = getattr(response, 'status_code', None)
+        text = getattr(response, 'text', None)
+        reason = (text if isinstance(text, str) and text else str(exc))[:200]
+        if status not in (404, 410):
+            log.warning('push failed for %s (%s): %s', host, status, reason)
+        return {'ok': False, 'host': host, 'status': status, 'reason': reason}
+
+
 def _send_all(jobs):
-    """jobs = [(اشتراك, نص الإشعار)]: كل مستخدم يوصله الإشعار حسب إعداده."""
+    """jobs = [(اشتراك, نص الإشعار)]: كل مستخدم يصله الإشعار بحسب إعداده."""
     dead = []
     for sub, payload in jobs:
-        try:
-            webpush(sub.as_subscription_info(), payload,
-                    vapid_private_key=get_signer(),
-                    vapid_claims={'sub': settings.VAPID_CONTACT}, ttl=60 * 60 * 24)
-        except WebPushException as exc:
-            status = getattr(exc.response, 'status_code', None)
-            if status in (404, 410):  # المتصفح لغى الاشتراك
-                dead.append(sub.id)
-            else:
-                log.warning('push failed for %s: %s', sub.endpoint[:60], exc)
+        result = _deliver(sub, payload)
+        if result['status'] in (404, 410):  # ألغى المتصفح الاشتراك (أو ألغته Apple)
+            dead.append(sub.id)
     if dead:
         PushSubscription.objects.filter(id__in=dead).delete()
     if not getattr(settings, 'PUSH_RUN_INLINE', False):
         close_old_connections()
+
+
+def send_test(user):
+    """إشعار تجريبي لكل أجهزة المستخدم، الآن (دون طابور)، ويعيد نتيجة كل جهاز لعرضها في الإعدادات."""
+    subs = list(PushSubscription.objects.filter(user=user).select_related('user__profile'))
+    with translation.override(_language(user)):
+        payload = json.dumps({'title': _('وَصل'), 'body': _('هذا إشعار تجريبي. الإشعارات تعمل ✅'),
+                              'url': '/chat', 'tag': 'test', 'lang': _language(user)}, ensure_ascii=False)
+    results = [_deliver(sub, payload) for sub in subs]
+    dead = [sub.id for sub, r in zip(subs, results) if r['status'] in (404, 410)]
+    PushSubscription.objects.filter(id__in=dead).delete()
+    return results

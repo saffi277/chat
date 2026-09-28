@@ -1,3 +1,5 @@
+import time
+
 from rest_framework import status
 from django.utils.translation import gettext as _
 from rest_framework.decorators import api_view, permission_classes
@@ -5,6 +7,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from .models import PushSubscription
+from .push import send_test
 from .vapid import get_keys
 
 
@@ -32,3 +35,18 @@ def subscribe(request):
         endpoint=endpoint,
         defaults={'user': request.user, 'p256dh': keys['p256dh'], 'auth': keys['auth']})
     return Response({'ok': True}, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+def test(request):
+    """
+    إشعار تجريبي لأجهزتي (زر في الإعدادات). يعيد نتيجة كل جهاز حتى نعرف سبب عدم الوصول إن وُجد:
+    {"results": [{"ok": true, "host": "web.push.apple.com", "status": 201, "reason": ""}]}
+    {"delay": 5} = انتظر 5 ثوانٍ قبل الإرسال، ليغلق المستخدم التطبيق ويرى الإشعار كما يصل عادةً (بحد أقصى 10).
+    """
+    try:
+        delay = min(max(int(request.data.get('delay') or 0), 0), 10)
+    except (TypeError, ValueError):
+        delay = 0
+    time.sleep(delay)
+    return Response({'results': send_test(request.user)})

@@ -175,3 +175,6 @@ msgstr "Faculty"
 
 msgid "إداري"
 msgstr "Staff"
+msgid "هذا إشعار تجريبي. الإشعارات تعمل ✅"
+msgstr "This is a test notification. Notifications are working ✅"
+

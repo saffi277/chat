@@ -1,29 +1,33 @@
-// Service Worker: سكربت يشتغل بالخلفية حتى لو صفحة التطبيق مسدودة.
-// شغلته هنا: يستلم إشعارات Push ويعرضها، ويفتح المحادثة لما تضغط عليها.
+// Service Worker: سكربت يعمل في الخلفية حتى لو كانت صفحة التطبيق مغلقة.
+// مهمته هنا: يستقبل إشعارات Push ويعرضها، ويفتح المحادثة عند الضغط عليها.
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+
+// أجهزة Apple: كل Push يجب أن يعرض إشعاراً، وإلا تلغي Apple الاشتراك بعد عدة مرات فتتوقف الإشعارات كلها
+const APPLE = /iPhone|iPad|iPod|Macintosh/.test(self.navigator.userAgent);
 
 self.addEventListener("push", (event) => {
   if (!event.data) return;
   const data = event.data.json();
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      // إذا المستخدم فاتح نفس المحادثة وقاعد يشوفها، ما نزعجه بإشعار
+      // إن كان المستخدم يشاهد المحادثة نفسها الآن فلا داعي للإشعار (إلا على أجهزة Apple، انظر أعلاه)
       const watching = clients.some(
         (c) => c.focused && c.visibilityState === "visible" && new URL(c.url).searchParams.get("c") === String(data.conversation),
       );
-      if (watching) return;
-      // نقطة على أيقونة التطبيق (الرقم الدقيق يتحدث لما ينفتح التطبيق)
+      if (watching && !APPLE) return;
+      // نقطة على أيقونة التطبيق (الرقم الدقيق يتحدّث عند فتح التطبيق)
       if (self.navigator.setAppBadge) self.navigator.setAppBadge().catch(() => {});
+      const lang = data.lang === "en" ? "en" : "ar";
       return self.registration.showNotification(data.title, {
         body: data.body,
         icon: "/icons/icon-192.png",
         badge: "/icons/badge-96.png",
-        tag: data.tag, // رسائل نفس المحادثة تبدل الإشعار القديم بدل ما تتكدس
-        renotify: true,
-        dir: "rtl",
-        lang: "ar",
+        tag: data.tag, // رسائل المحادثة نفسها تستبدل الإشعار القديم بدل أن تتكدس
+        renotify: true, // ومع ذلك يرنّ ويهتز لكل رسالة جديدة
+        dir: lang === "ar" ? "rtl" : "ltr",
+        lang,
         data: { url: data.url },
       });
     }),
@@ -35,7 +39,7 @@ self.addEventListener("notificationclick", (event) => {
   const url = new URL(event.notification.data?.url || "/chat", self.location.origin).href;
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      // إذا التطبيق مفتوح بتبويب، نروحله بدل ما نفتح واحد جديد
+      // إن كان التطبيق مفتوحاً في تبويب ننتقل إليه بدل فتح تبويب جديد
       const existing = clients.find((c) => new URL(c.url).pathname.startsWith("/chat"));
       if (existing) return existing.focus().then((c) => (c && "navigate" in c ? c.navigate(url) : self.clients.openWindow(url)));
       return self.clients.openWindow(url);

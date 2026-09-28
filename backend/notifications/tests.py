@@ -77,3 +77,29 @@ class PushTests(TestCase):
         cid = ali.post('/api/conversations/', {'user_id': s['id']}, format='json').data['id']
         ali.post(f'/api/conversations/{cid}/messages/', {'content': 'hi'}, format='json')
         self.assertIn('New message', webpush.call_args.args[1])
+
+    @mock.patch('notifications.push.webpush')
+    def test_vapid_contact_is_accepted_by_apple_and_push_is_urgent(self, webpush):
+        # خدمة Apple ترفض sub بنطاق وهمي (.local / localhost) فلا يصل أي إشعار إلى الآيفون
+        ali, _ = self.register('ali')
+        sara, s = self.register('sara')
+        sara.post('/api/push/subscribe/', SUB, format='json')
+        cid = ali.post('/api/conversations/', {'user_id': s['id']}, format='json').data['id']
+        ali.post(f'/api/conversations/{cid}/messages/', {'content': 'hi'}, format='json')
+        kwargs = webpush.call_args.kwargs
+        contact = kwargs['vapid_claims']['sub']
+        self.assertTrue(contact.startswith(('mailto:', 'https://')))
+        self.assertNotRegex(contact, r'\.local\b|localhost')
+        self.assertEqual(kwargs['headers'], {'Urgency': 'high'})
+
+    @mock.patch('notifications.push.webpush')
+    def test_test_endpoint_reports_each_device(self, webpush):
+        from pywebpush import WebPushException
+        ali, _ = self.register('ali')
+        ali.post('/api/push/subscribe/', {**SUB, 'endpoint': 'https://web.push.apple.com/abc'}, format='json')
+        webpush.side_effect = WebPushException('bad', response=mock.Mock(status_code=403, text='{"reason":"BadJwtToken"}'))
+        r = ali.post('/api/push/test/').data['results']
+        self.assertEqual((r[0]['ok'], r[0]['host'], r[0]['status']), (False, 'web.push.apple.com', 403))
+        self.assertIn('BadJwtToken', r[0]['reason'])
+        webpush.side_effect = None
+        self.assertTrue(ali.post('/api/push/test/').data['results'][0]['ok'])

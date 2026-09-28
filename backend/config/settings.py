@@ -216,8 +216,18 @@ KEYS_DIR = Path(os.environ.get('KEYS_DIR', BASE_DIR))
 # أكبر ملف نقبله بالطلب (الفيديو 50 ميگا + شوية)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 60 * 1024 * 1024
 
-# إشعارات Push: وسيلة تواصل وياك تنطيها لخدمات الإشعارات (Google/Apple) إذا صار مشكلة
-VAPID_CONTACT = 'mailto:admin@wasl.local'
+# إشعارات Push: وسيلة تواصل معك تُعطى لخدمات الإشعارات (Google/Apple) إن حدثت مشكلة.
+# يجب أن تكون بريداً حقيقياً (mailto:) أو رابط https: خدمة Apple ترفض أي نطاق وهمي مثل ‎.local‎ أو localhost
+# (ترد 403 BadJwtToken فلا يصل أي إشعار إلى الآيفون، بينما يقبله أندرويد).
+VAPID_CONTACT = os.environ.get('VAPID_CONTACT') or 'https://github.com/saffi277/chat'
+
+# السجلات: تحذيرات الإشعارات (سبب رفض الإرسال) تظهر في مخرجات الخادم
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {'console': {'class': 'logging.StreamHandler'}},
+    'loggers': {'notifications': {'handlers': ['console'], 'level': 'INFO'}},
+}
 
 # المكالمات (WebRTC): خوادم STUN تساعد الأجهزة تلكى بعضها. بالإنتاج نضيف TURN للشبكات المقفولة
 ICE_SERVERS = [{'urls': ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302']}]

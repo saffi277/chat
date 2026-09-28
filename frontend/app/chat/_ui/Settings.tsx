@@ -4,7 +4,7 @@ import { ROLE_LABELS, type Mode } from "@/lib/api";
 import { auth } from "@/lib/endpoints";
 import { LANGS, setLang, useT } from "@/lib/i18n";
 import { howToEnable, isStandalone, PERM_LABELS, permState, platform, requestPerm, type PermName, type PermState } from "@/lib/permissions";
-import { disablePush, enablePush, getPushState, type PushState } from "@/lib/push";
+import { disablePush, enablePush, getPushState, testPush, type PushState } from "@/lib/push";
 import { Avatar, nameOf, Section, Toggle } from "./bits";
 import { Icon } from "./icons";
 import { useWasl } from "./store";
@@ -212,26 +212,57 @@ const pushLabels: Record<PushState, string> = {
 
 export function PushToggle() {
   const t = useT();
+  const { notify } = useWasl();
   const [state, setState] = useState<PushState | null>(null);
   const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
+
+  // إشعار تجريبي: يصل بعد 5 ثوانٍ (ليُغلق المستخدم التطبيق)، ثم نعرض ما حدث لكل جهاز
+  async function sendTest() {
+    setTesting(true);
+    notify(t("سيصل إشعار تجريبي خلال 5 ثوانٍ. أغلق التطبيق أو اقفل الشاشة الآن."));
+    try {
+      const results = await testPush(5);
+      const failed = results.filter((r) => !r.ok);
+      if (!results.length || failed.some((r) => r.status === 404 || r.status === 410)) {
+        notify(t("انتهى اشتراك هذا الجهاز. أوقف الإشعارات ثم فعّلها من جديد."));
+      } else if (failed.length) {
+        const f = failed[0];
+        notify(t("رفضت خدمة الإشعارات ({host}) الإرسال: {status} {reason}", { host: f.host, status: f.status ?? "", reason: f.reason }));
+      } else {
+        notify(t("أُرسل الإشعار التجريبي ✅ إن لم يظهر، فتحقق من إعدادات الإشعارات في الهاتف."));
+      }
+    } catch (e) {
+      notify((e as Error).message);
+    } finally {
+      setTesting(false);
+    }
+  }
   useEffect(() => {
     getPushState().then(setState);
   }, []);
   if (!state) return null;
   return (
-    <div className="flex items-center gap-3">
-      <Icon name="bell" size={20} className="w-accent-text" />
-      <div className="flex-1">
-        <p className="font-bold">{t("الإشعارات")}</p>
-        <p className="w-muted text-xs leading-5">{t(pushLabels[state])}</p>
+    <div>
+      <div className="flex items-center gap-3">
+        <Icon name="bell" size={20} className="w-accent-text" />
+        <div className="flex-1">
+          <p className="font-bold">{t("الإشعارات")}</p>
+          <p className="w-muted text-xs leading-5">{t(pushLabels[state])}</p>
+        </div>
+        {(state === "on" || state === "off") && (
+          <Toggle on={state === "on"} label={t("الإشعارات")} onChange={async () => {
+            if (busy) return;
+            setBusy(true);
+            setState(await (state === "on" ? disablePush() : enablePush()).catch((): PushState => state));
+            setBusy(false);
+          }} />
+        )}
       </div>
-      {(state === "on" || state === "off") && (
-        <Toggle on={state === "on"} label={t("الإشعارات")} onChange={async () => {
-          if (busy) return;
-          setBusy(true);
-          setState(await (state === "on" ? disablePush() : enablePush()).catch((): PushState => state));
-          setBusy(false);
-        }} />
+      {state === "on" && (
+        <button onClick={sendTest} disabled={testing} className="w-tint mt-3 w-full rounded-full py-2.5 text-sm font-bold disabled:opacity-50">
+          {t(testing ? "جارٍ الإرسال..." : "إرسال إشعار تجريبي")}
+        </button>
       )}
     </div>
   );

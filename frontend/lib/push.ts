@@ -73,3 +73,10 @@ export async function syncPushSubscription() {
   const sub = await reg.pushManager.getSubscription();
   if (sub) await api("/push/subscribe/", "POST", sub.toJSON()).catch(() => {});
 }
+
+export type PushTestResult = { ok: boolean; host: string; status: number | null; reason: string };
+
+/** إشعار تجريبي لكل أجهزتي: الخادم ينتظر delay ثانية ثم يرسل، ويعيد نتيجة كل جهاز (لمعرفة سبب عدم الوصول) */
+export async function testPush(delay = 5) {
+  return (await api<{ results: PushTestResult[] }>("/push/test/", "POST", { delay })).results;
+}

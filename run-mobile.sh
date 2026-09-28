@@ -152,18 +152,8 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-say "Starting the backend on port 8000"
-cd "$ROOT/backend"
-# الرابط المؤقت يتبع trycloudflare.com: نثق به لنماذج لوحة الإدارة (CSRF)
-CSRF_TRUSTED_ORIGINS="https://*.trycloudflare.com" \
-  python manage.py runserver 0.0.0.0:8000 --noreload >"$LOGS/backend.log" 2>&1 &
-PIDS+=($!)
-
-say "Starting the frontend on port 3000"
-cd "$ROOT/frontend"
-./node_modules/.bin/next start -p 3000 >"$LOGS/frontend.log" 2>&1 &
-PIDS+=($!)
-
+# النفق أولاً: نحتاج رابطه قبل تشغيل الخادم (يُستخدم عنواناً للتواصل في توقيع الإشعارات، وخدمة Apple
+# ترفض العناوين الوهمية). الأداة تنتظر حتى تعمل الواجهة على 3000، فلا مشكلة في تشغيلها قبلها.
 say "Opening the tunnel (https link)"
 : >"$LOGS/tunnel.log"
 "$CF" tunnel --no-autoupdate --url http://127.0.0.1:3000 >"$LOGS/tunnel.log" 2>&1 &
@@ -178,10 +168,27 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 if [ -z "$URL" ]; then
+  # بلا نفق نكمل على الشبكة المحلية فقط (من دون مايكروفون أو كاميرا أو إشعارات، لأنها تحتاج https)
   tail -3 "$LOGS/tunnel.log"
+  kill $TUNNEL 2>/dev/null || true
+  PIDS=()   # النفق متوقف: لا ننتظره في النهاية (وإلا توقف كل شيء فوراً)
   IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
-  die "Could not create the https link (check your internet). Temporary fallback on the same Wi-Fi: http://${IP:-YOUR-PC-IP}:3000 (no microphone, camera or notifications)"
+  URL="http://${IP:-YOUR-PC-IP}:3000"
+  warn "Could not create the https link (check your internet). Continuing on your local Wi-Fi only: $URL (no microphone, camera or notifications)"
 fi
+
+say "Starting the backend on port 8000"
+cd "$ROOT/backend"
+# CSRF: نثق برابط النفق لنماذج لوحة الإدارة. VAPID_CONTACT: رابط الموقع نفسه عنواناً للتواصل مع خدمات الإشعارات
+if [[ "$URL" == https://* ]]; then export VAPID_CONTACT="$URL"; fi
+CSRF_TRUSTED_ORIGINS="https://*.trycloudflare.com" \
+  python manage.py runserver 0.0.0.0:8000 --noreload >"$LOGS/backend.log" 2>&1 &
+PIDS+=($!)
+
+say "Starting the frontend on port 3000"
+cd "$ROOT/frontend"
+./node_modules/.bin/next start -p 3000 >"$LOGS/frontend.log" 2>&1 &
+PIDS+=($!)
 
 # ننتظر حتى تستجيب الواجهة والخادم
 for _ in $(seq 1 30); do
@@ -189,10 +196,11 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 
+if [[ "$URL" == https://* ]]; then WHERE="any network: Wi-Fi or mobile data"; else WHERE="same Wi-Fi as this computer only"; fi
 cat <<EOF
 
 ======================================================================
-  Open this link on your phone (any network: Wi-Fi or mobile data):
+  Open this link on your phone ($WHERE):
 
       $URL
 

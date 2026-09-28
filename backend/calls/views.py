@@ -3,7 +3,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
+from django.utils import timezone, translation
 from django.utils.translation import gettext as _
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view
@@ -118,7 +118,8 @@ def calls(request):
         body = in_language(member.user, lambda: _('مكالمة فيديو واردة') if kind == Call.VIDEO else _('مكالمة صوتية واردة'))
         send_to_user(member.user, {
             'title': f'📞 {name}', 'body': body,
-            'conversation': conv.id, 'url': f'/chat?c={conv.id}&call={call.id}', 'tag': f'call-{call.id}'})
+            'conversation': conv.id, 'url': f'/chat?c={conv.id}&call={call.id}', 'tag': f'call-{call.id}',
+            'lang': in_language(member.user, translation.get_language)})
     return Response({**data, 'ice_servers': ice_servers()}, status=status.HTTP_201_CREATED)
 
 

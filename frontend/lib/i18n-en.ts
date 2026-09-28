@@ -3,6 +3,11 @@
  * عند إضافة نص جديد في الواجهة أضف ترجمته هنا (وإلا يظهر بالعربية في الواجهة الإنجليزية).
  */
 export const EN: Record<string, string> = {
+  "سيصل إشعار تجريبي خلال 5 ثوانٍ. أغلق التطبيق أو اقفل الشاشة الآن.": "A test notification will arrive in 5 seconds. Close the app or lock the screen now.",
+  "انتهى اشتراك هذا الجهاز. أوقف الإشعارات ثم فعّلها من جديد.": "This device's subscription has expired. Turn notifications off, then on again.",
+  "رفضت خدمة الإشعارات ({host}) الإرسال: {status} {reason}": "The notification service ({host}) rejected the message: {status} {reason}",
+  "أُرسل الإشعار التجريبي ✅ إن لم يظهر، فتحقق من إعدادات الإشعارات في الهاتف.": "Test notification sent ✅ If it didn't appear, check your phone's notification settings.",
+  "إرسال إشعار تجريبي": "Send a test notification",
   "15 دقيقة": "15 min",
   "8 ساعات": "8 hours",
   "{label} مستخدم من تطبيق آخر. أغلقه وحاول مرة أخرى.": "The {label} is being used by another app. Close it and try again.",
