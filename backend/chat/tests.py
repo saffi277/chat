@@ -59,3 +59,24 @@ class ChatFlowTests(TransactionTestCase):
 
         bad = WebsocketCommunicator(application, path + 'wrong')
         self.assertFalse((await bad.connect())[0])
+
+    async def test_websocket_rate_limit(self):
+        """إغراق المحادثة عبر WebSocket: أول 20 رسالة تُحفظ، والباقي يُرفض بـ rate_limited."""
+        from asgiref.sync import sync_to_async
+
+        from chat.models import Message
+        (ali, a), (sara, s) = await sync_to_async(self.register)('ali'), await sync_to_async(self.register)('sara')
+        conv = await sync_to_async(open_chat)(ali, s['user']['id'])
+        ws = WebsocketCommunicator(application, f"/ws/chat/{conv.data['id']}/?token={a['token']}")
+        self.assertTrue((await ws.connect())[0])
+        for i in range(25):
+            await ws.send_json_to({'type': 'message', 'content': f'رسالة {i}'})
+        errors = 0
+        for _ in range(25 + 5):
+            event = await ws.receive_json_from(timeout=3)
+            errors += event.get('type') == 'error'
+            if errors == 5:
+                break
+        await ws.disconnect()
+        self.assertEqual(errors, 5)
+        self.assertEqual(await sync_to_async(Message.objects.filter(conversation_id=conv.data['id']).count)(), 20)

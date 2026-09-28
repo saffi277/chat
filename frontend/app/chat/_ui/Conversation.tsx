@@ -71,6 +71,8 @@ export function Conversation({ conv }: { conv: Conv }) {
       if (e.type === "message") {
         setMsgs((l) => upsert(l, e.message));
         if (e.message.sender.id !== me.id) markRead();
+      } else if (e.type === "error" && e.detail === "rate_limited") {
+        notify(tr("أرسلت رسائل كثيرة بسرعة. انتظر قليلاً ثم أعد المحاولة."));
       } else if (e.type === "message_updated") {
         setMsgs((l) => upsert(l, e.message));
       } else if (e.type === "typing" && e.user_id !== me.id) {
@@ -104,7 +106,7 @@ export function Conversation({ conv }: { conv: Conv }) {
       document.removeEventListener("visibilitychange", onVisible);
       clearTimeout(refetch);
     };
-  }, [id, me.id, markRead]);
+  }, [id, me.id, markRead, notify]);
 
   // السكرول: ننزل لتحت بالرسائل الجديدة، ونثبت المكان لما نحمل الأقدم
   useLayoutEffect(() => {

@@ -10,6 +10,7 @@ export type ChatEvent =
   | { type: "read"; reader_id: number; message_id: number } // ✓✓ أزرق
   | { type: "delivered"; user_id: number; message_id: number } // ✓✓ رمادي
   | { type: "typing"; user_id: number; name?: string }
+  | { type: "error"; detail: "rate_limited" } // أرسلت رسائل كثيرة بسرعة (20 كل 10 ثوانٍ)
   // على الاتصال العام /ws/presence/
   | { type: "inbox"; message: Message } // أي رسالة بأي محادثة (حدّث القائمة)
   | { type: "presence"; user_id: number; is_online: boolean }

@@ -3,6 +3,7 @@
  * عند إضافة نص جديد في الواجهة أضف ترجمته هنا (وإلا يظهر بالعربية في الواجهة الإنجليزية).
  */
 export const EN: Record<string, string> = {
+  "أرسلت رسائل كثيرة بسرعة. انتظر قليلاً ثم أعد المحاولة.": "You sent too many messages too quickly. Wait a moment and try again.",
   "{name} ليس ضمن جهات اتصالك": "{name} isn't in your contacts",
   "المشتركون: {n}": "{n} subscribers",
   "أضف زملاءك وأساتذتك بالرقم الجامعي أو البريد الجامعي، ولن يظهر لك غيرهم.": "Add classmates and teachers by university ID or email. Only the people you add appear here.",

@@ -3,6 +3,9 @@ Consumer = مثل الـ View بس للـ WebSocket.
 الـ View: Request واحد → Response واحد وينسد الاتصال.
 الـ Consumer: اتصال يبقى مفتوح، والطرفين يدزون رسائل بأي وقت.
 """
+import time
+from collections import deque
+
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.db.models import F
@@ -14,6 +17,10 @@ from accounts.models import Profile
 from .models import Conversation, Membership, Message
 from .services import contact_ids, create_message, group_name, mark_delivered, user_group
 
+# حدّ الإرسال عبر WebSocket لكل اتصال (مثل SendThrottle في HTTP): 20 رسالة كل 10 ثوانٍ،
+# و«يكتب الآن» مرة في الثانية على الأكثر. ما زاد يُهمل، فلا يستطيع أحد إغراق المحادثة أو الخادم.
+BURST, WINDOW = 20, 10.0
+TYPING_EVERY = 1.0
 
 
 class ChatConsumer(AsyncJsonWebsocketConsumer):
@@ -27,6 +34,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # الاسم يروح ويا "يكتب الآن" (حتى الواجهة ما تحتاج قائمة أعضاء المجموعة كاملة)
         self.display_name = await database_sync_to_async(
             lambda: getattr(getattr(self.user, 'profile', None), 'display_name', '') or self.user.username)()
+        self.sent = deque()     # أوقات آخر الرسائل (لحدّ الإرسال)
+        self.last_typing = 0.0
         # ننضم لـ "غرفة" المحادثة حتى نستلم أي رسالة تنبث بيها
         await self.channel_layer.group_add(self.group, self.channel_name)
         await self.accept()
@@ -41,12 +50,31 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         if content.get('type') == 'message':
             text = (content.get('content') or '').strip()
             if text:
+                if not self.allow_message():
+                    await self.send_json({'type': 'error', 'detail': 'rate_limited'})
+                    return
                 # create_message نفسها تبث الرسالة للكل
                 await self.send_text_message(text, content.get('reply_to'))
-        elif content.get('type') == 'typing' and self.can_post:
+        elif content.get('type') == 'typing' and self.can_post and self.allow_typing():
             await self.channel_layer.group_send(
                 self.group, {'type': 'chat.event', 'payload': {'type': 'typing', 'user_id': self.user.id,
                                                               'name': self.display_name}})
+
+    def allow_message(self):
+        now = time.monotonic()
+        while self.sent and now - self.sent[0] > WINDOW:
+            self.sent.popleft()
+        if len(self.sent) >= BURST:
+            return False
+        self.sent.append(now)
+        return True
+
+    def allow_typing(self):
+        now = time.monotonic()
+        if now - self.last_typing < TYPING_EVERY:
+            return False
+        self.last_typing = now
+        return True
 
     async def chat_event(self, event):
         # تنادى لما يوصل group_send بنوع chat.event → ندزه للمتصفح JSON
