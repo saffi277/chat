@@ -42,7 +42,7 @@ import { CallSession } from "@/lib/call";      // المكالمات
 
 - الأدوار: `student` طالب، `faculty` تدريسي، `staff` إداري (`ROLE_LABELS` بـ `lib/api.ts`). الدور يطلع للناس (`user.role`)، أما البريد والرقم الجامعي فخاصين (`me.email`, `me.university_id`).
 - الإداري يغير كلمة مرور أي حساب من `/admin` ← Users ← الحساب ← "change password".
-- الصور: `frontend/public/brand/logo.png` (شعار الكلية؛ إذا ما موجود يطلع شعار مؤقت) و `logo-dark.png` (نسخة الليلي: داخل القوس أبيض والخط فاتح)، وصور الحرم الحقيقية `campus-day.jpg` / `campus-night.jpg` بألوانها الأصلية.
+- الصور: `frontend/public/brand/logo.png` (شعار الكلية؛ إذا ما موجود يطلع شعار مؤقت) و `logo-dark.png` (نسخة الليلي: داخل القوس أبيض والخط فاتح)، وصور الحرم الحقيقية `campus-day.webp` / `campus-night.webp` بألوانها الأصلية (مكبرة 4× بـ Real-ESRGAN، والليلية محاذية على النهارية بنفس القص والقياس).
 - الألوان بـ `app/wasl.css` تحت `.portal[data-theme=...]`.
 
 ### 🔒 الجلسة والأمان (يهمك إذا تبني شاشة جديدة)

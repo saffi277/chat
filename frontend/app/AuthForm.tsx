@@ -89,8 +89,11 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
   return (
     <main className="portal relative min-h-dvh overflow-x-hidden" data-theme={theme}>
       {/* صورة الحرم تملي الشاشة (باللابتوب)، وبالموبايل خلفية غامقة/فاتحة ناعمة */}
-      <div className="portal-photo pointer-events-none fixed inset-0 hidden lg:block"
-        style={{ backgroundImage: `url(/brand/campus-${night ? "night" : "day"}.jpg)` }} aria-hidden="true" />
+      {/* الصورتين نفس القص والقياس بالضبط (الليلية محاذية على النهارية)، فالتبديل يصير تلاشي ناعم بدون ما يتحرك المبنى */}
+      {(["day", "night"] as const).map((photo) => (
+        <div key={photo} className="portal-photo pointer-events-none fixed inset-0 hidden transition-opacity duration-500 lg:block"
+          style={{ backgroundImage: `url(/brand/campus-${photo}.webp)`, opacity: (photo === "night") === night ? 1 : 0 }} aria-hidden="true" />
+      ))}
       <svg className="pointer-events-none fixed right-0 top-0 hidden h-[70vh] w-[45vw] lg:block" viewBox="0 0 600 700" preserveAspectRatio="none" aria-hidden="true">
         <path d="M600 40 C 420 60 300 200 290 700" fill="none" stroke="var(--p-gold)" strokeWidth="1.2" opacity=".35" />
         <path d="M600 110 C 460 130 360 250 350 700" fill="none" stroke="var(--p-gold)" strokeWidth="1" opacity=".22" />
