@@ -86,6 +86,13 @@ const SYSTEM_PATTERNS: [RegExp, string][] = [
   [/^(.+) غيّر اسم المجموعة إلى "(.*)"$/, '{0} renamed the group to "{1}"'],
   [/^(.+) أنشأ القناة "(.*)"$/, '{0} created the channel "{1}"'],
   [/^(.+) غيّر اسم القناة إلى "(.*)"$/, '{0} renamed the channel to "{1}"'],
+  [/^(.+) فعّل الرسائل المختفية: (.+)$/, "{0} turned on disappearing messages: {1}"],
+  [/^(.+) أوقف الرسائل المختفية$/, "{0} turned off disappearing messages"],
+  [/^(.+) جعل الإرسال للمشرفين فقط$/, "{0} allowed only admins to send messages"],
+  [/^(.+) سمح لجميع الأعضاء بالإرسال$/, "{0} allowed all members to send messages"],
+  [/^(.+) فعّل الوضع البطيء$/, "{0} turned on slow mode"],
+  [/^(.+) أوقف الوضع البطيء$/, "{0} turned off slow mode"],
+  [/^(.+) انضم عبر رابط الدعوة$/, "{0} joined via the invite link"],
   [/^(.+) أضاف (.+)$/, "{0} added {1}"],
   [/^(.+) أزال (.+)$/, "{0} removed {1}"],
   [/^(.+) غادر المجموعة$/, "{0} left the group"],
@@ -109,7 +116,8 @@ export function systemText(text: string) {
   if (direct !== text) return direct; // نص ثابت (مثل: مكالمة صوتية فائتة)
   for (const [re, en] of SYSTEM_PATTERNS) {
     const m = text.match(re);
-    if (m) return en.replace(/\{(\d)\}/g, (_, i) => m[Number(i) + 1]);
+    // المدد (24 ساعة...) تُترجم أيضاً، والأسماء تبقى كما هي
+    if (m) return en.replace(/\{(\d)\}/g, (_, i) => (en.includes("disappearing messages:") && i === "1" ? t(m[2]) : m[Number(i) + 1]));
   }
   return text;
 }

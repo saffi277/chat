@@ -68,6 +68,7 @@ const paths: Record<string, React.ReactNode> = {
   palette: <><circle cx="13.5" cy="6.5" r="1" /><circle cx="17.5" cy="10.5" r="1" /><circle cx="8.5" cy="7.5" r="1" /><circle cx="6.5" cy="12.5" r="1" /><path d="M12 2a10 10 0 0 0 0 20 2 2 0 0 0 2-2 2 2 0 0 1 2-2h2a4 4 0 0 0 4-4c0-5.5-4.5-10-10-10Z" /></>,
   type: <path d="M4 7V4h16v3M9 20h6M12 4v16" />,
   navigation: <path d="m3 11 19-9-9 19-2-8-8-2Z" />,
+  screen: <><rect x="2" y="4" width="20" height="13" rx="2" /><path d="M8 21h8M12 17v4M12 8v5M9.5 10.5 12 8l2.5 2.5" /></>,
   retry: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></>,
   globe: <><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z" /></>,
 };

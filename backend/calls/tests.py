@@ -60,6 +60,35 @@ class CallTests(TestCase):
         self.sara.post(f"/api/calls/{c['id']}/answer/")
         self.assertIsNone(self.sara.get('/api/calls/ringing/').data['call'])
 
+    def test_group_call_join_leave(self, _):
+        omar, huda = register('omar'), register('huda')
+        from chat.testing import befriend
+        befriend(self.ali, self.sara.user['id'], omar.user['id'], huda.user['id'])
+        g = self.ali.post('/api/conversations/groups/', {'title': 'الشعبة أ', 'member_ids': [
+            self.sara.user['id'], omar.user['id'], huda.user['id']]}, format='json').data['id']
+        c = self.ali.post('/api/calls/', {'conversation_id': g, 'kind': 'audio'}, format='json').data
+        self.assertEqual(c['participants'], [self.ali.user['id']])
+        # ينضم الأعضاء واحداً بعد الآخر، وكل منضم يعرف من سبقه (ليتصل بهم)
+        r = self.sara.post(f"/api/calls/{c['id']}/answer/").data
+        self.assertEqual(sorted(r['participants']), sorted([self.ali.user['id'], self.sara.user['id']]))
+        self.assertEqual(omar.get(f'/api/calls/active/?conversation={g}').data['call']['id'], c['id'])
+        self.assertEqual(len(omar.post(f"/api/calls/{c['id']}/answer/").data['participants']), 3)
+        # المتصل يغادر: تبقى المكالمة لمن بقي
+        self.assertEqual(self.ali.post(f"/api/calls/{c['id']}/leave/").data['status'], 'ongoing')
+        self.assertEqual(sorted(Call.objects.get(pk=c['id']).joined.values_list('id', flat=True)),
+                         sorted([self.sara.user['id'], omar.user['id']]))
+        self.sara.post(f"/api/calls/{c['id']}/leave/")
+        self.assertEqual(omar.post(f"/api/calls/{c['id']}/leave/").data['status'], 'ended')  # آخر من غادر
+        self.assertIsNone(huda.get(f'/api/calls/active/?conversation={g}').data['call'])
+        self.assertIn('مكالمة صوتية •', self.ali.get(f'/api/conversations/{g}/messages/').data[-1]['content'])
+        # حدّ المشاركين
+        c2 = self.ali.post('/api/calls/', {'conversation_id': g}, format='json').data
+        with mock.patch('calls.views.MAX_PARTICIPANTS', 2):
+            self.sara.post(f"/api/calls/{c2['id']}/answer/")
+            self.assertEqual(omar.post(f"/api/calls/{c2['id']}/answer/").status_code, 400)
+        # خارج المجموعة لا يرى المكالمة
+        self.assertIsNone(register('zaid').get(f'/api/calls/active/?conversation={g}').data['call'])
+
     def test_upgrade_to_video(self, _):
         c = self.ali.post('/api/calls/', {'conversation_id': self.conv, 'kind': 'audio'}, format='json').data
         self.assertEqual(self.ali.post(f"/api/calls/{c['id']}/video/").status_code, 400)  # قبل الرد

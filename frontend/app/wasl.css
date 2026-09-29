@@ -90,6 +90,69 @@
   --chat-bg: #131929 url("/bg/doodles-dark.svg");
 }
 
+/* ================= الثيمات: لون التطبيق (مستقل عن النهاري والليلي) =================
+   data-accent على .wasl يغيّر الإبراز والفقاعات والعدّادات وعلامات القراءة في الوضعين.
+   البنفسجي هو الأساسي (المتغيرات أعلاه)، وهنا الخمسة الباقية. */
+.wasl[data-accent="green"][data-theme="light"] {
+  --accent: #0f9d6b; --accent-grad: #0f9d6b; --tint: #e3f5ed; --tint-text: #0f9d6b; --badge: #0f9d6b; --bubble-out: #dcf5e8; --tick-read: #0f9d6b;
+  --ring: linear-gradient(135deg, #0f9d6b, color-mix(in srgb, #0f9d6b 55%, #fff));
+}
+.wasl[data-accent="green"][data-theme="dark"] {
+  --accent: #22b37d; --accent-grad: #22b37d; --tint: #173b30; --tint-text: #7fe0b5; --tint-border: #22b37d; --badge: #22b37d; --bubble-out: #1d5a44; --tick-read: #6ee7b7;
+  --ring: linear-gradient(135deg, #22b37d, color-mix(in srgb, #22b37d 55%, #fff));
+}
+.wasl[data-accent="blue"][data-theme="light"] {
+  --accent: #2f6fed; --accent-grad: #2f6fed; --tint: #e6eeff; --tint-text: #2f6fed; --badge: #2f6fed; --bubble-out: #dde8ff; --tick-read: #2f6fed;
+  --ring: linear-gradient(135deg, #2f6fed, color-mix(in srgb, #2f6fed 55%, #fff));
+}
+.wasl[data-accent="blue"][data-theme="dark"] {
+  --accent: #4f8bff; --accent-grad: #4f8bff; --tint: #1b2c52; --tint-text: #a9c4ff; --tint-border: #4f8bff; --badge: #4f8bff; --bubble-out: #24406f; --tick-read: #93b8ff;
+  --ring: linear-gradient(135deg, #4f8bff, color-mix(in srgb, #4f8bff 55%, #fff));
+}
+.wasl[data-accent="pink"][data-theme="light"] {
+  --accent: #e0457b; --accent-grad: #e0457b; --tint: #fde8f0; --tint-text: #e0457b; --badge: #e0457b; --bubble-out: #fbe0ea; --tick-read: #e0457b;
+  --ring: linear-gradient(135deg, #e0457b, color-mix(in srgb, #e0457b 55%, #fff));
+}
+.wasl[data-accent="pink"][data-theme="dark"] {
+  --accent: #f0659a; --accent-grad: #f0659a; --tint: #45203a; --tint-text: #ffb0cd; --tint-border: #f0659a; --badge: #f0659a; --bubble-out: #6a2a48; --tick-read: #ffa3c6;
+  --ring: linear-gradient(135deg, #f0659a, color-mix(in srgb, #f0659a 55%, #fff));
+}
+.wasl[data-accent="orange"][data-theme="light"] {
+  --accent: #e0701a; --accent-grad: #e0701a; --tint: #fdefe2; --tint-text: #e0701a; --badge: #e0701a; --bubble-out: #fde6d2; --tick-read: #e0701a;
+  --ring: linear-gradient(135deg, #e0701a, color-mix(in srgb, #e0701a 55%, #fff));
+}
+.wasl[data-accent="orange"][data-theme="dark"] {
+  --accent: #f59245; --accent-grad: #f59245; --tint: #45301d; --tint-text: #ffc896; --tint-border: #f59245; --badge: #f59245; --bubble-out: #6b4323; --tick-read: #ffc08a;
+  --ring: linear-gradient(135deg, #f59245, color-mix(in srgb, #f59245 55%, #fff));
+}
+.wasl[data-accent="grey"][data-theme="light"] {
+  --accent: #5b6477; --accent-grad: #5b6477; --tint: #eceef3; --tint-text: #5b6477; --badge: #5b6477; --bubble-out: #e6e9ef; --tick-read: #5b6477;
+  --ring: linear-gradient(135deg, #5b6477, color-mix(in srgb, #5b6477 55%, #fff));
+}
+.wasl[data-accent="grey"][data-theme="dark"] {
+  --accent: #8b95ab; --accent-grad: #8b95ab; --tint: #2a3040; --tint-text: #c9d0de; --tint-border: #8b95ab; --badge: #8b95ab; --bubble-out: #394257; --tick-read: #c9d0de;
+  --ring: linear-gradient(135deg, #8b95ab, color-mix(in srgb, #8b95ab 55%, #fff));
+}
+
+/* ================= خلفيات المحادثة =================
+   عامة: data-wallpaper على .wasl (من الإعدادات ← الثيمات).
+   خاصة بمحادثة: data-wallpaper على عنصر .w-chat-bg نفسه. القواعد الخاصة بالقوة نفسها وتأتي بعد العامة، فتغلبها. */
+.wasl[data-wallpaper="doodles"] .w-chat-bg { background: var(--chat-bg); background-size: 260px 260px; }
+.wasl[data-wallpaper="plain"] .w-chat-bg { background: color-mix(in srgb, var(--accent) 7%, var(--bg)); }
+.wasl[data-wallpaper="gradient"] .w-chat-bg { background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 22%, var(--bg)), color-mix(in srgb, var(--accent) 4%, var(--bg)) 70%); }
+.wasl[data-wallpaper="dots"] .w-chat-bg { background: radial-gradient(color-mix(in srgb, var(--accent) 28%, transparent) 1.3px, transparent 1.5px) 0 0 / 18px 18px, color-mix(in srgb, var(--accent) 4%, var(--bg)); }
+.wasl[data-wallpaper="campus"] .w-chat-bg { background: linear-gradient(var(--campus-veil), var(--campus-veil)), var(--campus-photo) center / cover no-repeat; }
+.wasl[data-wallpaper="none"] .w-chat-bg { background: var(--bg); }
+.wasl .w-chat-bg[data-wallpaper="doodles"] { background: var(--chat-bg); background-size: 260px 260px; }
+.wasl .w-chat-bg[data-wallpaper="plain"] { background: color-mix(in srgb, var(--accent) 7%, var(--bg)); }
+.wasl .w-chat-bg[data-wallpaper="gradient"] { background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 22%, var(--bg)), color-mix(in srgb, var(--accent) 4%, var(--bg)) 70%); }
+.wasl .w-chat-bg[data-wallpaper="dots"] { background: radial-gradient(color-mix(in srgb, var(--accent) 28%, transparent) 1.3px, transparent 1.5px) 0 0 / 18px 18px, color-mix(in srgb, var(--accent) 4%, var(--bg)); }
+.wasl .w-chat-bg[data-wallpaper="campus"] { background: linear-gradient(var(--campus-veil), var(--campus-veil)), var(--campus-photo) center / cover no-repeat; }
+.wasl .w-chat-bg[data-wallpaper="none"] { background: var(--bg); }
+/* صورة الكلية خافتة خلف الرسائل: النهارية في الوضع النهاري والليلية في الليلي */
+.wasl[data-theme="light"] { --campus-photo: url("/brand/campus-day.webp"); --campus-veil: rgba(246, 246, 251, .84); }
+.wasl[data-theme="dark"] { --campus-photo: url("/brand/campus-night.webp"); --campus-veil: rgba(15, 20, 34, .84); }
+
 /* أسطح */
 .w-panel { background: var(--panel); border: 1px solid var(--border); }
 .w-strong { background: var(--panel-strong); }
@@ -130,7 +193,7 @@
 /* موجة الصوت بالمكالمة */
 @keyframes w-wave { 0%, 100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
 .w-wave > span { animation: w-wave 1.1s ease-in-out infinite; transform-origin: center; }
-@keyframes w-pulse { 0% { box-shadow: 0 0 0 0 rgba(108, 92, 231, .5); } 100% { box-shadow: 0 0 0 26px rgba(108, 92, 231, 0); } }
+@keyframes w-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 50%, transparent); } 100% { box-shadow: 0 0 0 26px transparent; } }
 .w-pulse { animation: w-pulse 1.6s ease-out infinite; }
 @keyframes w-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 

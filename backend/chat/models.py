@@ -27,6 +27,17 @@ class Conversation(models.Model):
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     created_at = models.DateTimeField(auto_now_add=True)
+    # الرسائل المختفية: الرسالة الجديدة تُحذف بعد هذا العدد من الثواني (0 = لا تختفي). يحذفها chat/worker.py
+    disappear_after = models.PositiveIntegerField(default=0)
+    # إعدادات المجموعة (يغيّرها المشرفون)
+    only_admins_post = models.BooleanField(default=False)  # الإرسال للمشرفين فقط
+    only_admins_edit = models.BooleanField(default=True)   # تعديل الاسم والوصف والصورة للمشرفين فقط
+    slow_mode = models.PositiveIntegerField(default=0)      # ثوانٍ بين رسالتين لكل عضو (0 = بلا حد)
+    # رابط الدعوة: من يملكه ينضم إلى المجموعة. يُلغى بمسحه، ويتغيّر بإنشاء جديد
+    invite_code = models.CharField(max_length=32, unique=True, null=True, blank=True)
+
+    DISAPPEAR_CHOICES = (0, 24 * 3600, 7 * 24 * 3600, 90 * 24 * 3600)
+    SLOW_CHOICES = (0, 10, 30, 60, 300, 900, 3600)
 
 
 class Membership(models.Model):
@@ -39,6 +50,10 @@ class Membership(models.Model):
     role = models.CharField(max_length=10, choices=[(ADMIN, 'مشرف'), (MEMBER, 'عضو')], default=MEMBER)
     is_favorite = models.BooleanField(default=False)
     is_muted = models.BooleanField(default=False)
+    # الكتم لمدة (8 ساعات، أسبوع...): بعد هذا الوقت يعود الإشعار وحده. فارغ مع is_muted = كتم دائم
+    muted_until = models.DateTimeField(null=True, blank=True)
+    # خلفية هذه المحادثة عندي فقط (فارغ = خلفية الثيم العامة)
+    wallpaper = models.CharField(max_length=20, blank=True)
     is_archived = models.BooleanField(default=False)
     is_pinned = models.BooleanField(default=False)  # 📌 تطلع فوك القائمة
     # "حذف المحادثة" عندي: الرسائل قبل هذا الوقت ما تطلعلي، والمحادثة تنخفي لحد ما تجي رسالة جديدة
@@ -50,6 +65,10 @@ class Membership(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['conversation', 'user'], name='unique_membership')]
+
+    @property
+    def muted_now(self):
+        return self.is_muted and (self.muted_until is None or self.muted_until > timezone.now())
 
 
 def message_upload_path(instance, filename):
@@ -86,6 +105,8 @@ class Message(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     edited_at = models.DateTimeField(null=True, blank=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
+    # الرسائل المختفية: وقت حذفها (من Conversation.disappear_after لحظة الإرسال)
+    expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
     # للمحادثات الثنائية: الطرف الثاني قراها. (بالمجموعات نستخدم Membership.last_read_id)
     is_read = models.BooleanField(default=False)
 
@@ -130,3 +151,26 @@ class StarredMessage(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=['message', 'user'], name='unique_star')]
+
+
+class ScheduledMessage(models.Model):
+    """
+    رسالة نصية مجدولة: تُرسل وحدها في وقتها (chat/worker.py يفحص كل 15 ثانية).
+    الحالة تمنع إرسالها مرتين إن عمل أكثر من عامل: من يغيّر pending إلى sending أولاً هو من يرسلها.
+    """
+
+    PENDING, SENDING, FAILED = 'pending', 'sending', 'failed'
+
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='scheduled')
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='scheduled')
+    content = EncryptedTextField()
+    reply_to = models.ForeignKey(Message, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    send_at = models.DateTimeField(db_index=True)
+    silent = models.BooleanField(default=False)  # دون إشعار
+    status = models.CharField(max_length=10, default=PENDING,
+                              choices=[(PENDING, 'بانتظار موعدها'), (SENDING, 'تُرسل'), (FAILED, 'تعذّر إرسالها')])
+    error = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['send_at', 'id']

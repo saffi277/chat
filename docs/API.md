@@ -118,9 +118,12 @@ import { CallSession } from "@/lib/call";      // المكالمات
 ## 🎨 الوضع (نهاري/ليلي) والثيم: شيئين مختلفين
 
 - **الوضع** `me.mode`: `light` نهاري، `dark` ليلي، `system` تلقائي حسب الجهاز (الافتراضي). مو ثيم، بس نهار وليل لنفس التصميم.
-- **الثيم** `me.theme`: شكل التطبيق. هسه بس `default` (الأساسي البنفسجي). الثيمات الثانية (زجاجي...) تنضاف بعدين.
+- **الثيم** `me.theme`: لون التطبيق، مستقل عن الوضع: `default` (البنفسجي)، `green`، `blue`، `pink`، `orange`، `grey`. يُطبَّق على `data-accent`.
+- **خلفية المحادثات** `me.wallpaper`: `doodles` (الافتراضية)، `plain`، `gradient`، `dots`، `campus` (صورة الكلية خافتة)، `none`. تُطبَّق على `data-wallpaper`.
+  ولكل محادثة خلفيتها الخاصة (لي وحدي): `conversations.setPrefs(id, { wallpaper })`، و`""` = خلفية الثيم.
+- كلها تُحفظ بـ `auth.updateMe({ theme, wallpaper })`، وصفحتها: الإعدادات ← الثيمات.
 
-**شلون شغال:** `store.tsx` يحسب `light` أو `dark` من `me.mode` ويحطها على `<div class="wasl" data-theme="...">`.
+**شلون شغال:** `store.tsx` يحسب `light` أو `dark` من `me.mode`، و`App.tsx` يضع الثلاثة على `<div class="wasl" data-theme data-accent data-wallpaper>`.
 وكل الألوان متغيرات (`--bg`, `--panel`, `--card`, `--tint`, `--text`, `--muted`, `--accent`, `--bubble-in/out`...) بـ `app/wasl.css`.
 
 إذا تضيف شاشة جديدة: استخدم الكلاسات الجاهزة (`w-panel`, `w-card`, `w-tint`, `w-muted`, `w-accent`, `w-line`...) أو `var(--xxx)`، ولا تكتب لون ثابت، فتشتغل بالوضعين تلقائياً.
@@ -169,7 +172,23 @@ import { CallSession } from "@/lib/call";      // المكالمات
 | `title`, `avatar` | للمجموعة والمحفوظة. بالثنائية: اعرض الطرف الثاني من `participants` |
 | `member_count`, `my_role` | "مجموعة • 12 عضواً"، وهل أني مشرف |
 | `is_favorite`, `is_muted`, `is_archived`, `is_pinned` | إعداداتي |
+| `muted_until` | الكتم لمدة: حتى متى (`null` = دائم). الكتم: `setPrefs(id, { is_muted: true, mute_hours: 8 })` |
+| `wallpaper` | خلفية هذه المحادثة عندي (`""` = خلفية الثيم) |
+| `disappear_after` | الرسائل المختفية بالثواني: `0` أو `86400` أو `604800` أو `7776000`. الرسالة الجديدة فيها `expires_at` |
+| `only_admins_post`, `only_admins_edit`, `slow_mode` | إعدادات المجموعة (المشرف): `conversations.setSettings(id, {...})`. `slow_mode` بالثواني: 0، 10، 30، 60، 300، 900، 3600 |
+| `can_post`, `can_edit_info` | أستطيع الإرسال؟ وتعديل الاسم والصورة؟ (اعرض خانة الكتابة حسب `can_post`) |
+| `invite_code` | رابط الدعوة (للمشرف فقط، في `conversations.get`): الرابط `/chat?join=<code>` |
 | `last_message`, `unread_count` | للسطر الثاني والرقم البنفسجي |
+
+### إعدادات المحادثة والرسائل المجدولة ورابط الدعوة
+| الطلب | ماذا يفعل |
+|---|---|
+| `messages.schedule(id, text, date, { silent? })` | جدولة رسالة نصية. يرسلها العامل الخلفي في وقتها (`backend/chat/worker.py`، كل 15 ثانية) |
+| `messages.scheduled(id)` / `messages.cancelScheduled(sid)` | رسائلي المجدولة في المحادثة / إلغاء واحدة |
+| `messages.sendText(id, text, replyTo, true)` أو `socket.send({type:"message", content, silent:true})` | **إرسال دون إشعار** |
+| `conversations.createInvite(id)` / `revokeInvite(id)` | رابط دعوة جديد (يلغي القديم) / إلغاؤه |
+| `invites.preview(code)` / `invites.join(code)` | معاينة المجموعة قبل الانضمام / الانضمام |
+| رفض الإرسال | HTTP: ‏403 (المجموعة للمشرفين) أو 429 (الوضع البطيء). WebSocket: حدث `error` فيه `detail` و`message` |
 
 ---
 
@@ -191,6 +210,10 @@ import { CallSession } from "@/lib/call";      // المكالمات
 | `story` / `story_viewed` | العام | حالة جديدة (حدّث الشريط) / أحد شاف حالتك |
 | `call_incoming` | العام | اعرض شاشة المكالمة الواردة |
 | `call_answered` / `call_ended` | العام | الطرف رد / المكالمة خلصت |
+| `call_left` | العام | غادر أحدهم المكالمة الجماعية: `group.peerLeft(user_id)` |
+| `message_removed` | المحادثة | رسالة مختفية انتهت مدتها: احذفها من القائمة |
+| `scheduled_changed` | العام | أُرسلت رسالتي المجدولة (أو تعذّر إرسالها): حدّث العدد |
+| `error` | المحادثة | `rate_limited` أو `not_allowed` أو `slow_mode`، ومعه `message` بلغة المستخدم |
 | `call.signal` | العام | مرره لـ `session.handleSignal(e.data)` |
 
 إرسال بالـ WebSocket: `socket.send({ type: "message", content, reply_to? })` و `socket.send({ type: "typing" })`.
@@ -221,7 +244,13 @@ s.toggleMute(); s.toggleCamera(); await s.hangup();
 - إذا ما حدا رد خلال دقيقة، المكالمة تصير **فائتة**.
 - كل مكالمة تنسجل رسالة بالمحادثة مثل "مكالمة فيديو • 2:15".
 - ✅ جربناها بين متصفحين: اتصلوا، وانتقل صوت وصورة بالاتجاهين.
-- ⚠️ حالياً بين **شخصين** بس (مكالمات المجموعة مرحلة جاية). وبين شبكات مختلفة بالإنتاج نحتاج خادم TURN.
+- **المكالمة الجماعية** (حتى 8 أشخاص): `GroupCall.start(convId, kind, meId, socket, handlers)` و`GroupCall.join(call, ...)`.
+  كل مشارك يتصل بكل مشارك مباشرة (Mesh). من ينضم يأخذ `participants` من الخادم ويرسل عرضاً لكل واحد.
+  المغادرة `group.leave()` (= `calls.leave(id)`): تبقى المكالمة لمن بقي، وتنتهي حين يغادر الأخير.
+  الانضمام إلى مكالمة جارية: `calls.active(convId)` ثم `GroupCall.join`.
+- **مشاركة الشاشة** (الحاسوب): `session.shareScreen()` / `stopScreen()` في المكالمتين: تحلّ الشاشة محل الكاميرا.
+- ✅ جربنا المكالمة الجماعية بأربعة متصفحات: انضمام، ومغادرة، وانضمام متأخر، ومشاركة شاشة.
+- ⚠️ بين شبكات مختلفة بالإنتاج نحتاج خادم TURN. والـ Mesh مناسب حتى 8 تقريباً؛ لأكثر من ذلك يلزم خادم وسائط (SFU).
 
 ---
 

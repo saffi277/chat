@@ -1,7 +1,8 @@
 from types import SimpleNamespace
 
-from rest_framework import serializers
+from django.utils import timezone
 from django.utils.translation import gettext as _
+from rest_framework import serializers
 
 from accounts.serializers import UserSerializer, iso, user_json
 from config.media import signed_url
@@ -63,7 +64,7 @@ class MessageSerializer(serializers.ModelSerializer):
         model = Message
         fields = ['id', 'conversation', 'sender', 'kind', 'content', 'file_url', 'file_name', 'file_size',
                   'duration', 'width', 'height', 'latitude', 'longitude', 'live_until', 'is_live', 'reply_to',
-                  'created_at', 'edited_at', 'is_deleted', 'status', 'is_read', 'reactions']
+                  'created_at', 'edited_at', 'expires_at', 'is_deleted', 'status', 'is_read', 'reactions']
 
     def get_file_url(self, obj):
         # رابط موقّع ومؤقت (config/media.py): ينفتح بس للي وصلتله الرسالة
@@ -87,7 +88,8 @@ class MessageSerializer(serializers.ModelSerializer):
             'file_size': obj.file_size, 'duration': obj.duration, 'width': obj.width, 'height': obj.height, 'latitude': obj.latitude, 'longitude': obj.longitude,
             'live_until': iso(obj.live_until), 'is_live': obj.is_live,
             'reply_to': ReplySerializer(obj.reply_to).to_representation(obj.reply_to) if obj.reply_to_id and obj.reply_to else None,
-            'created_at': iso(obj.created_at), 'edited_at': iso(obj.edited_at), 'is_deleted': obj.deleted_at is not None,
+            'created_at': iso(obj.created_at), 'edited_at': iso(obj.edited_at), 'expires_at': iso(obj.expires_at),
+            'is_deleted': obj.deleted_at is not None,
             'status': status, 'is_read': status == 'read', 'reactions': self.get_reactions(obj),
         }
 
@@ -141,6 +143,7 @@ class ConversationSerializer(serializers.ModelSerializer):
     def _mine(self, obj):
         if hasattr(obj, 'my_role'):  # قائمة المحادثات: إعداداتي محسوبة بالاستعلام
             return SimpleNamespace(role=obj.my_role, is_favorite=obj.my_favorite, is_muted=obj.my_muted,
+                                   muted_until=obj.my_muted_until, wallpaper=obj.my_wallpaper or '',
                                    is_archived=obj.my_archived, is_pinned=obj.pinned, cleared_at=obj.cleared,
                                    last_read_id=obj.my_read, user_id=self.context['request'].user.id)
         me = self.context['request'].user
@@ -162,7 +165,10 @@ class ConversationSerializer(serializers.ModelSerializer):
                 for m in self._memberships(obj)]
 
     def to_representation(self, obj):
+        mine = self._mine(obj)
+        admin = bool(mine and mine.role == Membership.ADMIN)
         return {
+            **self.get_settings(obj, mine, admin),
             'id': obj.id, 'kind': obj.kind, 'title': self.get_title(obj), 'description': obj.description,
             'avatar': self.get_avatar(obj), 'participants': self.get_participants(obj),
             'member_count': self.get_member_count(obj), 'my_role': self.get_my_role(obj),
@@ -202,8 +208,29 @@ class ConversationSerializer(serializers.ModelSerializer):
         return bool(mine and mine.is_favorite)
 
     def get_is_muted(self, obj):
+        # الكتم لمدة ينتهي وحده: بعد muted_until لا تُعدّ المحادثة مكتومة
         mine = self._mine(obj)
-        return bool(mine and mine.is_muted)
+        return bool(mine and mine.is_muted and (mine.muted_until is None or mine.muted_until > timezone.now()))
+
+    def get_settings(self, obj, mine, admin):
+        """إعدادات المحادثة: الخاصة بي (الكتم حتى متى، والخلفية) والعامة (الرسائل المختفية وإعدادات المجموعة)."""
+        muted = self.get_is_muted(obj)
+        if obj.kind == Conversation.CHANNEL or (obj.kind == Conversation.GROUP and obj.only_admins_post):
+            can_post = admin
+        else:
+            can_post = mine is not None
+        data = {
+            'muted_until': iso(mine.muted_until) if muted and mine.muted_until else None,
+            'wallpaper': mine.wallpaper if mine else '',
+            'disappear_after': obj.disappear_after,
+            'only_admins_post': obj.only_admins_post, 'only_admins_edit': obj.only_admins_edit,
+            'slow_mode': obj.slow_mode, 'can_post': can_post,
+            'can_edit_info': admin or (obj.kind == Conversation.GROUP and not obj.only_admins_edit),
+        }
+        # رابط الدعوة للمشرفين فقط، وفي صفحة المحادثة لا في القائمة
+        if admin and obj.kind == Conversation.GROUP and not self.context.get('compact'):
+            data['invite_code'] = obj.invite_code
+        return data
 
     def get_is_archived(self, obj):
         mine = self._mine(obj)

@@ -42,10 +42,28 @@ export const ROLE_LABELS: Record<Role, string> = { student: "طالب", faculty:
 
 /** الوضع: نهاري / ليلي / تلقائي (حسب الجهاز). مو ثيم */
 export type Mode = "light" | "dark" | "system";
-/** الثيم = شكل التطبيق. هسه بس الأساسي، والثيمات الثانية تنضاف بعدين */
-export type Theme = "default";
+/** الثيم = لون التطبيق (مستقل عن النهاري والليلي) */
+export type Theme = "default" | "green" | "blue" | "pink" | "orange" | "grey";
+export const THEMES: { id: Theme; label: string; color: string }[] = [
+  { id: "default", label: "البنفسجي", color: "#6c5ce7" },
+  { id: "green", label: "الأخضر", color: "#0f9d6b" },
+  { id: "blue", label: "الأزرق", color: "#2f6fed" },
+  { id: "pink", label: "الوردي", color: "#e0457b" },
+  { id: "orange", label: "البرتقالي", color: "#ea7a1f" },
+  { id: "grey", label: "الرمادي", color: "#5b6477" },
+];
+/** خلفية المحادثات (عامة في الإعدادات، أو خاصة بمحادثة) */
+export type Wallpaper = "doodles" | "plain" | "gradient" | "dots" | "campus" | "none";
+export const WALLPAPERS: { id: Wallpaper; label: string }[] = [
+  { id: "doodles", label: "الزخارف" },
+  { id: "plain", label: "سادة" },
+  { id: "gradient", label: "متدرّجة" },
+  { id: "dots", label: "نقاط" },
+  { id: "campus", label: "صورة الكلية" },
+  { id: "none", label: "بلا خلفية" },
+];
 /** أنا: نفس User + إعداداتي الخاصة */
-export type Me = User & { mode: Mode; theme: Theme; language: Lang; email: string; university_id: string; hide_preview: boolean };
+export type Me = User & { mode: Mode; theme: Theme; wallpaper: Wallpaper; language: Lang; email: string; university_id: string; hide_preview: boolean };
 
 export type MessageKind = "text" | "image" | "video" | "voice" | "file" | "location" | "system" | "call";
 /** sent = ✓ ، delivered = ✓✓ رمادي ، read = ✓✓ أزرق */
@@ -76,6 +94,8 @@ export type Message = {
   reply_to: ReplyPreview | null;
   created_at: string;
   edited_at: string | null;
+  /** الرسائل المختفية: وقت حذفها */
+  expires_at?: string | null;
   is_deleted: boolean;
   status: MessageStatus;
   is_read: boolean;
@@ -101,7 +121,30 @@ export type Conversation = {
   last_message: Message | null;
   unread_count: number;
   created_at: string;
+  /** الكتم لمدة: حتى متى (null = دائم أو غير مكتومة) */
+  muted_until: string | null;
+  /** خلفية هذه المحادثة عندي ("" = خلفية الثيم) */
+  wallpaper: Wallpaper | "";
+  /** الرسائل المختفية بعد كم ثانية (0 = لا) */
+  disappear_after: number;
+  only_admins_post: boolean;
+  only_admins_edit: boolean;
+  /** الوضع البطيء: ثوانٍ بين رسالتين لغير المشرف */
+  slow_mode: number;
+  /** أستطيع الإرسال؟ (القناة ومجموعة «للمشرفين فقط») */
+  can_post: boolean;
+  can_edit_info: boolean;
+  /** رابط الدعوة (للمشرف، في صفحة المحادثة فقط) */
+  invite_code?: string | null;
 };
+
+/** رسالة مجدولة (نص) */
+export type ScheduledMessage = {
+  id: number; conversation: number; content: string; send_at: string; silent: boolean;
+  status: "pending" | "sending" | "failed"; error: string; reply_to: number | null; created_at: string;
+};
+/** معاينة مجموعة من رابط دعوة */
+export type InvitePreview = { id: number; title: string; description: string; avatar: string | null; member_count: number; is_member: boolean };
 
 export type Member = { user: User; role: "admin" | "member"; joined_at: string };
 
@@ -137,6 +180,8 @@ export type Call = {
   answered_at: string | null;
   ended_at: string | null;
   duration: number | null;
+  /** من في المكالمة الآن (المجموعة) */
+  participants?: number[];
   ice_servers?: RTCIceServer[];
 };
 

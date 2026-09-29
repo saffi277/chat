@@ -89,14 +89,16 @@ class MeSerializer(UserSerializer):
 
     class Meta(UserSerializer.Meta):
         # البريد والرقم الجامعي خاصين: يطلعن إلي بس، مو للناس
-        fields = UserSerializer.Meta.fields + ['mode', 'theme', 'language', 'email', 'university_id', 'hide_preview']
+        fields = UserSerializer.Meta.fields + ['mode', 'theme', 'wallpaper', 'language', 'email', 'university_id',
+                                               'hide_preview']
 
     def get_university_id(self, user):
         return profile_of(user).university_id
 
     def to_representation(self, user):
         p = profile_of(user)
-        return {**user_json(user), 'mode': p.mode, 'theme': p.theme, 'language': p.language, 'email': user.email,
+        return {**user_json(user), 'mode': p.mode, 'theme': p.theme, 'wallpaper': p.wallpaper, 'language': p.language,
+                'email': user.email,
                 'university_id': p.university_id, 'hide_preview': p.hide_preview}
 
     def get_mode(self, user):
@@ -144,7 +146,8 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ['display_name', 'avatar', 'bio', 'phone', 'city', 'mode', 'theme', 'language', 'hide_preview']
+        fields = ['display_name', 'avatar', 'bio', 'phone', 'city', 'mode', 'theme', 'wallpaper', 'language',
+                  'hide_preview']
 
     def validate_display_name(self, value):
         return value.strip()

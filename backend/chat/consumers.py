@@ -10,12 +10,12 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.db.models import F
 from django.db.models.functions import Greatest
-from django.utils import timezone
+from django.utils import timezone, translation
 
 from accounts.models import Profile
 
-from .models import Conversation, Membership, Message
-from .services import contact_ids, create_message, group_name, mark_delivered, user_group
+from .models import Membership, Message
+from .services import contact_ids, create_message, group_name, mark_delivered, post_error, user_group
 
 # حدّ الإرسال عبر WebSocket لكل اتصال (مثل SendThrottle في HTTP): 20 رسالة كل 10 ثوانٍ،
 # و«يكتب الآن» مرة في الثانية على الأكثر. ما زاد يُهمل، فلا يستطيع أحد إغراق المحادثة أو الخادم.
@@ -53,8 +53,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 if not self.allow_message():
                     await self.send_json({'type': 'error', 'detail': 'rate_limited'})
                     return
-                # create_message نفسها تبث الرسالة للكل
-                await self.send_text_message(text, content.get('reply_to'))
+                # create_message نفسها تبث الرسالة للكل. وإن مُنع (مجموعة للمشرفين، أو الوضع البطيء) نخبره بالسبب
+                err = await self.send_text_message(text, content.get('reply_to'), content.get('silent') is True)
+                if err:
+                    await self.send_json({'type': 'error', 'detail': err[0], 'message': err[1]})
         elif content.get('type') == 'typing' and self.can_post and self.allow_typing():
             await self.channel_layer.group_send(
                 self.group, {'type': 'chat.event', 'payload': {'type': 'typing', 'user_id': self.user.id,
@@ -83,19 +85,25 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def is_participant(self):
         m = Membership.objects.filter(conversation_id=self.conv_id, user=self.user).select_related('conversation').first()
-        # القناة: المشترك يستقبل فقط (لا يرسل ولا يظهر «يكتب الآن»)
-        self.can_post = bool(m) and (m.conversation.kind != Conversation.CHANNEL or m.role == Membership.ADMIN)
+        # القناة (ومجموعة «الإرسال للمشرفين»): غير المشرف يستقبل فقط، ولا يظهر عنه «يكتب الآن»
+        self.can_post = bool(m) and post_error(m, check_slow=False) is None
         return m is not None
 
     @database_sync_to_async
-    def send_text_message(self, text, reply_to):
-        conv = Conversation.objects.get(pk=self.conv_id)
-        # نتحقق من جديد في كل رسالة: ربما أُلغي إشرافه والاتصال مفتوح
-        if conv.kind == Conversation.CHANNEL and not Membership.objects.filter(
-                conversation=conv, user=self.user, role=Membership.ADMIN).exists():
-            return
+    def send_text_message(self, text, reply_to, silent=False):
+        # نتحقق من جديد في كل رسالة: ربما أُلغي إشرافه أو غيّر المشرف الإعدادات والاتصال مفتوح
+        m = Membership.objects.filter(conversation_id=self.conv_id, user=self.user).select_related('conversation').first()
+        if not m:
+            return 'not_allowed', ''
+        # نص الخطأ بلغة المستخدم (لا طلب HTTP هنا يحدد اللغة)
+        with translation.override(getattr(getattr(self.user, 'profile', None), 'language', 'ar')):
+            err = post_error(m)
+        if err:
+            return err
+        conv = m.conversation
         reply = Message.objects.filter(pk=reply_to, conversation=conv).first() if reply_to else None
-        create_message(conv, self.user, text, reply_to=reply)
+        create_message(conv, self.user, text, silent=silent, reply_to=reply)
+        return None
 
 
 class PresenceConsumer(AsyncJsonWebsocketConsumer):

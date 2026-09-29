@@ -10,6 +10,7 @@ import { useT } from "@/lib/i18n";
 import { CallOverlay, CallsView } from "./Calls";
 import { ChatList, NavBar } from "./ChatList";
 import { Conversation } from "./Conversation";
+import { ConvSettingsPanel, JoinDialog, MuteDialog } from "./ConvSettings";
 import { Icon } from "./icons";
 import { LocationPanel } from "./Location";
 import { AddContactPanel, PeopleView } from "./People";
@@ -69,7 +70,7 @@ function useVisibleViewport() {
 }
 
 function Shell() {
-  const { theme, tab, activeId, convs, panel, storyViewer, call, toast } = useWasl();
+  const { me, theme, tab, activeId, convs, panel, storyViewer, call, toast, muteDialog, setMuteDialog, joinCode, setJoinCode } = useWasl();
   useT(); // يعيد رسم الهيكل كله عند تغيير اللغة
   useVisibleViewport();
   // لون شريط الحالة في الهاتف يتبع وضع التطبيق (لا وضع الجهاز)
@@ -79,7 +80,8 @@ function Shell() {
   }, [theme]);
   const active = convs.find((c) => c.id === activeId);
   return (
-    <div className="wasl wasl-shell overflow-hidden" data-theme={theme}>
+    // الوضع (نهاري/ليلي) والثيم (اللون) والخلفية ثلاثة اختيارات مستقلة
+    <div className="wasl wasl-shell overflow-hidden" data-theme={theme} data-accent={me.theme || "default"} data-wallpaper={me.wallpaper || "doodles"}>
       {/* في الحاسوب يمتد التطبيق على الشاشة كلها، وعرض القائمة يتدرج مع حجم الشاشة */}
       <div className="flex h-full">
         <aside className={`${active ? "hidden md:flex" : "flex"} w-split relative w-full shrink-0 flex-col overflow-hidden md:w-[360px] md:border-e lg:w-[400px] 2xl:w-[440px]`}
@@ -108,10 +110,14 @@ function Shell() {
       {panel?.type === "newChannel" && <NewChannelPanel />}
       {panel?.type === "channels" && <ChannelsPanel />}
       {panel?.type === "storyCompose" && <StoryComposer />}
+      {panel?.type === "convSettings" && <ConvSettingsPanel convId={panel.convId} />}
+      {muteDialog !== null && <MuteDialog convId={muteDialog} onClose={() => setMuteDialog(null)} />}
+      {joinCode && <JoinDialog code={joinCode} onClose={() => setJoinCode(null)} />}
       {storyViewer && <StoryViewer />}
       {call && <CallOverlay />}
       {toast && (
-        <div className="fixed inset-x-4 bottom-24 z-[70] mx-auto w-fit max-w-sm rounded-full bg-[#1f2937] px-5 py-3 text-center text-sm font-semibold text-white shadow-lg" role="status">{toast}</div>
+        // أثناء المكالمة يظهر في الأعلى حتى لا يغطي زري الرد والرفض
+        <div className={`fixed inset-x-4 z-[70] mx-auto w-fit max-w-sm rounded-full bg-[#1f2937] px-5 py-3 text-center text-sm font-semibold text-white shadow-lg ${call ? "top-[max(1rem,env(safe-area-inset-top))]" : "bottom-24"}`} role="status">{toast}</div>
       )}
     </div>
   );

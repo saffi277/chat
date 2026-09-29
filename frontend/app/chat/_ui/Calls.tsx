@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import type { Call } from "@/lib/api";
+import { canShareScreen, type GroupPeer } from "@/lib/call";
 import { useT } from "@/lib/i18n";
 import { calls as callsApi, conversations as convApi } from "@/lib/endpoints";
 import { Avatar, Chip, duration, Empty, IconButton, listTime, nameOf } from "./bits";
@@ -91,7 +92,7 @@ function Timer({ since }: { since: number }) {
 
 export function CallOverlay() {
   const t = useT();
-  const { call, acceptCall, declineCall, hangup, toggleMute, toggleCamera, enableVideo } = useWasl();
+  const { call, acceptCall, declineCall, hangup, toggleMute, toggleCamera, enableVideo, toggleScreen } = useWasl();
   const [speaker, setSpeaker] = useState(true);
   const remoteAudio = useRef<HTMLAudioElement>(null);
   useEffect(() => {
@@ -101,9 +102,13 @@ export function CallOverlay() {
     if (remoteAudio.current) remoteAudio.current.volume = speaker ? 1 : 0.35;
   }, [speaker]);
   if (!call) return null;
+  // المكالمة الجماعية بعد الرد: شبكة المشاركين
+  if (call.call.conversation_kind === "group" && call.phase !== "incoming" && call.phase !== "ended") return <GroupCallView />;
 
   const video = call.call.kind === "video";
-  const peerName = call.peer ? nameOf(call.peer) : "";
+  const groupIncoming = call.call.conversation_kind === "group";
+  // المجموعة: اسمها في الأعلى، ومن يتصل تحته
+  const peerName = groupIncoming ? call.call.title : call.peer ? nameOf(call.peer) : "";
   const statusText =
     call.phase === "incoming" ? t(video ? "مكالمة فيديو واردة..." : "مكالمة صوتية واردة...")
       : call.phase === "outgoing" ? t("يرنّ...")
@@ -129,7 +134,8 @@ export function CallOverlay() {
             <div className={`rounded-full p-1.5 ${call.phase === "incoming" || call.phase === "outgoing" ? "w-pulse" : ""}`}>
               <Avatar user={call.peer} size={132} ring />
             </div>
-            <h2 className="mt-6 text-3xl font-extrabold">{peerName}</h2>
+            <h2 className="mt-6 text-3xl font-extrabold" dir="auto">{peerName}</h2>
+            {groupIncoming && call.peer && <p className="mt-1 text-sm font-semibold">{t("{name} يتصل بالمجموعة", { name: nameOf(call.peer) })}</p>}
             <p className="w-muted mt-2 text-lg font-bold" dir="ltr">{statusText ?? (call.startedAt ? <Timer since={call.startedAt} /> : "")}</p>
             {call.phase === "active" && (
               <div className="w-wave mt-8 flex h-10 items-center gap-1" aria-hidden>
@@ -167,6 +173,9 @@ export function CallOverlay() {
                     disabled={call.phase !== "active" && call.phase !== "connecting"} />
                 )}
                 {!myCamera && <Ctl icon="speaker" label={t("مكبّر الصوت")} on={speaker} onClick={() => setSpeaker((s) => !s)} />}
+                {canShareScreen() && call.phase === "active" && (
+                  <Ctl icon="screen" label={t(call.sharing ? "إيقاف المشاركة" : "مشاركة الشاشة")} on={!!call.sharing} onClick={toggleScreen} />
+                )}
               </div>
               <button onClick={hangup} aria-label={t("إنهاء المكالمة")} className="w-danger grid h-18 w-18 place-items-center rounded-full p-5 shadow-lg">
                 <Icon name="phoneOff" size={30} />
@@ -179,7 +188,84 @@ export function CallOverlay() {
   );
 }
 
-function Ctl({ icon, label, on, onClick, disabled }: { icon: "mic" | "micOff" | "video" | "videoOff" | "speaker"; label: string; on: boolean; onClick: () => void; disabled?: boolean }) {
+// ------------------------------------------------------------ المكالمة الجماعية: شبكة المشاركين
+function GroupCallView() {
+  const t = useT();
+  const { call, me, userById, hangup, toggleMute, toggleCamera, enableVideo, toggleScreen } = useWasl();
+  if (!call) return null;
+  const peers = call.peers ?? [];
+  const myCamera = !!call.local?.getVideoTracks().length;
+  const tiles = peers.length + 1;
+  const cols = tiles <= 1 ? "grid-cols-1" : tiles <= 4 ? "grid-cols-2" : "grid-cols-3";
+  const waiting = call.phase === "outgoing" || (call.phase === "active" && peers.length === 0);
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col bg-[#0b0f1a] text-white" role="dialog" aria-label={t("مكالمة جماعية")}>
+      <header className="shrink-0 px-4 pb-2 pt-[max(1rem,env(safe-area-inset-top))] text-center">
+        <div className="text-lg font-extrabold" dir="auto">{call.call.title || t("مكالمة جماعية")}</div>
+        <div className="text-sm text-white/70" dir="ltr">
+          {waiting ? t("يرنّ عند الأعضاء...") : call.startedAt ? <Timer since={call.startedAt} /> : t("جارٍ الاتصال...")}
+          {" • "}{t("المشاركون: {n}", { n: tiles })}
+        </div>
+      </header>
+      <div className={`grid min-h-0 flex-1 auto-rows-fr gap-2 p-2 ${cols}`}>
+        <Tile name={t("أنت")} user={me} stream={call.local} video={myCamera && !call.cameraOff} muted={call.muted} self sharing={call.sharing} />
+        {peers.map((p) => <PeerTile key={p.userId} peer={p} name={nameOf(userById(p.userId) ?? { display_name: "", username: t("عضو") })} user={userById(p.userId)} />)}
+      </div>
+      <div className="flex shrink-0 items-center justify-center gap-4 p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+        <RoundBtn icon={call.muted ? "micOff" : "mic"} label={t(call.muted ? "إلغاء الكتم" : "كتم الصوت")} on={call.muted} onClick={toggleMute} />
+        {myCamera
+          ? <RoundBtn icon={call.cameraOff ? "videoOff" : "video"} label={t(call.cameraOff ? "تشغيل الكاميرا" : "إيقاف الكاميرا")} on={call.cameraOff} onClick={toggleCamera} />
+          : <RoundBtn icon="video" label={t("تشغيل الكاميرا")} on={false} onClick={enableVideo} />}
+        {canShareScreen() && <RoundBtn icon="screen" label={t(call.sharing ? "إيقاف المشاركة" : "مشاركة الشاشة")} on={!!call.sharing} onClick={toggleScreen} />}
+        <button onClick={hangup} aria-label={t("مغادرة المكالمة")} title={t("مغادرة المكالمة")} className="w-danger grid h-14 w-14 place-items-center rounded-full shadow-lg">
+          <Icon name="phoneOff" size={26} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PeerTile({ peer, name, user }: { peer: GroupPeer; name: string; user?: Parameters<typeof Avatar>[0]["user"] }) {
+  const audio = useRef<HTMLAudioElement>(null);
+  useEffect(() => {
+    if (audio.current && audio.current.srcObject !== peer.stream) audio.current.srcObject = peer.stream;
+  }, [peer.stream]);
+  return (
+    <>
+      <Tile name={name} user={user} stream={peer.stream} video={peer.video} connecting={peer.state !== "connected"} />
+      {/* الصوت من عنصر audio (الفيديو مكتوم كي لا يتكرر الصوت) */}
+      <audio ref={audio} autoPlay />
+    </>
+  );
+}
+
+function Tile({ name, user, stream, video, muted, self, sharing, connecting }: {
+  name: string; user?: Parameters<typeof Avatar>[0]["user"]; stream: MediaStream | null; video: boolean; muted?: boolean; self?: boolean; sharing?: boolean; connecting?: boolean;
+}) {
+  const t = useT();
+  return (
+    <div className="relative grid min-h-0 place-items-center overflow-hidden rounded-2xl bg-white/[.06]" data-testid="call-tile">
+      {video && stream
+        ? <Video stream={stream} muted className={`absolute inset-0 h-full w-full ${sharing ? "object-contain" : "object-cover"} ${self && !sharing ? "-scale-x-100" : ""}`} />
+        : <Avatar user={user ?? null} name={name} size={72} />}
+      <span className="absolute bottom-2 start-2 flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-xs font-bold">
+        {muted && <Icon name="micOff" size={12} />}{name}{sharing && ` • ${t("يشارك الشاشة")}`}
+      </span>
+      {connecting && <span className="absolute top-2 end-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px]">{t("جارٍ الاتصال...")}</span>}
+    </div>
+  );
+}
+
+function RoundBtn({ icon, label, on, onClick }: { icon: "mic" | "micOff" | "video" | "videoOff" | "screen"; label: string; on: boolean; onClick: () => void }) {
+  return (
+    <button onClick={onClick} aria-label={label} title={label} aria-pressed={on}
+      className={`grid h-14 w-14 place-items-center rounded-full transition ${on ? "bg-white text-[#0b0f1a]" : "bg-white/15 text-white"}`}>
+      <Icon name={icon} size={24} />
+    </button>
+  );
+}
+
+function Ctl({ icon, label, on, onClick, disabled }: { icon: "mic" | "micOff" | "video" | "videoOff" | "speaker" | "screen"; label: string; on: boolean; onClick: () => void; disabled?: boolean }) {
   return (
     <button onClick={onClick} disabled={disabled} className="grid justify-items-center gap-1.5 text-xs font-bold disabled:opacity-40" aria-label={label} aria-pressed={on}>
       <span className={`grid h-16 w-16 place-items-center rounded-full ${on ? "w-accent" : "w-card"}`}><Icon name={icon} size={26} /></span>

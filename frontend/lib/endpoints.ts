@@ -9,6 +9,8 @@ import {
   type Conversation,
   type Me,
   type Member,
+  type ScheduledMessage,
+  type InvitePreview,
   type Message,
   type MessageKind,
   type Role,
@@ -37,7 +39,7 @@ export const auth = {
   me: () => api<Me>("/auth/me/"),
   /** تسجيل خروج: التوكن ينمسح من السيرفر (all = من كل الأجهزة) */
   logout: (all = false) => api("/auth/logout/", "POST", { all }),
-  updateMe: (data: Partial<Pick<Me, "display_name" | "bio" | "phone" | "city" | "email" | "mode" | "theme" | "language" | "hide_preview">>) =>
+  updateMe: (data: Partial<Pick<Me, "display_name" | "bio" | "phone" | "city" | "email" | "mode" | "theme" | "wallpaper" | "language" | "hide_preview">>) =>
     api<Me>("/auth/me/", "PATCH", data),
   setAvatar: (file: File | null) => {
     if (!file) return api<Me>("/auth/me/", "PATCH", { avatar: null });
@@ -85,9 +87,15 @@ export const conversations = {
   saved: () => api<Conversation>("/conversations/saved/"),
   createGroup: (title: string, memberIds: number[], description = "") =>
     api<Conversation>("/conversations/groups/", "POST", { title, member_ids: memberIds, description }),
-  /** إعداداتي: مفضلة، كتم، أرشفة */
-  setPrefs: (id: number, prefs: Partial<Pick<Conversation, "is_favorite" | "is_muted" | "is_archived" | "is_pinned">>) =>
+  /** إعداداتي: مفضلة، كتم (mute_hours = لمدة)، أرشفة، خلفية هذه المحادثة */
+  setPrefs: (id: number, prefs: Partial<Pick<Conversation, "is_favorite" | "is_muted" | "is_archived" | "is_pinned" | "wallpaper">> & { mute_hours?: number }) =>
     api<Conversation>(`/conversations/${id}/`, "PATCH", prefs),
+  /** الرسائل المختفية، وإعدادات المجموعة (للمشرف) */
+  setSettings: (id: number, data: Partial<Pick<Conversation, "disappear_after" | "only_admins_post" | "only_admins_edit" | "slow_mode">>) =>
+    api<Conversation>(`/conversations/${id}/`, "PATCH", data),
+  /** رابط دعوة جديد (يلغي القديم)، أو إلغاؤه */
+  createInvite: (id: number) => api<{ invite_code: string }>(`/conversations/${id}/invite/`, "POST"),
+  revokeInvite: (id: number) => api<{ invite_code: null }>(`/conversations/${id}/invite/`, "DELETE"),
   /** المشرف بس: اسم ووصف المجموعة */
   updateGroup: (id: number, data: { title?: string; description?: string }) =>
     api<Conversation>(`/conversations/${id}/`, "PATCH", data),
@@ -125,8 +133,15 @@ export const messages = {
   /** آخر 50 رسالة. للأقدم مرر before = id أقدم رسالة عندك */
   list: (conversationId: number, before?: number) =>
     api<Message[]>(`/conversations/${conversationId}/messages/${qs({ before })}`),
-  sendText: (conversationId: number, content: string, replyTo?: number) =>
-    api<Message>(`/conversations/${conversationId}/messages/`, "POST", { content, reply_to: replyTo }),
+  sendText: (conversationId: number, content: string, replyTo?: number, silent?: boolean) =>
+    api<Message>(`/conversations/${conversationId}/messages/`, "POST", { content, reply_to: replyTo, silent }),
+  /** الرسائل المجدولة (رسائلي في هذه المحادثة) */
+  scheduled: (conversationId: number) => api<ScheduledMessage[]>(`/conversations/${conversationId}/scheduled/`),
+  schedule: (conversationId: number, content: string, sendAt: Date, opts: { silent?: boolean; replyTo?: number } = {}) =>
+    api<ScheduledMessage>(`/conversations/${conversationId}/scheduled/`, "POST", {
+      content, send_at: sendAt.toISOString(), silent: opts.silent, reply_to: opts.replyTo,
+    }),
+  cancelScheduled: (id: number) => api(`/scheduled/${id}/`, "DELETE"),
   /** صورة/فيديو/صوت/ملف. للصوت مرر duration بالثواني */
   sendFile: (conversationId: number, file: File | Blob, opts: SendFileOpts = {}) => {
     const form = new FormData();
@@ -158,6 +173,12 @@ export const messages = {
   starred: (conversationId?: number) => api<Message[]>(`/starred/${qs({ conversation: conversationId })}`),
 };
 
+// ---------------------------------------------------------------- رابط الدعوة
+export const invites = {
+  preview: (code: string) => api<InvitePreview>(`/invite/${encodeURIComponent(code)}/`),
+  join: (code: string) => api<Conversation>(`/invite/${encodeURIComponent(code)}/`, "POST"),
+};
+
 // ---------------------------------------------------------------- الحالات
 export const stories = {
   feed: (kind?: "image" | "video" | "text") => api<StoryGroup[]>(`/stories/${qs({ kind })}`),
@@ -180,6 +201,10 @@ export const calls = {
   answer: (id: number) => api<Call>(`/calls/${id}/answer/`, "POST"),
   decline: (id: number) => api(`/calls/${id}/decline/`, "POST"),
   end: (id: number) => api<Call>(`/calls/${id}/end/`, "POST"),
+  /** مغادرة المكالمة الجماعية (تبقى لمن بقي) */
+  leave: (id: number) => api<Call>(`/calls/${id}/leave/`, "POST"),
+  /** المكالمة الجارية في محادثة (لزر «انضمام») */
+  active: async (conversationId: number) => (await api<{ call: Call | null }>(`/calls/active/${qs({ conversation: conversationId })}`)).call,
   iceServers: () => api<{ ice_servers: RTCIceServer[] }>("/calls/ice/"),
   /** المكالمة التي ترنّ لي الآن (عند فتح التطبيق من إشعار مكالمة) */
   ringing: async () => (await api<{ call: Call | null }>("/calls/ringing/")).call,

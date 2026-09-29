@@ -24,8 +24,14 @@ class Profile(models.Model):
     # الوضع: نهاري/ليلي (مو ثيم). والثيم (شكل التطبيق) شي منفصل، نضيف ثيمات بعدين
     MODES = [('light', 'نهاري'), ('dark', 'ليلي'), ('system', 'تلقائي')]
     mode = models.CharField(max_length=10, choices=MODES, default='system')
-    THEMES = [('default', 'الأساسي')]
+    # الثيم = لون التطبيق (الإبراز والفقاعات والعدّادات)، مستقل عن الوضع النهاري والليلي
+    THEMES = [('default', 'البنفسجي (الأساسي)'), ('green', 'الأخضر'), ('blue', 'الأزرق'), ('pink', 'الوردي'),
+              ('orange', 'البرتقالي'), ('grey', 'الرمادي')]
     theme = models.CharField(max_length=20, choices=THEMES, default='default')
+    # خلفية المحادثات (ولكل محادثة أن تغيّرها لنفسها: Membership.wallpaper)
+    WALLPAPERS = [('doodles', 'الزخارف'), ('plain', 'سادة'), ('gradient', 'متدرّجة'), ('dots', 'نقاط'),
+                  ('campus', 'صورة الكلية'), ('none', 'بلا خلفية')]
+    wallpaper = models.CharField(max_length=20, choices=WALLPAPERS, default='doodles')
     # إخفاء نص الرسالة بالإشعار (يطلع "رسالة جديدة" بس): للي يخاف أحد يشوف شاشة موبايله
     hide_preview = models.BooleanField(default=False)
     # لغة الواجهة (وتُستخدم أيضاً لنص الإشعارات التي تصله)

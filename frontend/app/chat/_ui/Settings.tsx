@@ -1,15 +1,16 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { ROLE_LABELS, type Me, type Mode } from "@/lib/api";
+import { ROLE_LABELS, THEMES, WALLPAPERS, type Me, type Mode } from "@/lib/api";
 import { auth } from "@/lib/endpoints";
 import { LANGS, setLang, useT } from "@/lib/i18n";
 import { howToEnable, isStandalone, PERM_LABELS, permState, platform, requestPerm, type PermName, type PermState } from "@/lib/permissions";
 import { disablePush, enablePush, getPushState, testPush, type PushState } from "@/lib/push";
 import { Avatar, IconButton, nameOf, Section, Toggle } from "./bits";
+import { WallTile } from "./ConvSettings";
 import { Icon } from "./icons";
 import { useWasl } from "./store";
 
-// الوضع نهاري/ليلي (وليس سمة). السمات تُضاف لاحقاً كقسم مستقل
+// الوضع نهاري/ليلي (وليس ثيماً). الثيم (اللون والخلفية) قسم مستقل: «الثيمات»
 const modes: { value: Mode; label: string; icon: "sun" | "moon" | "device" }[] = [
   { value: "light", label: "نهاري", icon: "sun" },
   { value: "dark", label: "ليلي", icon: "moon" },
@@ -17,7 +18,7 @@ const modes: { value: Mode; label: string; icon: "sun" | "moon" | "device" }[] =
 ];
 
 // ------------------------------------------------------------ الإعدادات: قائمة أقسام، وكل قسم في صفحته
-type Page = "account" | "appearance" | "language" | "notifications" | "permissions";
+type Page = "account" | "appearance" | "themes" | "language" | "notifications" | "permissions";
 type IconName = Parameters<typeof Icon>[0]["name"];
 
 /** الحفظ في الخادم مع رسالة نجاح/خطأ (مشترك بين الصفحات) */
@@ -46,11 +47,12 @@ export function SettingsView() {
   const [page, setPage] = useState<Page | null>(null);
 
   if (page) {
-    const titles: Record<Page, string> = { account: "معلوماتي", appearance: "المظهر", language: "اللغة", notifications: "الإشعارات", permissions: "الأذونات" };
+    const titles: Record<Page, string> = { account: "معلوماتي", appearance: "المظهر", themes: "الثيمات", language: "اللغة", notifications: "الإشعارات", permissions: "الأذونات" };
     return (
       <SubPage title={t(titles[page])} onBack={() => setPage(null)}>
         {page === "account" && <AccountPage />}
         {page === "appearance" && <AppearancePage />}
+        {page === "themes" && <ThemesPage />}
         {page === "language" && <LanguagePage />}
         {page === "notifications" && <NotificationsPage />}
         {page === "permissions" && <><p className="w-muted mb-1 mt-3 px-1 text-xs leading-6">{t("تحكّم في ما يستطيع التطبيق استخدامه في جهازك.")}</p><Section><PermissionsList /></Section></>}
@@ -79,6 +81,8 @@ export function SettingsView() {
         <Group>
           <Row icon="user" color="#6c5ce7" label={t("معلوماتي")} onClick={() => setPage("account")} />
           <Row icon={me.mode === "dark" ? "moon" : "sun"} color="#0ea5e9" label={t("المظهر")} value={t(modeLabel)} onClick={() => setPage("appearance")} />
+          <Row icon="palette" color={THEMES.find((x) => x.id === me.theme)?.color ?? "#6c5ce7"} label={t("الثيمات")}
+            value={t(THEMES.find((x) => x.id === me.theme)?.label ?? "البنفسجي")} onClick={() => setPage("themes")} />
           <Row icon="globe" color="#10b981" label={t("اللغة")} value={LANGS.find((l) => l.value === me.language)?.label} onClick={() => setPage("language")} />
           <Row icon="bell" color="#f43f5e" label={t("الإشعارات")} onClick={() => setPage("notifications")} />
           <Row icon="shield" color="#f59e0b" label={t("الأذونات")} onClick={() => setPage("permissions")} />
@@ -226,6 +230,55 @@ function AppearancePage() {
         ))}
       </div>
     </Group>
+  );
+}
+
+/** الثيمات: لون التطبيق وخلفية المحادثات، مع معاينة حيّة. مستقلة عن الوضع النهاري والليلي */
+function ThemesPage() {
+  const t = useT();
+  const { me } = useWasl();
+  const { busy, run } = useSave();
+  return (
+    <>
+      {/* معاينة: تتغير فوراً مع الاختيار */}
+      <div className="w-chat-bg mt-3 overflow-hidden rounded-[22px] p-4" style={{ boxShadow: "var(--soft-shadow)" }} aria-hidden>
+        <div className="w-bubble-in w-fit max-w-[75%] rounded-[18px] px-3.5 py-2 text-sm">{t("مرحباً! هل رأيت جدول الامتحانات؟")}</div>
+        <div className="w-bubble-out ms-auto mt-2 w-fit max-w-[75%] rounded-[18px] px-3.5 py-2 text-sm">{t("نعم، أرسلته في المجموعة 👍")}
+          <span className="mt-0.5 flex justify-end" style={{ color: "var(--tick-read)" }}><Icon name="checks" size={14} /></span>
+        </div>
+        <div className="mt-3 flex items-center gap-2">
+          <span className="w-accent grid h-9 w-9 place-items-center rounded-full"><Icon name="send" size={16} /></span>
+          <span className="w-badge grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-xs font-bold">3</span>
+          <span className="w-tint rounded-full px-3 py-1 text-xs font-bold">{t("الكل")}</span>
+        </div>
+      </div>
+      <p className="w-muted mb-1 mt-4 px-1 text-xs leading-6">{t("اللون يغيّر الأزرار والفقاعات والعدّادات، ويعمل في الوضعين النهاري والليلي.")}</p>
+      <Section title={t("لون التطبيق")}>
+        <div role="radiogroup" aria-label={t("لون التطبيق")} className="grid grid-cols-3 gap-3">
+          {THEMES.map((th) => {
+            const on = (me.theme || "default") === th.id;
+            return (
+              <button key={th.id} role="radio" aria-checked={on} onClick={() => !busy && !on && run(() => auth.updateMe({ theme: th.id }))}
+                className="grid justify-items-center gap-1.5 rounded-2xl py-2 text-xs font-bold" style={on ? { background: "var(--tint)" } : undefined}>
+                <span className="grid h-11 w-11 place-items-center rounded-full text-white shadow" style={{ background: th.color, outline: on ? `3px solid ${th.color}` : undefined, outlineOffset: 2 }}>
+                  {on && <Icon name="check" size={20} strokeWidth={3} />}
+                </span>
+                {t(th.label)}
+              </button>
+            );
+          })}
+        </div>
+      </Section>
+      <Section title={t("خلفية المحادثات")}>
+        <div className="grid grid-cols-3 gap-2">
+          {WALLPAPERS.map((w) => (
+            <WallTile key={w.id} id={w.id} label={t(w.label)} on={(me.wallpaper || "doodles") === w.id}
+              onClick={() => !busy && run(() => auth.updateMe({ wallpaper: w.id }))} />
+          ))}
+        </div>
+        <p className="w-muted mt-2 text-xs">{t("ولكل محادثة أن تختار خلفيتها: من ⋯ ← إعدادات المحادثة.")}</p>
+      </Section>
+    </>
   );
 }
 

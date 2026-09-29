@@ -5,7 +5,8 @@ from urllib.parse import urlparse
 
 from django.conf import settings
 from django.db import close_old_connections
-from django.utils import translation
+from django.db.models import Q
+from django.utils import timezone, translation
 from django.utils.translation import gettext as _
 from pywebpush import WebPushException, webpush
 
@@ -29,9 +30,13 @@ def notify_new_message(message, preview=None):
     conv = message.conversation
     if conv.kind == 'saved':
         return
-    subs = list(PushSubscription.objects.filter(
-        user__memberships__conversation_id=message.conversation_id,
-        user__memberships__is_muted=False).exclude(user=sender).select_related('user__profile'))
+    from chat.models import Membership
+    # من كتمها: دائماً، أو حتى وقت لم يأتِ بعد (بعده يعود الإشعار وحده)
+    now = timezone.now()
+    muted = Membership.objects.filter(conversation_id=message.conversation_id, is_muted=True).filter(
+        Q(muted_until__isnull=True) | Q(muted_until__gt=now)).values('user_id')
+    subs = list(PushSubscription.objects.filter(user__memberships__conversation_id=message.conversation_id)
+                .exclude(user=sender).exclude(user_id__in=muted).select_related('user__profile'))
     if not subs:
         return
     base = {'conversation': message.conversation_id, 'url': f'/chat?c={message.conversation_id}',

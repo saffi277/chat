@@ -6,6 +6,7 @@ import { channels as channelsApi, contacts as contactsApi, conversations as conv
 import { dateLocale, t as tr, useLang, useT } from "@/lib/i18n";
 import { Avatar, Chip, ConvAvatar, fileSize, IconButton, ImageViewer, lastSeenText, listTime, nameOf, Panel, preview, Section, StoryTap } from "./bits";
 import { Icon, type IconName } from "./icons";
+import { useMuteToggle } from "./ConvSettings";
 import { useUserSearch, useWasl } from "./store";
 
 function Action({ icon, label, onClick, active }: { icon: IconName; label: string; onClick: () => void; active?: boolean }) {
@@ -126,6 +127,7 @@ function useClearChat() {
 export function ContactPanel({ userId }: { userId: number }) {
   const t = useT();
   const { userById, convs, openWith, startCall, setPanel, refreshConvs, notify, isContact, contactAdded, contactRemoved, storyRing, openStory } = useWasl();
+  const toggleMute = useMuteToggle();
   const [user, setUser] = useState<User | null>(userById(userId) ?? null);
   const [menu, setMenu] = useState(false);
   const [info, setInfo] = useState(false);
@@ -209,7 +211,7 @@ export function ContactPanel({ userId }: { userId: number }) {
         <Action icon="chats" label={t("مراسلة")} active onClick={() => openWith(userId)} />
         <Action icon="phone" label={t("مكالمة صوتية")} onClick={() => call("audio")} />
         <Action icon="video" label={t("مكالمة فيديو")} onClick={() => call("video")} />
-        <Action icon={conv?.is_muted ? "bellOff" : "bell"} label={t(conv?.is_muted ? "إلغاء الكتم" : "كتم الإشعارات")} onClick={() => pref("is_muted")} />
+        <Action icon={conv?.is_muted ? "bellOff" : "bell"} label={t(conv?.is_muted ? "إلغاء الكتم" : "كتم الإشعارات")} onClick={() => (conv ? toggleMute(conv) : pref("is_muted"))} />
       </div>
       {info && (
         <Card>
@@ -224,6 +226,7 @@ export function ContactPanel({ userId }: { userId: number }) {
       {conv && <MediaCard convId={conv.id} />}
       <Card>
         <div className="w-divide">
+          <NavRow icon="settings" label={t("إعدادات المحادثة")} onClick={async () => setPanel({ type: "convSettings", convId: (await ensureConv()).id })} />
           <NavRow icon="pin" label={t("مشاركة الموقع")} onClick={async () => setPanel({ type: "location", convId: (await ensureConv()).id })} />
           <NavRow icon="lock" label={t("المحادثة السرية")} onClick={() => notify(t("المحادثة السرية قريباً 🔒"))}
             extra={<span className="w-tint rounded-full px-2 py-0.5 text-[10px] font-bold">{t("قريباً")}</span>} />
@@ -295,12 +298,15 @@ export function GroupPanel({ convId }: { convId: number }) {
   const [memberMenu, setMemberMenu] = useState<number | null>(null);
   const avatarPick = useRef<HTMLInputElement>(null);
   const clearChat = useClearChat();
+  const toggleMute = useMuteToggle();
   const load = () => convApi.members(convId).then(setMembers).catch(() => {});
   useEffect(() => {
     convApi.members(convId).then(setMembers).catch(() => {});
   }, [convId]);
   if (!conv) return null;
   const admin = conv.my_role === "admin";
+  // الاسم والصورة: للمشرف، أو لكل عضو إن سمح المشرفون (can_edit_info)
+  const canEdit = conv.can_edit_info ?? admin;
   // القناة: المشترك يرى المشرفين فقط، والمشرف يرى المشتركين ويعيّن مشرفين من التدريسيين والإداريين
   const channel = conv.kind === "channel";
 
@@ -316,9 +322,9 @@ export function GroupPanel({ convId }: { convId: number }) {
   return (
     <Panel title={t(channel ? "معلومات القناة" : "معلومات المجموعة")} onClose={() => setPanel(null)}>
       <div className="flex flex-col items-center pt-2 text-center">
-        <button className="relative" disabled={!admin} onClick={() => avatarPick.current?.click()} aria-label={t(channel ? "تغيير صورة القناة" : "تغيير صورة المجموعة")}>
+        <button className="relative" disabled={!canEdit} onClick={() => avatarPick.current?.click()} aria-label={t(channel ? "تغيير صورة القناة" : "تغيير صورة المجموعة")}>
           <ConvAvatar conv={conv} other={null} size={112} />
-          {admin && <span className="w-accent absolute bottom-1 end-1 grid h-9 w-9 place-items-center rounded-full"><Icon name="camera" size={17} /></span>}
+          {canEdit && <span className="w-accent absolute bottom-1 end-1 grid h-9 w-9 place-items-center rounded-full"><Icon name="camera" size={17} /></span>}
         </button>
         <input ref={avatarPick} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) act(() => convApi.setGroupAvatar(convId, f)); e.target.value = ""; }} />
         {editTitle !== null ? (
@@ -329,7 +335,7 @@ export function GroupPanel({ convId }: { convId: number }) {
         ) : (
           <h3 className="mt-3 flex items-center gap-2 text-2xl font-extrabold">
             {conv.title}
-            {admin && <button onClick={() => setEditTitle(conv.title)} aria-label={t("تعديل الاسم")} className="w-muted"><Icon name="edit" size={17} /></button>}
+            {canEdit && <button onClick={() => setEditTitle(conv.title)} aria-label={t("تعديل الاسم")} className="w-muted"><Icon name="edit" size={17} /></button>}
           </h3>
         )}
         <p className="w-muted mt-0.5 text-sm">{channel ? t("قناة • المشتركون: {n}", { n: conv.member_count }) : t("مجموعة • {n} أعضاء", { n: conv.member_count })}</p>
@@ -339,7 +345,7 @@ export function GroupPanel({ convId }: { convId: number }) {
         <Action icon={channel ? "megaphone" : "chats"} label={t(channel ? "المنشورات" : "مراسلة")} active onClick={() => { setPanel(null); openConv(convId); }} />
         {admin && <Action icon="userPlus" label={t(channel ? "إضافة مشتركين" : "إضافة أعضاء")} onClick={() => setAdding(true)} />}
         <Action icon="pinned" label={t(conv.is_pinned ? "إلغاء التثبيت" : "تثبيت")} onClick={() => act(() => convApi.setPrefs(convId, { is_pinned: !conv.is_pinned }))} />
-        <Action icon={conv.is_muted ? "bellOff" : "bell"} label={t(conv.is_muted ? "إلغاء الكتم" : "كتم الإشعارات")} onClick={() => act(() => convApi.setPrefs(convId, { is_muted: !conv.is_muted }))} />
+        <Action icon={conv.is_muted ? "bellOff" : "bell"} label={t(conv.is_muted ? "إلغاء الكتم" : "كتم الإشعارات")} onClick={() => toggleMute(conv)} />
       </div>
       <MediaCard convId={convId} />
       <Section title={channel ? (admin ? t("المشتركون ({n})", { n: members.length }) : t("المشرفون")) : t("أعضاء المجموعة ({n})", { n: members.length })}>
@@ -372,6 +378,7 @@ export function GroupPanel({ convId }: { convId: number }) {
       </Section>
       <Card>
         <div className="w-divide">
+          <NavRow icon="settings" label={t(channel ? "إعدادات القناة" : "إعدادات المحادثة")} onClick={() => setPanel({ type: "convSettings", convId })} />
           <NavRow icon="trash" label={t("حذف المحادثة")} danger onClick={() => clearChat(convId)} />
           <NavRow icon="logout" label={t(channel ? "إلغاء الاشتراك" : "مغادرة المجموعة")} danger
             onClick={() => { if (confirm(t(channel ? "هل تريد إلغاء الاشتراك في القناة؟" : "هل تريد مغادرة المجموعة؟"))) act(async () => { await convApi.leave(convId); setPanel(null); openConv(null); }); }} />

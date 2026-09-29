@@ -1,12 +1,13 @@
 "use client";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { Conversation as Conv, Message, MessageKind } from "@/lib/api";
+import type { Call, Conversation as Conv, Message, MessageKind } from "@/lib/api";
 import { t as tr, useT } from "@/lib/i18n";
-import { contacts as contactsApi, conversations as convApi, messages as msgApi, type SendFileOpts } from "@/lib/endpoints";
+import { calls as callsApi, contacts as contactsApi, conversations as convApi, messages as msgApi, type SendFileOpts } from "@/lib/endpoints";
 import { openSocket, type LiveSocket, type SocketStatus } from "@/lib/socket";
 import { localPreviews, MessageBody, ReplyQuote, SenderName, Ticks, type UploadState } from "./Bubbles";
 import { clock, ConvAvatar, dayLabel, IconButton, ImageViewer, lastSeenText, nameOf, preview, StoryTap, systemText } from "./bits";
 import { Composer, type MediaSend } from "./Composer";
+import { disappearLabel, ScheduleDialog, useMuteToggle } from "./ConvSettings";
 import { Icon, type IconName } from "./icons";
 import { useWasl } from "./store";
 
@@ -47,7 +48,7 @@ const LONG_PRESS_MS = 450;
 
 export function Conversation({ conv }: { conv: Conv }) {
   const t = useT();
-  const { me, otherOf, openConv, panel, storyRing, openStory, storyViewer, call, setPanel, startCall, liveShares, stopLiveShare, startLiveShare, refreshConvs, notify, isContact, contactAdded } = useWasl();
+  const { me, otherOf, openConv, panel, storyRing, openStory, storyViewer, call, joinCall, setPanel, startCall, liveShares, stopLiveShare, startLiveShare, refreshConvs, notify, isContact, contactAdded } = useWasl();
   const [msgs, setMsgs] = useState<Message[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -72,9 +73,35 @@ export function Conversation({ conv }: { conv: Conv }) {
   const typingTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const other = otherOf(conv);
   const id = conv.id;
-  // القناة: المشرفون فقط ينشرون، والمشتركون يقرؤون ويتفاعلون
+  // القناة (ومجموعة «الإرسال للمشرفين فقط»): المشرفون فقط يرسلون، والباقون يقرؤون ويتفاعلون
   const channel = conv.kind === "channel";
-  const canPost = !channel || conv.my_role === "admin";
+  const canPost = conv.can_post ?? (!channel || conv.my_role === "admin");
+  const toggleMute = useMuteToggle();
+  // مكالمة جماعية جارية في هذه المجموعة لست فيها: شريط «انضمام»
+  const [activeCall, setActiveCall] = useState<Call | null>(null);
+  useEffect(() => {
+    if (conv.kind !== "group") return;
+    let alive = true;
+    const load = () => callsApi.active(conv.id).then((c) => alive && setActiveCall(c)).catch(() => {});
+    load();
+    window.addEventListener("wasl:calls", load);
+    return () => { alive = false; window.removeEventListener("wasl:calls", load); };
+  }, [conv.id, conv.kind]);
+  // (رنين لم أرد عليه لا يعني أني فيها: يبقى زر «انضمام» متاحاً بعد الرفض)
+  const inThisCall = !!call && call.phase !== "ended" && call.phase !== "incoming" && call.call.id === activeCall?.id;
+  const [scheduledCount, setScheduledCount] = useState(0);
+  const [scheduling, setScheduling] = useState(false);
+  const loadScheduled = useCallback(() => {
+    if (conv.kind === "saved" || !canPost) return;
+    msgApi.scheduled(conv.id).then((l) => setScheduledCount(l.filter((s) => s.status === "pending").length)).catch(() => {});
+  }, [conv.id, conv.kind, canPost]);
+  useEffect(() => {
+    loadScheduled();
+    // أُرسلت رسالة مجدولة (الحدث يصل على الاتصال العام في store.tsx)
+    const on = (e: Event) => (e as CustomEvent<number>).detail === conv.id && loadScheduled();
+    window.addEventListener("wasl:scheduled", on);
+    return () => window.removeEventListener("wasl:scheduled", on);
+  }, [conv.id, loadScheduled]);
   // نسخة من المحادثة بـ ref: القائمة تتحدث كثير، وما نريد نعيد فتح الاتصال كل مرة
   const convRef = useRef(conv);
   useEffect(() => {
@@ -105,6 +132,11 @@ export function Conversation({ conv }: { conv: Conv }) {
         if (e.message.sender.id !== me.id) markRead();
       } else if (e.type === "error" && e.detail === "rate_limited") {
         notify(tr("أرسلت رسائل كثيرة بسرعة. انتظر قليلاً ثم أعد المحاولة."));
+      } else if (e.type === "error") {
+        notify(e.message || tr("لا يمكنك الإرسال في هذه المحادثة"));
+      } else if (e.type === "message_removed") {
+        // رسالة مختفية انتهت مدتها
+        setMsgs((l) => l.filter((m) => m.id !== e.message_id));
       } else if (e.type === "message_updated") {
         setMsgs((l) => upsert(l, e.message));
       } else if (e.type === "typing" && e.user_id !== me.id) {
@@ -304,17 +336,21 @@ export function Conversation({ conv }: { conv: Conv }) {
     { icon: "image", label: t("الوسائط والملفات"), run: () => { setMoreOpen(false); setPanel({ type: "media", convId: id }); } },
     ...(canPost ? [{ icon: "pin" as IconName, label: t("مشاركة الموقع"), run: () => { setMoreOpen(false); setPanel({ type: "location", convId: id }); } }] : []),
     { icon: "star", label: t("الرسائل المميزة"), run: () => { setMoreOpen(false); setPanel({ type: "starred", convId: id }); } },
+    ...(canPost && conv.kind !== "saved" ? [{ icon: "clock" as IconName, label: t("جدولة رسالة"), run: () => { setMoreOpen(false); setScheduling(true); } }] : []),
+    { icon: "settings", label: t("إعدادات المحادثة"), run: () => { setMoreOpen(false); setPanel({ type: "convSettings", convId: id }); } },
     ...(conv.kind !== "saved" ? [
       { icon: "pinned" as IconName, label: t(conv.is_pinned ? "إلغاء التثبيت" : "تثبيت المحادثة"), run: () => togglePref("is_pinned") },
       { icon: "bookmark" as IconName, label: t(conv.is_favorite ? "إزالة من المفضلة" : "إضافة إلى المفضلة"), run: () => togglePref("is_favorite") },
-      { icon: (conv.is_muted ? "bell" : "bellOff") as IconName, label: t(conv.is_muted ? "إلغاء الكتم" : "كتم الإشعارات"), run: () => togglePref("is_muted") },
+      { icon: (conv.is_muted ? "bell" : "bellOff") as IconName, label: t(conv.is_muted ? "إلغاء الكتم" : "كتم الإشعارات"), run: () => { setMoreOpen(false); toggleMute(conv); } },
       { icon: "archive" as IconName, label: t(conv.is_archived ? "إلغاء الأرشفة" : "أرشفة المحادثة"), run: () => togglePref("is_archived") },
       { icon: "trash" as IconName, label: t("حذف المحادثة"), run: clearChat, danger: true },
     ] : []),
   ];
 
   return (
-    <div className="flex h-full min-h-0 flex-col" onClick={() => { setMenuFor(null); setMoreOpen(false); }}>
+    // خلفية هذه المحادثة (إن اختار المستخدم لها خلفية خاصة) تغطي خلفية الثيم العامة
+    <div className={`flex h-full min-h-0 flex-col ${conv.wallpaper ? "w-chat-bg" : ""}`} data-wallpaper={conv.wallpaper || undefined}
+      onClick={() => { setMenuFor(null); setMoreOpen(false); }}>
       {/* الترويسة */}
       <header className="w-shadow relative z-10 flex items-center gap-2 rounded-b-[26px] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:rounded-none md:shadow-none md:border-b md:w-split"
         style={{ background: "var(--panel)" }}>
@@ -331,7 +367,7 @@ export function Conversation({ conv }: { conv: Conv }) {
             </div>
           </div>
         </button>
-        {conv.kind === "direct" && (
+        {(conv.kind === "direct" || conv.kind === "group") && (
           <>
             <IconButton icon="video" label={t("مكالمة فيديو")} onClick={() => startCall(conv, "video")} size={42} />
             <IconButton icon="phone" label={t("مكالمة صوتية")} onClick={() => startCall(conv, "audio")} size={42} />
@@ -356,6 +392,15 @@ export function Conversation({ conv }: { conv: Conv }) {
         </span>
       </header>
 
+      {activeCall && !inThisCall && activeCall.status === "ongoing" && (
+        <div className="w-panel mx-3 mt-2 flex items-center gap-3 rounded-2xl px-4 py-2.5 text-sm md:mx-6" role="status">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-white" style={{ background: "var(--online)" }}>
+            <Icon name={activeCall.kind === "video" ? "video" : "phone"} size={17} />
+          </span>
+          <span className="min-w-0 flex-1 font-semibold">{t("مكالمة جماعية جارية • المشاركون: {n}", { n: activeCall.participants?.length ?? 0 })}</span>
+          <button onClick={() => joinCall(activeCall)} className="shrink-0 rounded-full px-4 py-1.5 text-xs font-bold text-white" style={{ background: "var(--online)" }}>{t("انضمام")}</button>
+        </div>
+      )}
       {stranger && (
         <div className="w-panel mx-3 mt-2 flex items-center gap-3 rounded-2xl px-4 py-2.5 text-sm md:mx-6" role="note">
           <Icon name="info" size={18} className="w-accent-text shrink-0" />
@@ -369,6 +414,13 @@ export function Conversation({ conv }: { conv: Conv }) {
         // الصور تُحمَّل بعد الرسائل فتطول الصفحة: إن كنا في الأسفل نبقى فيه
         onLoadCapture={() => { const el = scroller.current; if (el && stick.current) el.scrollTop = el.scrollHeight; }}
         className="w-scroll min-h-0 flex-1 overflow-y-auto px-3 pb-2 md:px-6">
+        {conv.disappear_after > 0 && (
+          <div className="mt-3 flex justify-center">
+            <button onClick={() => setPanel({ type: "convSettings", convId: id })} className="flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold" style={{ background: "var(--pill)" }}>
+              <Icon name="clock" size={13} />{t("الرسائل المختفية مفعّلة: {time}", { time: t(disappearLabel(conv.disappear_after)) })}
+            </button>
+          </div>
+        )}
         {loading && <p className="w-muted py-10 text-center text-sm">{t("جارٍ التحميل...")}</p>}
         {hasMore && !loading && <button onClick={loadOlder} className="w-chip mx-auto my-3 block rounded-full px-4 py-1.5 text-xs">{t("رسائل أقدم")}</button>}
         {!loading && msgs.length === 0 && (
@@ -422,6 +474,7 @@ export function Conversation({ conv }: { conv: Conv }) {
                     <div className="w-muted mt-1 flex items-center justify-start gap-1 text-[11px]" dir="ltr">
                       {mine && !m.is_deleted && !channel && <Ticks m={m} />}
                       <span>{clock(m.created_at)}</span>
+                      {m.expires_at && <span title={t("رسالة مختفية")}><Icon name="clock" size={11} /></span>}
                       {starred.has(m.id) && <Icon name="star" size={11} filled />}
                       {m.edited_at && !m.is_deleted && <span>{t("معدّلة")}</span>}
                     </div>
@@ -475,17 +528,24 @@ export function Conversation({ conv }: { conv: Conv }) {
         )}
       </div>
 
+      {scheduledCount > 0 && canPost && (
+        <button onClick={() => setPanel({ type: "convSettings", convId: id })}
+          className="w-strong w-shadow mx-auto mb-2 flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-bold" style={{ border: "1px solid var(--border)" }}>
+          <Icon name="clock" size={14} className="w-accent-text" />{t("رسائل مجدولة: {n}", { n: scheduledCount })}
+        </button>
+      )}
+      {scheduling && <ScheduleDialog convId={id} replyTo={reply?.id} onClose={() => setScheduling(false)} onDone={loadScheduled} />}
       {canPost ? (
-        <Composer convId={id} socket={() => socketRef.current} reply={reply} editing={editing}
+        <Composer onScheduled={loadScheduled} convId={id} socket={() => socketRef.current} reply={reply} editing={editing}
           onDone={() => { setReply(null); setEditing(null); }}
           onSent={(m) => { stick.current = true; setMsgs((l) => upsert(l, m)); }} onMedia={sendMedia} />
       ) : (
         // القناة للمشترك: لا خانة كتابة، بل سطر يوضح ذلك وزر كتم الإشعارات
         <div className="flex items-center gap-3 rounded-t-[26px] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 md:rounded-none md:border-t md:w-line"
           style={{ background: "var(--panel)", boxShadow: "0 -6px 24px rgba(40, 36, 90, .06)" }}>
-          <Icon name="megaphone" size={20} className="w-muted shrink-0" />
-          <span className="w-muted min-w-0 flex-1 text-sm">{t("النشر في هذه القناة لمشرفيها فقط")}</span>
-          <button onClick={() => togglePref("is_muted")} className="w-tint flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold">
+          <Icon name={channel ? "megaphone" : "lock"} size={20} className="w-muted shrink-0" />
+          <span className="w-muted min-w-0 flex-1 text-sm">{t(channel ? "النشر في هذه القناة لمشرفيها فقط" : "الإرسال في هذه المجموعة للمشرفين فقط")}</span>
+          <button onClick={() => toggleMute(conv)} className="w-tint flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold">
             <Icon name={conv.is_muted ? "bell" : "bellOff"} size={16} />{t(conv.is_muted ? "إلغاء الكتم" : "كتم")}
           </button>
         </div>

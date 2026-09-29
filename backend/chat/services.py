@@ -5,8 +5,11 @@ import threading
 from asgiref.sync import SyncToAsync, async_to_sync
 from channels.layers import get_channel_layer
 from django.core.cache import cache
+from datetime import timedelta
+
 from django.db.models import Max, OuterRef, Subquery
 from django.utils import timezone
+from django.utils.translation import gettext as _
 
 from accounts.models import Contact, Profile
 from notifications.push import notify_new_message
@@ -156,8 +159,36 @@ def receipts_for(conversation):
     return list(conversation.memberships.values('user_id', 'last_delivered_id', 'last_read_id'))
 
 
-def create_message(conversation, sender, content='', **fields):
-    """1) نخزن الرسالة بالـ Database  2) نبثها للكل  3) إشعار Push  4) نرجعها JSON."""
+def post_error(membership, check_slow=True):
+    """
+    هل يستطيع هذا العضو الإرسال الآن؟ يعيد None، أو (رمز، نص الخطأ بلغة المستخدم).
+    يُستعمل في الـ HTTP والـ WebSocket والرسائل المجدولة، فالقاعدة واحدة في كل مكان.
+    """
+    conv = membership.conversation
+    admin = membership.role == Membership.ADMIN
+    if conv.kind == Conversation.CHANNEL and not admin:
+        return 'not_allowed', _('النشر في القناة لمشرفيها فقط')
+    if conv.kind == Conversation.GROUP and not admin:
+        if conv.only_admins_post:
+            return 'not_allowed', _('الإرسال في هذه المجموعة للمشرفين فقط')
+        if check_slow and conv.slow_mode:
+            last = (conv.messages.filter(sender_id=membership.user_id).exclude(kind__in=QUIET)
+                    .order_by('-id').values_list('created_at', flat=True).first())
+            if last:
+                wait = int((last + timedelta(seconds=conv.slow_mode) - timezone.now()).total_seconds()) + 1
+                if wait > 0:
+                    return 'slow_mode', _('الوضع البطيء مفعّل: يمكنك الإرسال بعد {n} ثانية').format(n=wait)
+    return None
+
+
+def create_message(conversation, sender, content='', silent=False, **fields):
+    """
+    1) نخزن الرسالة بالـ Database  2) نبثها للكل  3) إشعار Push (إلا إن كانت «دون إشعار»)  4) نرجعها JSON.
+    في محادثة رسائلها مختفية: نحدد وقت حذفها من الآن.
+    """
+    kind = fields.get('kind', Message.TEXT)
+    if conversation.disappear_after and kind not in QUIET and 'expires_at' not in fields:
+        fields['expires_at'] = timezone.now() + timedelta(seconds=conversation.disappear_after)
     msg = Message.objects.create(conversation=conversation, sender=sender, content=content, **fields)
     # المرسل طبعاً "قرا" رسالته
     Membership.objects.filter(conversation=conversation, user=sender).update(
@@ -177,7 +208,7 @@ def create_message(conversation, sender, content='', **fields):
                                     'message_id': msg.id})
     # لكل عضو على اتصاله العام: حتى تتحدث قائمته
     send_to_users(member_ids(conversation), {'type': 'inbox', 'message': data})
-    if msg.kind not in QUIET:
+    if msg.kind not in QUIET and not silent:
         notify_new_message(msg, lambda tr: preview_text(msg, tr))
     return data
 
@@ -236,3 +267,16 @@ def soft_delete(message):
     message.deleted_at = timezone.now()
     message.save()
     return message_changed(message)
+
+
+def remove_message(message):
+    """حذف نهائي (للرسائل المختفية): تختفي من المحادثة عند الجميع، مع ملفها."""
+    conv, mid, stored = message.conversation, message.id, message.file
+    # حذف الصف أولاً: إن سبقنا عامل آخر إليه (0 صفوف) فلا نكرر البث
+    deleted, _rows = Message.objects.filter(pk=mid).delete()
+    if not deleted:
+        return
+    if stored:
+        stored.delete(save=False)
+    broadcast(conv.id, {'type': 'message_removed', 'message_id': mid})
+    send_to_users(member_ids(conv), {'type': 'conversation_updated', 'conversation_id': conv.id})

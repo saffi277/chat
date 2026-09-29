@@ -1,3 +1,4 @@
+import secrets
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -8,15 +9,17 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 from rest_framework import status
 from rest_framework.decorators import api_view, throttle_classes
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from django.utils.dateparse import parse_datetime
+from rest_framework.exceptions import PermissionDenied, Throttled, ValidationError
 from rest_framework.response import Response
 
+from accounts.models import Profile
 from accounts.serializers import profile_of
-from config.throttles import SendThrottle, UserThrottle
+from config.throttles import LookupThrottle, SendThrottle, UserThrottle
 
 from . import services
 from .media import guess_kind, validate_upload
-from .models import Conversation, Membership, Message, Reaction, StarredMessage
+from .models import Conversation, Membership, Message, Reaction, ScheduledMessage, StarredMessage
 from .serializers import ConversationSerializer, MemberSerializer, MessageSerializer
 
 User = get_user_model()
@@ -41,10 +44,29 @@ def require_admin(membership):
         raise PermissionDenied(_('هذا الإجراء للمشرف فقط'))
 
 
-def require_can_post(membership):
-    """القناة: النشر لمشرفيها فقط، والمشتركون يقرؤون ويتفاعلون."""
-    if membership.conversation.kind == Conversation.CHANNEL and membership.role != Membership.ADMIN:
-        raise PermissionDenied(_('النشر في القناة لمشرفيها فقط'))
+def require_can_post(membership, check_slow=True):
+    """القناة ومجموعة «للمشرفين فقط»: النشر للمشرفين. والوضع البطيء: رسالة كل N ثانية لغير المشرف."""
+    err = services.post_error(membership, check_slow)
+    if err and err[0] == 'slow_mode':
+        raise Throttled(detail=err[1])
+    if err:
+        raise PermissionDenied(err[1])
+
+
+def require_edit(membership):
+    """تعديل اسم المجموعة ووصفها وصورتها: للمشرف، أو لأي عضو إن سمح المشرفون بذلك."""
+    conv = membership.conversation
+    if conv.kind == Conversation.GROUP and not conv.only_admins_edit and membership.role != Membership.ADMIN:
+        return
+    require_admin(membership)
+
+
+# مدد الرسائل المختفية كما تُكتب في رسالة النظام (تُحفظ بالعربية، والواجهة الإنجليزية تترجمها)
+DISAPPEAR_LABELS = {24 * 3600: '24 ساعة', 7 * 24 * 3600: '7 أيام', 90 * 24 * 3600: '90 يوماً'}
+
+
+def as_bool(value):
+    return value in (True, 1) or str(value).lower() in ('1', 'true', 'yes', 'on')
 
 
 def known_users(request, ids):
@@ -98,6 +120,8 @@ def conversations(request):
             my_role=Subquery(my_row.values('role')[:1]),
             my_favorite=Subquery(my_row.values('is_favorite')[:1]),
             my_muted=Subquery(my_row.values('is_muted')[:1]),
+            my_muted_until=Subquery(my_row.values('muted_until')[:1]),
+            my_wallpaper=Subquery(my_row.values('wallpaper')[:1]),
             my_archived=Subquery(my_row.values('is_archived')[:1]),
             n_members=Coalesce(Subquery(others.annotate(c=Count('id')).values('c'), output_field=IntegerField()), 0) + 1,
             others_read=Subquery(others.annotate(m=Min('last_read_id')).values('m')),
@@ -236,14 +260,78 @@ def conversation_detail(request, pk):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     # PATCH: إعداداتي الخاصة (أي عضو)
-    prefs = {k: bool(request.data[k]) for k in ('is_favorite', 'is_muted', 'is_archived', 'is_pinned')
-             if k in request.data}
+    prefs = {k: as_bool(request.data[k]) for k in ('is_favorite', 'is_archived', 'is_pinned') if k in request.data}
+    if 'is_muted' in request.data:
+        # الكتم: دائماً، أو لمدة بالساعات (8 ساعات، أسبوع = 168...) ثم يعود الإشعار وحده
+        prefs['is_muted'], prefs['muted_until'] = as_bool(request.data['is_muted']), None
+        hours = request.data.get('mute_hours')
+        if prefs['is_muted'] and hours:
+            try:
+                hours = float(hours)
+            except (TypeError, ValueError):
+                hours = 0
+            if not 0 < hours <= 366 * 24:
+                raise ValidationError({'mute_hours': _('مدة الكتم غير صحيحة')})
+            prefs['muted_until'] = timezone.now() + timedelta(hours=hours)
+    if 'wallpaper' in request.data:
+        wallpaper = request.data.get('wallpaper') or ''
+        if wallpaper and wallpaper not in dict(Profile.WALLPAPERS):
+            raise ValidationError({'wallpaper': _('خلفية غير معروفة')})
+        prefs['wallpaper'] = wallpaper
     if prefs:
         Membership.objects.filter(pk=m.pk).update(**prefs)
-    # معلومات المجموعة (المشرف بس)
+    changed = False
+    # الرسائل المختفية: لأي من الطرفين في المحادثة الثنائية، ولمن يعدّل المعلومات في المجموعة
+    if 'disappear_after' in request.data:
+        try:
+            after = int(request.data.get('disappear_after') or 0)
+        except (TypeError, ValueError):
+            after = -1
+        if after not in Conversation.DISAPPEAR_CHOICES:
+            raise ValidationError({'disappear_after': _('مدة غير صحيحة')})
+        if conv.kind not in (Conversation.DIRECT, Conversation.GROUP):
+            raise ValidationError(_('الرسائل المختفية للمحادثات والمجموعات فقط'))
+        if conv.kind == Conversation.GROUP:
+            require_edit(m)
+        if after != conv.disappear_after:
+            conv.disappear_after = after
+            conv.save(update_fields=['disappear_after'])
+            services.system_message(conv, request.user, f'{name_of(request.user)} فعّل الرسائل المختفية: {DISAPPEAR_LABELS[after]}'
+                                    if after else f'{name_of(request.user)} أوقف الرسائل المختفية')
+            changed = True
+    # إعدادات المجموعة (للمشرفين): الإرسال والتعديل للمشرفين فقط، والوضع البطيء
+    admin_fields = [k for k in ('only_admins_post', 'only_admins_edit', 'slow_mode') if k in request.data]
+    if admin_fields:
+        if conv.kind != Conversation.GROUP:
+            raise ValidationError(_('هذه الإعدادات للمجموعات فقط'))
+        require_admin(m)
+        who = name_of(request.user)
+        if 'only_admins_post' in request.data:
+            value = as_bool(request.data['only_admins_post'])
+            if value != conv.only_admins_post:
+                conv.only_admins_post = value
+                services.system_message(conv, request.user, f'{who} جعل الإرسال للمشرفين فقط' if value
+                                        else f'{who} سمح لجميع الأعضاء بالإرسال')
+        if 'only_admins_edit' in request.data:
+            conv.only_admins_edit = as_bool(request.data['only_admins_edit'])
+        if 'slow_mode' in request.data:
+            try:
+                slow = int(request.data.get('slow_mode') or 0)
+            except (TypeError, ValueError):
+                slow = -1
+            if slow not in Conversation.SLOW_CHOICES:
+                raise ValidationError({'slow_mode': _('مدة غير صحيحة')})
+            if slow != conv.slow_mode:
+                conv.slow_mode = slow
+                services.system_message(conv, request.user, f'{who} فعّل الوضع البطيء' if slow else f'{who} أوقف الوضع البطيء')
+        conv.save(update_fields=['only_admins_post', 'only_admins_edit', 'slow_mode'])
+        changed = True
+    if changed:
+        services.send_to_users(services.member_ids(conv), {'type': 'conversation_updated', 'conversation_id': conv.id})
+    # معلومات المجموعة (المشرف، أو كل الأعضاء إن سمح المشرفون)
     group_fields = [k for k in ('title', 'description', 'avatar') if k in request.data]
     if group_fields:
-        require_admin(m)
+        require_edit(m)
         if 'title' in request.data:
             title = (request.data.get('title') or '').strip()
             if not title:
@@ -379,6 +467,94 @@ def messages(request, pk):
     return Response(send_message(request, conv), status=status.HTTP_201_CREATED)
 
 
+# ------------------------------------------------------------------ رابط الدعوة
+
+@api_view(['POST', 'DELETE'])
+def invite_link(request, pk):
+    """POST = رابط دعوة جديد (يُلغي القديم)، DELETE = إلغاء الرابط. للمشرفين، وفي المجموعات فقط."""
+    m = my_membership(request, pk)
+    conv = m.conversation
+    if conv.kind != Conversation.GROUP:
+        raise ValidationError(_('روابط الدعوة للمجموعات فقط'))
+    require_admin(m)
+    conv.invite_code = secrets.token_urlsafe(16) if request.method == 'POST' else None
+    conv.save(update_fields=['invite_code'])
+    return Response({'invite_code': conv.invite_code})
+
+
+@api_view(['GET', 'POST'])
+@throttle_classes([LookupThrottle])
+def join_by_invite(request, code):
+    """GET = معاينة المجموعة قبل الانضمام، POST = الانضمام. الرابط الملغى أو الخاطئ = 404."""
+    conv = Conversation.objects.filter(invite_code=code, kind=Conversation.GROUP).first() if code else None
+    if not conv:
+        return Response({'detail': _('رابط الدعوة غير صالح أو أُلغي')}, status=status.HTTP_404_NOT_FOUND)
+    is_member = conv.memberships.filter(user=request.user).exists()
+    if request.method == 'GET':
+        return Response({'id': conv.id, 'title': conv.title, 'description': conv.description,
+                         'avatar': conv.avatar.url if conv.avatar else None,
+                         'member_count': conv.memberships.count(), 'is_member': is_member})
+    if not is_member:
+        Membership.objects.create(conversation=conv, user=request.user)
+        services.forget_contacts(*services.member_ids(conv))
+        services.system_message(conv, request.user, f'{name_of(request.user)} انضم عبر رابط الدعوة')
+        services.send_to_users(services.member_ids(conv), {'type': 'conversation_updated', 'conversation_id': conv.id})
+    return Response(conv_data(request, conv), status=status.HTTP_200_OK if is_member else status.HTTP_201_CREATED)
+
+
+# ------------------------------------------------------------------ الرسائل المجدولة
+
+MAX_SCHEDULED = 100
+
+
+def scheduled_json(s):
+    return {'id': s.id, 'conversation': s.conversation_id, 'content': s.content, 'send_at': s.send_at.isoformat(),
+            'silent': s.silent, 'status': s.status, 'error': s.error, 'reply_to': s.reply_to_id,
+            'created_at': s.created_at.isoformat()}
+
+
+@api_view(['GET', 'POST'])
+def scheduled(request, pk):
+    """
+    GET  ← رسائلي المجدولة في هذه المحادثة (الأقرب أولاً).
+    POST {content, send_at (ISO بتوقيت واضح), silent?, reply_to?} ← جدولة رسالة نصية.
+    """
+    m = my_membership(request, pk)
+    mine = ScheduledMessage.objects.filter(conversation=m.conversation, sender=request.user)
+    if request.method == 'GET':
+        return Response([scheduled_json(s) for s in mine])
+    require_can_post(m, check_slow=False)
+    content = (request.data.get('content') or '').strip()
+    if not content:
+        raise ValidationError({'content': _('الرسالة فارغة')})
+    send_at = parse_datetime(str(request.data.get('send_at') or ''))
+    if not send_at:
+        raise ValidationError({'send_at': _('اختر وقت الإرسال')})
+    if timezone.is_naive(send_at):
+        send_at = timezone.make_aware(send_at)
+    now = timezone.now()
+    if send_at < now + timedelta(seconds=30):
+        raise ValidationError({'send_at': _('اختر وقتاً في المستقبل (بعد دقيقة على الأقل)')})
+    if send_at > now + timedelta(days=365):
+        raise ValidationError({'send_at': _('أبعد موعد ممكن: بعد سنة')})
+    if ScheduledMessage.objects.filter(sender=request.user, status=ScheduledMessage.PENDING).count() >= MAX_SCHEDULED:
+        raise ValidationError(_('لديك رسائل مجدولة كثيرة. انتظر إرسال بعضها أو ألغِها.'))
+    reply_id = request.data.get('reply_to')
+    reply = get_object_or_404(Message, pk=reply_id, conversation=m.conversation) if reply_id else None
+    s = ScheduledMessage.objects.create(conversation=m.conversation, sender=request.user, content=content[:4000],
+                                        send_at=send_at, silent=as_bool(request.data.get('silent')), reply_to=reply)
+    return Response(scheduled_json(s), status=status.HTTP_201_CREATED)
+
+
+@api_view(['DELETE'])
+def scheduled_detail(request, sid):
+    """إلغاء رسالة مجدولة لم تُرسل بعد."""
+    s = get_object_or_404(ScheduledMessage, pk=sid, sender=request.user,
+                          status__in=[ScheduledMessage.PENDING, ScheduledMessage.FAILED])
+    s.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 def send_message(request, conv):
     """
     نص:      {"content": "هلو"}
@@ -430,7 +606,8 @@ def send_message(request, conv):
             fields.update(width=size[0], height=size[1])
     else:
         raise ValidationError({'kind': _('نوع رسالة غير معروف')})
-    return services.create_message(conv, request.user, content, **fields)
+    # «إرسال دون إشعار»: تصل الرسالة كالعادة لكن بلا إشعار على الهاتف
+    return services.create_message(conv, request.user, content, silent=as_bool(data.get('silent')), **fields)
 
 
 def my_message(request, message_id):

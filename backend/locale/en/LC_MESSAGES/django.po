@@ -217,3 +217,50 @@ msgstr "Channel"
 
 msgid "لا توجد مكالمات في القنوات"
 msgstr "Calls aren't available in channels"
+
+# إعدادات المحادثة، والرسائل المجدولة، ورابط الدعوة، والمكالمة الجماعية
+msgid "أبعد موعد ممكن: بعد سنة"
+msgstr "The latest possible time is one year from now"
+
+msgid "اختر وقت الإرسال"
+msgstr "Choose when to send"
+
+msgid "اختر وقتاً في المستقبل (بعد دقيقة على الأقل)"
+msgstr "Choose a time in the future (at least a minute from now)"
+
+msgid "الإرسال في هذه المجموعة للمشرفين فقط"
+msgstr "Only admins can send messages in this group"
+
+msgid "الرسائل المختفية للمحادثات والمجموعات فقط"
+msgstr "Disappearing messages are for chats and groups only"
+
+msgid "المكالمة ممتلئة: الحد {n} مشاركين"
+msgstr "The call is full: the limit is {n} participants"
+
+msgid "الوضع البطيء مفعّل: يمكنك الإرسال بعد {n} ثانية"
+msgstr "Slow mode is on: you can send again in {n} seconds"
+
+msgid "خلفية غير معروفة"
+msgstr "Unknown background"
+
+msgid "رابط الدعوة غير صالح أو أُلغي"
+msgstr "This invite link is invalid or has been revoked"
+
+msgid "روابط الدعوة للمجموعات فقط"
+msgstr "Invite links are for groups only"
+
+msgid "لديك رسائل مجدولة كثيرة. انتظر إرسال بعضها أو ألغِها."
+msgstr "You have too many scheduled messages. Wait for some to be sent or cancel them."
+
+msgid "لم تعد عضواً في هذه المحادثة"
+msgstr "You are no longer a member of this chat"
+
+msgid "مدة الكتم غير صحيحة"
+msgstr "Invalid mute duration"
+
+msgid "مدة غير صحيحة"
+msgstr "Invalid duration"
+
+msgid "هذه الإعدادات للمجموعات فقط"
+msgstr "These settings are for groups only"
+

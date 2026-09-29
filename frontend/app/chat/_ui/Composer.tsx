@@ -7,6 +7,7 @@ import { messages as msgApi, type SendFileOpts } from "@/lib/endpoints";
 import { permError } from "@/lib/permissions";
 import type { LiveSocket } from "@/lib/socket";
 import { duration, nameOf } from "./bits";
+import { ScheduleDialog } from "./ConvSettings";
 import { Icon } from "./icons";
 import { useWasl } from "./store";
 
@@ -19,7 +20,7 @@ export type MediaSend = (file: File | Blob, opts: SendFileOpts & { kind: Message
 const hasKeyboard = () => typeof window !== "undefined" && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 const MAX_ROWS_PX = 6 * 24 + 22; // ستة أسطر ثم تمرير داخل الخانة
 
-export function Composer({ convId, socket, reply, editing, onDone, onSent, onMedia }: {
+export function Composer({ convId, socket, reply, editing, onDone, onSent, onMedia, onScheduled }: {
   convId: number;
   socket: () => LiveSocket | null;
   reply: Message | null;
@@ -27,11 +28,14 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent, onMed
   onDone: () => void;
   onSent: (m: Message) => void;
   onMedia: MediaSend;
+  onScheduled?: () => void;
 }) {
   const t = useT();
   const { setPanel, notify } = useWasl();
   const [text, setText] = useState("");
-  const [menu, setMenu] = useState<"emoji" | "attach" | null>(null);
+  const [menu, setMenu] = useState<"emoji" | "attach" | "send" | null>(null);
+  const [scheduleText, setScheduleText] = useState<string | null>(null);
+  const sendPress = useRef<{ timer?: ReturnType<typeof setTimeout>; fired: boolean }>({ fired: false });
   const [pending, setPending] = useState<{ file: File; url: string; kind: "image" | "video" } | null>(null);
   const [caption, setCaption] = useState("");
   const [busy, setBusy] = useState(false);
@@ -82,7 +86,7 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent, onMed
     }
   }
 
-  async function sendText() {
+  async function sendText(silent = false) {
     const content = text.trim();
     if (!content) return;
     if (editing) {
@@ -100,9 +104,12 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent, onMed
     setText("");
     onDone();
     // الطريق السريع: WebSocket. إذا مقطوع نرجع للـ HTTP حتى الرسالة ما تضيع
-    if (socket()?.send({ type: "message", content, reply_to: reply?.id })) return;
+    if (socket()?.send({ type: "message", content, reply_to: reply?.id, ...(silent ? { silent: true } : {}) })) {
+      if (silent) notify(t("أُرسلت دون إشعار"));
+      return;
+    }
     try {
-      onSent(await msgApi.sendText(convId, content, reply?.id));
+      onSent(await msgApi.sendText(convId, content, reply?.id, silent));
     } catch {
       setText(content);
     }
@@ -177,6 +184,23 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent, onMed
           ))}
         </div>
       )}
+      {/* الضغط خارج أي قائمة يغلقها. عند بدء الضغط لا عند النقر: رفع الإصبع بعد الضغط المطوّل يولّد نقرة
+          تقع على هذه الطبقة، فلو أغلقنا عند النقر لأُغلقت القائمة لحظة فتحها */}
+      {menu && <div className="fixed inset-0 z-[5]" onPointerDown={() => setMenu(null)} aria-hidden />}
+      {menu === "send" && (
+        <div className="w-strong w-shadow absolute bottom-full start-3 z-10 mb-2 grid w-60 gap-1 rounded-2xl p-2" role="menu" style={{ border: "1px solid var(--border)" }}>
+          <button role="menuitem" onClick={() => { setMenu(null); sendText(true); }} className="w-hover flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold">
+            <span className="w-tint grid h-9 w-9 place-items-center rounded-full"><Icon name="bellOff" size={17} /></span>{t("إرسال دون إشعار")}
+          </button>
+          <button role="menuitem" onClick={() => { setMenu(null); setScheduleText(text); }} className="w-hover flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold">
+            <span className="w-tint grid h-9 w-9 place-items-center rounded-full"><Icon name="clock" size={17} /></span>{t("جدولة الإرسال")}
+          </button>
+        </div>
+      )}
+      {scheduleText !== null && (
+        <ScheduleDialog convId={convId} text={scheduleText} replyTo={reply?.id} onClose={() => setScheduleText(null)}
+          onDone={() => { setText(""); onDone(); onScheduled?.(); }} />
+      )}
       {menu === "attach" && (
         <div className="w-strong w-shadow absolute bottom-full end-3 z-10 mb-2 grid w-56 gap-1 rounded-2xl p-2" style={{ border: "1px solid var(--border)" }}>
           <AttachItem icon="image" label={t("صورة أو فيديو")} onClick={() => mediaPick.current?.click()} />
@@ -200,7 +224,17 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent, onMed
         <form onSubmit={(e) => { e.preventDefault(); sendText(); }} className="flex items-end gap-1.5">
           {hasText || editing ? (
             // onMouseDown: لا ننقل التركيز إلى الزر، فتبقى لوحة المفاتيح مفتوحة بعد الإرسال
+            // ضغط مطوّل (أو نقر أيمن) على زر الإرسال: «إرسال دون إشعار» و«جدولة الإرسال»
             <button type="submit" disabled={busy || !hasText} aria-label={t(editing ? "حفظ التعديل" : "إرسال")} onMouseDown={(e) => e.preventDefault()}
+              aria-haspopup={editing ? undefined : "menu"}
+              onContextMenu={(e) => { if (editing) return; e.preventDefault(); setMenu("send"); }}
+              onPointerDown={(e) => {
+                sendPress.current.fired = false;
+                if (editing || e.pointerType === "mouse") return;
+                sendPress.current.timer = setTimeout(() => { sendPress.current.fired = true; navigator.vibrate?.(15); setMenu("send"); }, 450);
+              }}
+              onPointerUp={() => clearTimeout(sendPress.current.timer)} onPointerLeave={() => clearTimeout(sendPress.current.timer)}
+              onClickCapture={(e) => { if (sendPress.current.fired) { sendPress.current.fired = false; e.preventDefault(); e.stopPropagation(); } }}
               className="w-accent grid h-12 w-12 shrink-0 place-items-center rounded-full disabled:opacity-50"><Icon name={editing ? "check" : "send"} size={21} /></button>
           ) : (
             <button type="button" onClick={startRecording} disabled={busy} aria-label={t("تسجيل رسالة صوتية")}
