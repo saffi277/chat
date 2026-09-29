@@ -9,13 +9,14 @@
 * { box-sizing: border-box; }
 
 body {
-  /* خط الهاتف نفسه (كما في واتساب): SF في الآيفون، وخط أندرويد في أندرويد، وخط النظام في الحاسوب */
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Arabic", "Segoe UI", Roboto, "Noto Sans Arabic", "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+  /* خط واحد ثابت على كل الأجهزة: IBM Plex Sans Arabic، خط مستقيم واضح (لا نسخ مموّج)، وحروفه الإنجليزية من العائلة نفسها.
+     يأتي مع التطبيق نفسه (@fontsource في app/layout.tsx) فلا يعتمد على خط الجهاز، والباقي احتياط حتى يُحمَّل */
+  font-family: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, Arial, sans-serif;
   background: #ffffff;
   color: #101827;
 }
 
-button, input { font: inherit; }
+button, input, textarea, select { font: inherit; }
 
 ::selection { background: #cfe2ff; color: #0b2a5b; }
 

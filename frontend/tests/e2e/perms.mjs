@@ -1,0 +1,26 @@
+import { chromium } from 'playwright';
+import { readFileSync } from 'fs';
+const acc = JSON.parse(readFileSync('seed/accounts.json'));
+const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+const errs = [];
+const api = (path, method = 'GET', body) => fetch('http://localhost:8000/api' + path, { method, headers: { 'Content-Type': 'application/json', Authorization: 'Token ' + acc.me.token }, body: body && JSON.stringify(body) }).then((r) => r.json());
+await api('/auth/me/', 'PATCH', { mode: 'light', hide_preview: false });
+const c = await b.newContext({ viewport: { width: 390, height: 844 } });
+await c.grantPermissions(['microphone'], { origin: 'http://localhost:3000' });
+await c.addInitScript(([t, u]) => { localStorage.setItem('token', t); localStorage.setItem('user', JSON.stringify(u)); }, [acc.me.token, acc.me.user]);
+const p = await c.newPage();
+p.on('pageerror', (e) => errs.push(e.message));
+p.on('console', (m) => m.type() === 'error' && !/WebSocket|net::/.test(m.text()) && errs.push(m.text().slice(0, 200)));
+await p.goto('http://localhost:3000/chat'); await p.waitForSelector('.wasl');
+await p.click('nav >> text=الإعدادات'); await p.waitForTimeout(600);
+await p.click('aside button:has-text("الأذونات")'); await p.waitForTimeout(600);
+const perms = p.locator('aside section').last();
+await p.screenshot({ path: 'ui/perms-m.png' });
+console.log('perm rows:', (await perms.innerText()).replace(/\n+/g, ' | '));
+// إخفاء محتوى الإشعار ينحفظ بالسيرفر (من صفحة الإشعارات)
+await p.click('button[aria-label="رجوع"]'); await p.click('aside button:has-text("الإشعارات")'); await p.waitForTimeout(400);
+await p.click('button[role=switch][aria-label="إخفاء محتوى الإشعار"]'); await p.waitForTimeout(800);
+console.log('hide_preview saved:', (await api('/auth/me/')).hide_preview);
+await api('/auth/me/', 'PATCH', { hide_preview: false });
+console.log('errors:', errs.length ? [...new Set(errs)] : 'none');
+await b.close();

@@ -62,6 +62,9 @@ export function fileSize(bytes: number | null) {
 }
 
 // ------------------------------------------------------------ نص مختصر للرسالة
+/** النص دون علامات التنسيق (*عريض* _مائل_ ~مشطوب~ `كود`) لسطر المعاينة في القائمة */
+export const plain = (text: string) => text.replace(/(^|[\s(\[«])([*_~`])(\S(?:[^\n]*?\S)?)\2(?=$|[\s.,!?؟،:;)\]»])/g, "$1$3");
+
 export function preview(m: Message | null, meId?: number): { icon?: IconName; text: string } {
   if (!m) return { text: t("ابدأ محادثة جديدة") };
   if (m.is_deleted) return { text: `🚫 ${t("حُذفت هذه الرسالة")}` };
@@ -74,7 +77,7 @@ export function preview(m: Message | null, meId?: number): { icon?: IconName; te
     case "poll": return { icon: "poll", text: m.content };
     case "call": return { icon: "phone", text: systemText(m.content) };
     case "system": return { text: systemText(m.content) };
-    default: return { text: (m.sender.id === meId ? t("أنت: ") : "") + m.content };
+    default: return { text: (m.sender.id === meId ? t("أنت: ") : "") + plain(m.content) };
   }
 }
 

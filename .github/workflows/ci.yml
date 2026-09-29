@@ -1,0 +1,114 @@
+# الفحص التلقائي مع كل push وكل Pull Request:
+#   1) الخادم: فحص Django، وأن لا migrations ناقصة، واختبارات الخادم كلها.
+#   2) الواجهة: TypeScript، وESLint، وأن كل النصوص مترجمة، والبناء.
+#   3) اختبارات المتصفح (Playwright): تشغيل الخادم والواجهة معاً وتجربة التطبيق كما يستعمله الناس.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: الخادم (Django)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+      - run: python manage.py check
+      - name: لا migrations ناقصة
+        run: python manage.py makemigrations --check --dry-run
+      - name: اختبارات الخادم
+        run: python manage.py test
+
+  frontend:
+    name: الواجهة (Next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      - run: npx tsc --noEmit
+      - run: npx eslint app lib
+      - name: كل النصوص مترجمة
+        run: npm run i18n:check
+      - run: npm run build
+
+  e2e:
+    name: اختبارات المتصفح (Playwright)
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      PYTHON: python
+      # الاختبارات تنشئ حسابات كثيرة من العنوان نفسه خلال دقائق، فنرفع حدّ التسجيل والدخول لهذا التشغيل فقط
+      THROTTLE_LOGIN: 300/min
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: pip install -r backend/requirements.txt
+      - run: npm ci
+        working-directory: frontend
+      - name: تثبيت متصفح Chromium
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: تشغيل الخادم (8000)
+        working-directory: backend
+        run: |
+          python manage.py migrate --noinput
+          nohup python manage.py runserver 8000 > ../backend.log 2>&1 &
+      - name: بناء الواجهة وتشغيلها (3000)
+        working-directory: frontend
+        run: |
+          npm run build
+          nohup npm start -- -p 3000 > ../frontend.log 2>&1 &
+      - name: انتظار الخادمين
+        run: |
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null http://localhost:3000/login && curl -s -o /dev/null http://localhost:8000/api/auth/me/ && exit 0
+            sleep 2
+          done
+          echo "servers did not start"; cat backend.log frontend.log; exit 1
+      - name: اختبارات المتصفح
+        working-directory: frontend
+        run: npm run test:e2e
+      - name: حفظ الصور الملتقطة والسجلات
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: |
+            frontend/tests/e2e/.out/ui/*.png
+            backend.log
+            frontend.log
+          retention-days: 7

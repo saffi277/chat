@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# نتائج اختبارات المتصفح (الصور الملتقطة)
+/tests/e2e/.out/
