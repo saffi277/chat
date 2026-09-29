@@ -59,6 +59,7 @@ export function Composer({ convId, kind, socket, reply, editing, onDone, onSent,
   const filePick = useRef<HTMLInputElement>(null);
   const cameraPick = useRef<HTMLInputElement>(null);
   const lastTyping = useRef(0);
+  const caretTo = useRef<number | null>(null);
 
   // لما نبدي تعديل، نحط النص القديم بالخانة
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -80,6 +81,11 @@ export function Composer({ convId, kind, socket, reply, editing, onDone, onSent,
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, MAX_ROWS_PX)}px`;
     el.style.overflowY = el.scrollHeight > MAX_ROWS_PX ? "auto" : "hidden";
+    if (caretTo.current !== null) {
+      el.focus();
+      el.setSelectionRange(caretTo.current, caretTo.current);
+      caretTo.current = null;
+    }
   }, [text]);
 
   // عداد التسجيل
@@ -191,10 +197,12 @@ export function Composer({ convId, kind, socket, reply, editing, onDone, onSent,
     const caret = el?.selectionStart ?? text.length;
     const next = `${text.slice(0, mention.start)}@${username} ${text.slice(caret)}`;
     const pos = mention.start + username.length + 2;
+    // المؤشر يوضع بعد الاسم فور عرض النص الجديد (useLayoutEffect أعلاه)، لا في إطار لاحق:
+    // لو تأخر الإطار (جهاز بطيء) لعاد المؤشر إلى الوراء وقد كُتبت حروف بعده فتنقلب مواضعها
+    caretTo.current = pos;
     setText(next);
     writeDraft(convId, next);
     setMention(null);
-    requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(pos, pos); });
   }
 
   return (
