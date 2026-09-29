@@ -108,17 +108,27 @@ cd "$ROOT/backend"
 [ -d .venv ] || $PY -m venv .venv
 # shellcheck disable=SC1091
 source .venv/bin/activate
-if [ $FAST = 0 ]; then
+# يُثبَّت دائماً في التشغيل العادي، ومع --fast أيضاً إن تغيّر requirements.txt (بعد git pull مثلاً)
+if [ $FAST = 0 ] || [ requirements.txt -nt .venv/.installed ]; then
   pip install -q --upgrade pip
   pip install -q -r requirements.txt qrcode
+  touch .venv/.installed
 fi
 python manage.py migrate --noinput
 
 # ---------------------------------------------------------------- 2) الواجهة (Next.js)
 say "Preparing the frontend (Next.js)"
 cd "$ROOT/frontend"
-if [ $FAST = 0 ] || [ ! -d .next ]; then
-  [ -d node_modules ] || npm install
+# المكتبات: تُثبَّت إن لم تكن موجودة أو إن تغيّرت قائمتها (git pull أضاف مكتبة جديدة)،
+# وإلا فشل البناء بـ "Module not found"
+NEED_BUILD=$((1 - FAST))
+if [ ! -d node_modules ] || [ package.json -nt node_modules/.installed ] || [ package-lock.json -nt node_modules/.installed ]; then
+  npm install
+  touch node_modules/.installed
+  NEED_BUILD=1
+fi
+[ -d .next ] || NEED_BUILD=1
+if [ $NEED_BUILD = 1 ]; then
   npm run build
 fi
 
