@@ -31,12 +31,32 @@ cd backend && pip install -r requirements.txt && python manage.py migrate
 cd ../frontend && npm install
 ```
 
-**الاختبارات:** `cd backend && python manage.py test`
+## الاختبارات
+- **اختبارات الخادم:** `cd backend && python manage.py test`
+- **اختبارات المتصفح (Playwright):**
+  - عشر حزم في `frontend/tests/e2e/` تجرّب التطبيق كما يستعمله الناس: الدخول، والمحادثات، والوسائط، والمكالمات، والإعدادات، والمراحل (أ) و(ب) و(ج).
+  - تحتاج الخادم على 8000 والواجهة على 3000 (`npm run build && npm start`). ثم:
+    ```bash
+    cd frontend
+    npx playwright install chromium   # مرة واحدة
+    npm run test:e2e                  # كل الحزم
+    npm run test:e2e -- pa pc         # حزم بعينها
+    ```
+  - الصور الملتقطة تُحفظ في `frontend/tests/e2e/.out/ui/`.
+- **الفحص التلقائي (GitHub Actions):**
+  - يعمل مع كل push وكل Pull Request (`.github/workflows/ci.yml`).
+  - يشغّل: اختبارات الخادم، وTypeScript، وESLint، والترجمة، والبناء، ثم اختبارات المتصفح.
+- **اختبار الضغط:** `loadtest/run.py`، والنتائج في `loadtest/results/`، وطريقة التشغيل في `docs/DEPLOY.md`.
+
+## الخط
+- التطبيق يحمل خطه معه: **IBM Plex Sans Arabic** (من الحزمة `@fontsource/ibm-plex-sans-arabic`، وأوزانه 400 و500 و600 و700).
+- يظهر الخط نفسه، الواضح والمستقيم، على كل جهاز، بدل خط النظام الذي قد يكون نسخياً مزخرفاً على بعض هواتف أندرويد.
 
 **📚 الملفات المهمة:**
 - `docs/report.html`: التقرير الشامل: المعمارية، وقاعدة البيانات، والتشفير، ومعالجة الضغط، ومكان كل ملف
 - `docs/API.md`: كل شاشة وشنو تستخدم من الـ API (للمصمم)
 - `docs/roadmap.html`: شنو عدنا وشنو الجاي
+- `docs/next-steps.md`: ما أُنجز من ميزات تيليغرام، وما أُجّل ولماذا
 - `docs/study-guide.html`: **دليل وَصل الشامل**: كل ما درسناه، وكيف بُني النظام، ودليل كل ملف وملف الإعدادات، مع أسئلة واختبار
 
 ## الهيكل

@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>تقرير نظام وَصل</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
 <meta name="description" content="تقرير مفصّل عن نظام المراسلة «وَصل» لكلية الأسباط الجامعة: المعمارية، وقاعدة البيانات، والتشفير، ومعالجة الضغط، ومواقع الملفات.">
 <style>
   :root {
@@ -27,7 +30,7 @@
   html { scroll-behavior: smooth; }
   body {
     margin: 0; background: var(--bg); color: var(--text); line-height: 1.9; font-size: 16px;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Arabic", "Segoe UI", Roboto, "Noto Sans Arabic", "Noto Sans", Tahoma, sans-serif;
+    font-family: "IBM Plex Sans Arabic", system-ui, -apple-system, BlinkMacSystemFont, "SF Arabic", "Segoe UI", Roboto, "Noto Sans Arabic", "Noto Sans", Tahoma, sans-serif;
   }
   .wrap { max-width: 1060px; margin: 0 auto; padding: 0 16px 80px; }
   header.hero { padding: 40px 0 24px; }
@@ -381,7 +384,30 @@ docker compose up -d --build</code></pre>
       <tr><td>وقت الاتصال (الوسيط)</td><td>4.8 ثانية</td><td><b>0.9 ثانية</b></td></tr>
     </tbody>
   </table></div>
-  <p class="muted">قيس على جهاز واحد بـ 4 معالجات يشغّل النظام ومولّد الضغط معاً، فالأرقام على خادم حقيقي أفضل. أدوات الاختبار: <span class="path">loadtest/run.py</span> و <code>python manage.py loadtest_users --count 2000</code>، والنتائج في <span class="path">loadtest/results/</span>. أُجري الاختبار قبل إضافة جهات الاتصال والقنوات؛ والإضافتان لا تزيدان عمل الطلبات الأساسية، لكن إعادة القياس على الخادم النهائي خطوة مستحسنة.</p>
+  <p class="muted">قيس على جهاز واحد بـ 4 معالجات يشغّل النظام ومولّد الضغط معاً، فالأرقام على خادم حقيقي أفضل. أدوات الاختبار: <span class="path">loadtest/run.py</span> و <code>python manage.py loadtest_users --count 2000</code>، والنتائج في <span class="path">loadtest/results/</span>.</p>
+
+  <h3>إعادة القياس بعد المراحل (أ)-(د)، في 29 أيلول 2026</h3>
+  <p>أعدنا الاختبار على الجهاز نفسه، وبالتخطيط الإنتاجي نفسه، للكود القديم (3 تشغيلات) والكود الجديد (7 تشغيلات). الجدول يعرض الوسيط:</p>
+  <div class="table"><table>
+    <thead><tr><th>الوسيط</th><th>الكود القديم</th><th>الكود الجديد</th></tr></thead>
+    <tbody>
+      <tr><td>اتصلوا عبر WebSocket</td><td>2000 من 2000</td><td>2000 من 2000</td></tr>
+      <tr><td>زمن جلب المحادثات لنصف المستخدمين</td><td>3.1 ثانية</td><td>4.35 ثانية</td></tr>
+      <tr><td>زمن وصول الرسالة للطرف الآخر لنصف المستخدمين</td><td>4.6 ثانية</td><td>6.5 ثانية</td></tr>
+      <tr><td>طلبات لم تكتمل خلال الاختبار</td><td>460</td><td>873</td></tr>
+      <tr><td>رسائل أُرسلت</td><td>5,512</td><td>4,779</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note warn">
+    <strong>قراءة صريحة</strong>
+    <ul>
+      <li>تحت الضغط الأقصى على هذا الجهاز الصغير، الإصدار الجديد أبطأ بنحو 30%، لأن كل رسالة صارت تفحص أكثر: الحظر، والخصوصية، وصلاحية الإرسال، والوضع البطيء، والإشارات، والرسائل المختفية.</li>
+      <li>دون ضغط، زمن الطلب الواحد متقارب في الإصدارين.</li>
+      <li>أرقام الكود القديم نفسه تتفاوت بين تشغيل وآخر (2.1 إلى 3.8 ثانية)، لأن الخادم ومولّد الضغط يتقاسمان المعالجات الأربعة. لذلك رقم 7,974 رسالة في الجدول الأول لا يُقارن مباشرة بهذا الجدول.</li>
+      <li>التوصية للتشغيل الفعلي: خادم من 8 معالجات، وإعادة القياس عليه.</li>
+      <li>كل التشغيلات محفوظة في <span class="path">loadtest/results/phase-d-runs.json</span>.</li>
+    </ul>
+  </div>
 </section>
 
 <!-- ============================================================ 9 -->

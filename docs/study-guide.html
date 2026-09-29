@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>دليل وَصل الشامل</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap">
 <meta name="description" content="كل ما درسناه عن نظام «وَصل» في ملف واحد بالفصحى: الأساسيات، والتشغيل وDaphne، وكيف بُنيت الميزات، ودليل كل ملف وملف الإعدادات، واختبار نهائي.">
 <style>
   :root {
@@ -26,7 +29,7 @@
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
   body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.9; font-size: 16px;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Arabic", "Segoe UI", Roboto, "Noto Sans Arabic", "Noto Sans", Tahoma, sans-serif; }
+    font-family: "IBM Plex Sans Arabic", system-ui, -apple-system, BlinkMacSystemFont, "SF Arabic", "Segoe UI", Roboto, "Noto Sans Arabic", "Noto Sans", Tahoma, sans-serif; }
   .wrap { max-width: 1060px; margin: 0 auto; padding: 0 16px 80px; }
   header.hero { padding: 40px 0 20px; }
   .eyebrow { color: var(--accent); font-weight: 700; font-size: 14px; }
@@ -148,16 +151,17 @@
   <ol start="15">
     <li><a href="#s15">الميزات الأولى والإشعارات وVAPID</a></li><li><a href="#s16">التوسع لألفي طالب</a></li><li><a href="#s17">الهاش والتشفير</a></li>
     <li><a href="#s18">الهاتف وhttps والأذونات</a></li><li><a href="#s19">جهات الاتصال والقنوات واللغتان والمكالمات</a></li>
+    <li><a href="#s20">المراحل (أ) إلى (د)</a></li>
   </ol>
   <h3>الجزء الرابع: دليل الملفات</h3>
-  <ol start="20">
+  <ol start="21">
     <li><a href="#big">خريطة المشروع</a></li><li><a href="#lang">كيف تعرف لغة أي ملف؟</a></li><li><a href="#fw">كيف تعرف إطار العمل؟</a></li>
     <li><a href="#manager">ماذا تقول للمدير، وكيف تُثبت له</a></li><li><a href="#settings">ملف الإعدادات: ماذا فيه؟</a></li>
     <li><a href="#backend">ملفات الخادم</a></li><li><a href="#frontend">ملفات الواجهة</a></li><li><a href="#other">ملفات التشغيل والتوثيق</a></li>
     <li><a href="#generated">ما لم نكتبه نحن</a></li><li><a href="#qa">أسئلة المدير المتوقعة</a></li>
   </ol>
   <h3>الجزء الخامس</h3>
-  <ol start="30"><li><a href="#final">الاختبار النهائي (30 سؤالاً)</a></li></ol>
+  <ol start="31"><li><a href="#final">الاختبار النهائي (30 سؤالاً)</a></li></ol>
 </nav>
 
 <div class="part-title" id="part1"><span>الجزء الأول</span>الأساسيات: كيف يعمل أي تطبيق مثل تطبيقنا</div>
@@ -214,7 +218,7 @@
     </tbody>
   </table></div>
   <h3>لماذا TypeScript؟ وما علاقتها بـ Next.js؟</h3>
-  <p>Next.js إطار، والكود داخله يُكتب بإحدى لغتين فقط: JavaScript أو TypeScript. و<b>TypeScript هي JavaScript نفسها مع إضافة «الأنواع»</b>: تكتب <code>name: string</code> فيكتشف المحرّر الأخطاء قبل التشغيل. وعند البناء تتحول تلقائياً إلى JavaScript، فالمتصفح لا يرى إلا JavaScript. واخترناها لأن Next.js نفسه يقترحها افتراضياً. (وفي القسم 21 طرق التمييز بين اللغات، وفي القسم 23 ما تقوله للمدير.)</p>
+  <p>Next.js إطار، والكود داخله يُكتب بإحدى لغتين فقط: JavaScript أو TypeScript. و<b>TypeScript هي JavaScript نفسها مع إضافة «الأنواع»</b>: تكتب <code>name: string</code> فيكتشف المحرّر الأخطاء قبل التشغيل. وعند البناء تتحول تلقائياً إلى JavaScript، فالمتصفح لا يرى إلا JavaScript. واخترناها لأن Next.js نفسه يقترحها افتراضياً. (وفي القسم 22 طرق التمييز بين اللغات، وفي القسم 24 ما تقوله للمدير.)</p>
   <h3>Node.js وnpm</h3>
   <p>كانت <b>JavaScript</b> في الأصل تعمل داخل المتصفح فقط. و<b>Node.js ليس لغة</b>، بل برنامج يشغّل JavaScript على جهازك خارج المتصفح؛ نحتاجه لتشغيل Next.js.</p>
   <p>و<b>npm</b> يأتي مع Node.js، وهو مثل متجر تُنزَّل منه المكتبات. الأمر <code>npm install</code> ينزّل كل ما تحتاجه الواجهة.</p>
@@ -398,7 +402,7 @@ Authorization: Token abc123
       <tr><td>PATCH</td><td><code>/api/conversations/5/read/</code></td><td>تعليم المحادثة مقروءة</td></tr>
     </tbody>
   </table></div>
-  <p>والقائمة الكاملة في <span class="path">docs/API.md</span>، وملفاتها في القسم 25.</p>
+  <p>والقائمة الكاملة في <span class="path">docs/API.md</span>، وملفاتها في القسم 26.</p>
   <h3>التوكن: كيف يعرف الخادم من أنت؟</h3>
   <ol>
     <li>تسجّل الدخول بمعرّفك وكلمة المرور.</li>
@@ -820,7 +824,7 @@ daphne -p 8000 config.asgi:application</code></pre>
       <tr><td><code>docker start &lt;name&gt;</code></td><td>يعيد تشغيله</td></tr>
     </tbody>
   </table></div>
-  <p>ونستعمل Docker نفسه لتشغيل «وَصل» على خادم حقيقي بسبع خدمات؛ تفاصيلها في القسم 27.</p>
+  <p>ونستعمل Docker نفسه لتشغيل «وَصل» على خادم حقيقي بسبع خدمات؛ تفاصيلها في القسم 28.</p>
 
   <h3>🌐 ما هو CORS؟</h3>
   <p><b>CORS</b> قاعدة أمان في المتصفح: لا يستطيع موقع أن يطلب من خادم آخر <b>إلا إذا وافق الخادم</b>. فالخادم لديه قائمة بالمواقع المسموح لها.</p>
@@ -1104,10 +1108,140 @@ daphne -p 8000 config.asgi:application</code></pre>
   </div>
 </section>
 
-<div class="part-title" id="part4"><span>الجزء الرابع</span>دليل الملفات: كل ملف، ولغته، وعمله</div>
 <!-- ============ 20 -->
+<section class="part lesson" id="s20">
+  <h2><span class="n">20</span>المراحل (أ) إلى (د): ما أضفناه في أيلول 2026</h2>
+  <p>أضفنا أغلب ما كان ينقصنا مقارنة بتيليغرام، على أربع مراحل. تحت كل ميزة الملفات التي تجدها فيها.</p>
+
+  <h3>المرحلة (أ): الصور والرفع والكتابة</h3>
+  <ul>
+    <li><b>الصورة تظهر فوراً</b> عند الإرسال، مع حلقة تقدّم وزر ✕ للإلغاء، و«لم تُرسل» مع «إعادة المحاولة» إن انقطع الاتصال.
+      <ul>
+        <li>الرفع بـ <code>XMLHttpRequest</code> لأنه وحده يخبرنا بنسبة التقدّم: الدالة <code>upload()</code> في <span class="path">frontend/lib/api.ts</span>.</li>
+        <li>العرض: <span class="path">frontend/app/chat/_ui/Bubbles.tsx</span>.</li>
+      </ul>
+    </li>
+    <li><b>الخادم يحفظ أبعاد الصورة</b> (العرض والارتفاع)، فيحجز المستقبِل مكانها بالشكل الصحيح قبل تحميلها، فلا تقفز الرسائل.
+      <ul>
+        <li>الحقلان <code>width</code> و<code>height</code> في <span class="path">backend/chat/models.py</span>.</li>
+        <li>القراءة في <span class="path">backend/chat/media.py</span>.</li>
+      </ul>
+    </li>
+    <li>في الحاسوب: Enter يرسل وShift+Enter سطر جديد. وفي الهاتف: Enter سطر جديد، وزر الإرسال يرسل.
+      <ul><li><span class="path">frontend/app/chat/_ui/Composer.tsx</span></li></ul>
+    </li>
+  </ul>
+
+  <h3>المرحلة (ب): إعدادات المحادثة، والجدولة، والمكالمات الجماعية، والمظاهر</h3>
+  <ul>
+    <li><b>إعدادات المحادثة:</b>
+      <ul>
+        <li>الميزات: الكتم حتى وقت محدد، والرسائل المختفية، و«الإرسال للمشرفين فقط»، والوضع البطيء، ورابط الدعوة، وخلفية خاصة لكل محادثة.</li>
+        <li>الخادم: <span class="path">backend/chat/views.py</span>.</li>
+        <li>الواجهة: <span class="path">frontend/app/chat/_ui/ConvSettings.tsx</span>.</li>
+      </ul>
+    </li>
+    <li><b>الرسائل المجدولة، وحذف الرسائل المختفية:</b>
+      <ul>
+        <li>يتولّاهما <b>عامل خلفي</b> يعمل كل 15 ثانية: <span class="path">backend/chat/worker.py</span>.</li>
+        <li>إن عمل أكثر من عامل معاً، «يحجز» كل عامل الرسالة بأمر <code>UPDATE</code> واحد يغيّر حالتها من <code>pending</code> إلى <code>sending</code>.</li>
+        <li>من ينجح في الحجز يرسلها وحده، فلا تُرسل مرتين.</li>
+      </ul>
+    </li>
+    <li><b>المكالمات الجماعية حتى 8 أشخاص، ومشاركة الشاشة:</b>
+      <ul>
+        <li>كل جهاز يتصل بكل جهاز مباشرة (mesh)، لذلك الحد 8.</li>
+        <li>مشاركة الشاشة بـ <code>getDisplayMedia</code>.</li>
+        <li>الملفات: <span class="path">frontend/lib/call.ts</span> (<code>GroupCall</code>)، و<span class="path">backend/calls/views.py</span>.</li>
+      </ul>
+    </li>
+    <li><b>المظاهر:</b>
+      <ul>
+        <li>6 ألوان و6 خلفيات، بمتغيرات CSS تتبدل بالسمتين <code>data-accent</code> و<code>data-wallpaper</code>.</li>
+        <li>الملفات: <span class="path">frontend/app/chat/_ui/Settings.tsx</span>.</li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>المرحلة (ج): الأمان والخصوصية وأدوات الرسائل</h3>
+  <ul>
+    <li><b>الدور لا يمنحه المستخدم لنفسه:</b>
+      <ul>
+        <li>من يختار «تدريسي» يبقى طالباً حتى يوافق الإداري من <code>/admin</code>.</li>
+        <li>الملف: <span class="path">backend/accounts/admin.py</span>.</li>
+      </ul>
+    </li>
+    <li><b>الحظر، والإبلاغ، والخصوصية</b> (من يرى آخر ظهوري وصورتي):
+      <ul>
+        <li>الصنف <code>Viewer</code> في <span class="path">backend/accounts/privacy.py</span> يطبّق خصوصية صاحب الحساب على كل مشاهد.</li>
+        <li>والرسالة التي تُبث للجميع لا تحمل آخر ظهور المرسل أبداً.</li>
+      </ul>
+    </li>
+    <li><b>الأجهزة، والتحقق بخطوتين، وحذف الحساب:</b>
+      <ul>
+        <li>الخادم: <span class="path">backend/accounts/views.py</span>.</li>
+        <li>الواجهة: <span class="path">frontend/app/chat/_ui/Safety.tsx</span>.</li>
+      </ul>
+    </li>
+    <li><b>أدوات الرسائل:</b>
+      <ul>
+        <li>الميزات: إعادة التوجيه، والبحث داخل الرسائل المشفّرة، والتثبيت، والاستطلاعات، ومعاينة الروابط، والمجلدات.</li>
+        <li>الخادم: <span class="path">backend/chat/features.py</span>.</li>
+        <li>الواجهة: <span class="path">frontend/app/chat/_ui/Tools.tsx</span>.</li>
+      </ul>
+    </li>
+    <li><b>معاينة الروابط وهجوم SSRF:</b>
+      <ul>
+        <li>الخادم هو من يفتح الرابط ليقرأ عنوان الصفحة.</li>
+        <li>لو قبل أي عنوان، لاستطاع مهاجم أن يجعله يفتح عناوين داخلية مثل <code>127.0.0.1</code> أو <code>169.254.169.254</code>.</li>
+        <li>لذلك نتحقق أولاً أن عنوان الموقع عام.</li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>المرحلة (د): الخط، والاختبارات، والفحص التلقائي</h3>
+  <ul>
+    <li><b>خط واحد واضح</b> على كل جهاز: IBM Plex Sans Arabic، يُحمَّل مع التطبيق نفسه من الحزمة <code>@fontsource/ibm-plex-sans-arabic</code>.
+      <ul>
+        <li>كنا نعتمد على خط النظام، وبعض هواتف أندرويد تعرض خطاً نسخياً مزخرفاً.</li>
+      </ul>
+    </li>
+    <li><b>اختبارات المتصفح في المستودع:</b>
+      <ul>
+        <li>عشر حزم في <span class="path">frontend/tests/e2e/</span>.</li>
+        <li>تُشغَّل بأمر واحد: <code>npm run test:e2e</code>.</li>
+      </ul>
+    </li>
+    <li><b>GitHub Actions</b> (<span class="path">.github/workflows/ci.yml</span>) يعمل مع كل push، ويشغّل:
+      <ul>
+        <li>اختبارات الخادم.</li>
+        <li>TypeScript، وESLint، والترجمة، والبناء.</li>
+        <li>ثم اختبارات المتصفح على خادم حقيقي.</li>
+      </ul>
+    </li>
+  </ul>
+  <div class="note info">
+    <strong>درس من الفحص التلقائي</strong>
+    <ul>
+      <li>أول تشغيل على GitHub فشل في اختبار واحد: كُتبت الإشارة <code>@sara</code> ثم النص، فظهر النص مقلوب الترتيب.</li>
+      <li>السبب: بعد اختيار الإشارة كنا نضع المؤشر في «الإطار التالي» (<code>requestAnimationFrame</code>). على جهاز بطيء يتأخر هذا الإطار، فتُكتب حروف ثم يعود المؤشر إلى الوراء.</li>
+      <li>الإصلاح: وضع المؤشر فور عرض النص الجديد (<code>useLayoutEffect</code>).</li>
+      <li>العبرة: الفحص على جهاز آخر أبطأ يكشف أخطاء لا تظهر عندنا.</li>
+    </ul>
+  </div>
+  <div class="interview">«أضفنا ميزات تيليغرام الأساسية على أربع مراحل: إعدادات المحادثة، والجدولة بعامل خلفي آمن من التكرار، والمكالمات الجماعية، والخصوصية والحظر، وأدوات الرسائل. وكل ذلك مغطى باختبارات في المستودع تعمل تلقائياً مع كل تعديل.»</div>
+  <div class="quiz">
+    <h3>✍️ أسئلة</h3>
+    <div class="mcq" data-correct="1"><p>1. شُغّل عاملان خلفيان معاً. كيف لا تُرسل الرسالة المجدولة مرتين؟</p><div class="opts"><button>كل عامل ينتظر الآخر دقيقة</button><button>كل عامل يحاول تغيير حالتها من pending إلى sending بأمر UPDATE واحد، ومن ينجح وحده يرسلها</button><button>لا حل؛ لا تشغّل إلا عاملاً واحداً</button></div><div class="why">قاعدة البيانات تضمن أن UPDATE واحداً فقط يجد الحالة pending.</div></div>
+    <div class="mcq" data-correct="0"><p>2. لماذا الحد في المكالمة الجماعية 8 أشخاص؟</p><div class="opts"><button>لأن كل جهاز يتصل بكل جهاز مباشرة، فيزداد الحمل على الجهاز مع كل مشارك</button><button>لأن الخادم لا يتحمل أكثر</button><button>لأن WebRTC لا يسمح بأكثر</button></div><div class="why">للأعداد الأكبر يلزم خادم وسائط (SFU) يستقبل من كل جهاز مرة واحدة.</div></div>
+    <div class="mcq" data-correct="2"><p>3. لماذا يرفض الخادم معاينة الرابط <code>http://127.0.0.1:8000/admin/</code>؟</p><div class="opts"><button>لأنه رابط غير آمن (http)</button><button>لأن المنفذ غير مسموح</button><button>لأنه عنوان داخلي؛ قبوله يسمح لمهاجم باستعمال خادمنا للوصول إلى الشبكة الداخلية (SSRF)</button></div><div class="why">المعاينة تُفتح من الخادم، فنسمح بالعناوين العامة فقط.</div></div>
+  </div>
+</section>
+
+<div class="part-title" id="part4"><span>الجزء الرابع</span>دليل الملفات: كل ملف، ولغته، وعمله</div>
+<!-- ============ 21 -->
 <section class="part lesson" id="big">
-  <h2><span class="n">20</span>خريطة المشروع: المجلدات الرئيسية</h2>
+  <h2><span class="n">21</span>خريطة المشروع: المجلدات الرئيسية</h2>
   <p>حين تفتح المجلد <span class="path">chat/</span> في VS Code ترى في الشريط الجانبي هذه المجلدات الرئيسية:</p>
   <pre><code>chat/
 ├── backend/        الخادم: العقل والذاكرة (Python + Django)
@@ -1124,10 +1258,10 @@ daphne -p 8000 config.asgi:application</code></pre>
   <p>الجزءان منفصلان تماماً ويتحدثان عبر الشبكة بطريقتين: <b>HTTP</b> (سؤال وجواب، مثل «أعطني محادثاتي») و<b>WebSocket</b> (خط مفتوح دائماً للرسائل الفورية).</p>
 </section>
 
-<!-- ============ 21 -->
+<!-- ============ 22 -->
 <section class="part lesson" id="lang">
-  <h2><span class="n">21</span>كيف تعرف لغة أي ملف؟</h2>
-  <h3><span class="n">21.1</span>الطريقة الأولى: امتداد الملف (الأسهل)</h3>
+  <h2><span class="n">22</span>كيف تعرف لغة أي ملف؟</h2>
+  <h3><span class="n">22.1</span>الطريقة الأولى: امتداد الملف (الأسهل)</h3>
   <p>الامتداد هو ما بعد النقطة في اسم الملف. هذا جدول كل الامتدادات في مشروعنا:</p>
   <div class="table"><table>
     <thead><tr><th>الامتداد</th><th>اللغة</th><th>مثال من مشروعنا</th></tr></thead>
@@ -1147,10 +1281,10 @@ daphne -p 8000 config.asgi:application</code></pre>
     </tbody>
   </table></div>
 
-  <h3><span class="n">21.2</span>الطريقة الثانية: VS Code يخبرك بنفسه</h3>
+  <h3><span class="n">22.2</span>الطريقة الثانية: VS Code يخبرك بنفسه</h3>
   <p>افتح أي ملف، وانظر إلى <b>الشريط السفلي في VS Code، في الزاوية اليمنى</b>. ستجد اسم اللغة مكتوباً: <code>Python</code> عند فتح ملف ‎.py، و<code>TypeScript JSX</code> عند فتح ملف ‎.tsx، و<code>TypeScript</code> عند فتح ملف ‎.ts. وأيقونة الملف في الشريط الجانبي تدل عليها أيضاً: ثعبان أزرق وأصفر لـ Python، ومربع أزرق مكتوب فيه TS لـ TypeScript.</p>
 
-  <h3><span class="n">21.3</span>الطريقة الثالثة: شكل الكود نفسه</h3>
+  <h3><span class="n">22.3</span>الطريقة الثالثة: شكل الكود نفسه</h3>
   <p>الدالة نفسها من مشروعنا بالطريقتين:</p>
   <div class="grid2">
     <div class="box"><h4><span class="lang py">Python</span> من <span class="path">backend/chat/views.py</span></h4>
@@ -1163,7 +1297,7 @@ daphne -p 8000 config.asgi:application</code></pre>
       <p>• <code>const</code> و<code>=&gt;</code> والأقواس المعقوفة<br>• التعليق يبدأ بـ <code>//</code><br>• الاستيراد: <code>import { x } from "y"</code><br>• <b>وعلامة TypeScript تحديداً: الأنواع بعد النقطتين</b> <code>u: User</code></p></div>
   </div>
 
-  <h3><span class="n">21.4</span>كيف تفرّق TypeScript عن JavaScript؟</h3>
+  <h3><span class="n">22.4</span>كيف تفرّق TypeScript عن JavaScript؟</h3>
   <p>هما متشابهتان جداً، لأن TypeScript هي JavaScript مع «الأنواع». أربع علامات تكفي:</p>
   <ol class="steps">
     <li><b>الامتداد</b>: <code>.ts</code> أو <code>.tsx</code> تعني TypeScript، و<code>.js</code> أو <code>.jsx</code> تعني JavaScript.</li>
@@ -1173,11 +1307,11 @@ daphne -p 8000 config.asgi:application</code></pre>
   </ol>
 </section>
 
-<!-- ============ 22 -->
+<!-- ============ 23 -->
 <section class="part lesson" id="fw">
-  <h2><span class="n">22</span>كيف تعرف إطار العمل؟</h2>
+  <h2><span class="n">23</span>كيف تعرف إطار العمل؟</h2>
   <p>تذكير: <b>اللغة</b> هي ما نكتب به (Python، TypeScript)، و<b>إطار العمل</b> هيكل جاهز مكتوب بتلك اللغة نبني داخله (Django، Next.js). ولكل إطار «بصمات» في الملفات:</p>
-  <h3><span class="n">22.1</span>بصمات Django في الخادم</h3>
+  <h3><span class="n">23.1</span>بصمات Django في الخادم</h3>
   <ul>
     <li>الملف <span class="path">backend/manage.py</span>: موجود في كل مشروع Django، وبه نشغّل الأوامر (<code>python manage.py runserver</code>).</li>
     <li>الملف <span class="path">backend/config/settings.py</span> وفيه <code>INSTALLED_APPS</code> و<code>MIDDLEWARE</code>: أسماء خاصة بـ Django.</li>
@@ -1185,7 +1319,7 @@ daphne -p 8000 config.asgi:application</code></pre>
     <li>في أول كل ملف: <code>from django.db import models</code>، و<code>from rest_framework ...</code> (وهو Django REST Framework)، و<code>from channels ...</code> (وهو Django Channels).</li>
     <li>كل «تطبيق» مجلد فيه الملفات نفسها: <code>models.py</code>، <code>views.py</code>، <code>urls.py</code>، <code>admin.py</code>، <code>apps.py</code>، <code>migrations/</code>. هذا تنظيم Django المعروف.</li>
   </ul>
-  <h3><span class="n">22.2</span>بصمات Next.js وReact في الواجهة</h3>
+  <h3><span class="n">23.2</span>بصمات Next.js وReact في الواجهة</h3>
   <ul>
     <li>في <span class="path">frontend/package.json</span>: <code>"next": "16.3.6"</code> و<code>"react": "19.2.8"</code>، والأوامر <code>next dev</code> و<code>next build</code>.</li>
     <li>الملف <span class="path">frontend/next.config.ts</span>: إعدادات Next.js.</li>
@@ -1195,12 +1329,12 @@ daphne -p 8000 config.asgi:application</code></pre>
   </ul>
 </section>
 
-<!-- ============ 23 -->
+<!-- ============ 24 -->
 <section class="part lesson" id="manager">
-  <h2><span class="n">23</span>ماذا تقول للمدير، وكيف تُثبت له</h2>
-  <h3><span class="n">23.1</span>الجواب في جملتين</h3>
+  <h2><span class="n">24</span>ماذا تقول للمدير، وكيف تُثبت له</h2>
+  <h3><span class="n">24.1</span>الجواب في جملتين</h3>
   <div class="say">«الخادم مكتوب بلغة Python بإطار Django، ومعه Django REST Framework للـ API وDjango Channels للرسائل الفورية. والواجهة مكتوبة بلغة TypeScript بإطار Next.js مع React.»</div>
-  <h3><span class="n">23.2</span>إن سألك: «كيف عرفتَ أنها TypeScript؟»</h3>
+  <h3><span class="n">24.2</span>إن سألك: «كيف عرفتَ أنها TypeScript؟»</h3>
   <p>افتح VS Code وأره هذه الأدلة الخمسة بالترتيب:</p>
   <ol class="steps">
     <li><b>امتداد الملفات</b>: افتح <span class="path">frontend/app/chat/_ui/</span> وأشر إلى الأسماء: <code>ChatList.tsx</code>، <code>Conversation.tsx</code>. والامتداد <code>.tsx</code> يعني TypeScript.</li>
@@ -1209,17 +1343,17 @@ daphne -p 8000 config.asgi:application</code></pre>
     <li><b>ملف إعدادات TypeScript</b>: <span class="path">frontend/tsconfig.json</span>، وفيه <code>"strict": true</code> أي الفحص الصارم للأنواع.</li>
     <li><b>قائمة المكتبات</b>: <span class="path">frontend/package.json</span>، وفيه <code>"typescript": "^5"</code> و<code>"next": "16.3.6"</code>.</li>
   </ol>
-  <h3><span class="n">23.3</span>وإن سألك: «ولماذا TypeScript لا JavaScript؟»</h3>
+  <h3><span class="n">24.3</span>وإن سألك: «ولماذا TypeScript لا JavaScript؟»</h3>
   <div class="say">«لأنها تكشف الأخطاء قبل التشغيل؛ فلو كتبتُ اسم حقل خطأ أو مرّرتُ رقماً مكان نص، تنبّهني فوراً. وهي الخيار الافتراضي الذي يقترحه Next.js نفسه، وعند البناء تتحول إلى JavaScript عادية يفهمها المتصفح.»</div>
-  <h3><span class="n">23.4</span>وإن سألك عن الخادم: «كيف عرفتَ أنه Django؟»</h3>
+  <h3><span class="n">24.4</span>وإن سألك عن الخادم: «كيف عرفتَ أنه Django؟»</h3>
   <p>أره <span class="path">backend/manage.py</span>، ثم <span class="path">backend/requirements.txt</span> وفيه <code>Django==5.2.17</code>، ثم أول سطر في <span class="path">backend/chat/models.py</span>: <code>from django.db import models</code>.</p>
 </section>
 
-<!-- ============ 24 -->
+<!-- ============ 25 -->
 <section class="part lesson" id="settings">
-  <h2><span class="n">24</span>ملف الإعدادات: ماذا فيه؟</h2>
+  <h2><span class="n">25</span>ملف الإعدادات: ماذا فيه؟</h2>
   <p>حين يُقال «ملف الإعدادات» في مشروع Django فالمقصود <span class="path">backend/config/settings.py</span> (233 سطراً، بلغة Python). هو المكان الذي يقرر كيف يعمل الخادم كله. هذه محتوياته بالترتيب نفسه الذي تراه حين تفتحه:</p>
-  <h3><span class="n">24.1</span>الأمان والعناوين</h3>
+  <h3><span class="n">25.1</span>الأمان والعناوين</h3>
   <div class="table"><table>
     <thead><tr><th>الإعداد</th><th>معناه</th></tr></thead>
     <tbody>
@@ -1230,7 +1364,7 @@ daphne -p 8000 config.asgi:application</code></pre>
       <tr><td><code>SECURE_PROXY_SSL_HEADER</code></td><td>يخبر Django أن الطلب الأصلي كان https حين يمرّ عبر البوابة (Caddy).</td></tr>
     </tbody>
   </table></div>
-  <h3><span class="n">24.2</span>مكوّنات النظام</h3>
+  <h3><span class="n">25.2</span>مكوّنات النظام</h3>
   <div class="table"><table>
     <thead><tr><th>الإعداد</th><th>معناه</th></tr></thead>
     <tbody>
@@ -1241,7 +1375,7 @@ daphne -p 8000 config.asgi:application</code></pre>
       <tr><td><code>ASGI_APPLICATION</code></td><td>نقطة الدخول التي تدعم WebSocket: <span class="path">config/asgi.py</span>.</td></tr>
     </tbody>
   </table></div>
-  <h3><span class="n">24.3</span>قاعدة البيانات وكلمات المرور</h3>
+  <h3><span class="n">25.3</span>قاعدة البيانات وكلمات المرور</h3>
   <div class="table"><table>
     <thead><tr><th>الإعداد</th><th>معناه</th></tr></thead>
     <tbody>
@@ -1250,7 +1384,7 @@ daphne -p 8000 config.asgi:application</code></pre>
       <tr><td><code>AUTH_PASSWORD_VALIDATORS</code></td><td>قواعد كلمة المرور: ألا تشبه اسم المستخدم، وألا تكون قصيرة، ولا شائعة، ولا أرقاماً فقط.</td></tr>
     </tbody>
   </table></div>
-  <h3><span class="n">24.4</span>اللغة والوقت والملفات</h3>
+  <h3><span class="n">25.4</span>اللغة والوقت والملفات</h3>
   <div class="table"><table>
     <thead><tr><th>الإعداد</th><th>معناه</th></tr></thead>
     <tbody>
@@ -1263,7 +1397,7 @@ daphne -p 8000 config.asgi:application</code></pre>
       <tr><td><code>DEFAULT_AUTO_FIELD</code></td><td>نوع رقم التعريف (id) في الجداول: رقم كبير يكفي لمليارات الصفوف.</td></tr>
     </tbody>
   </table></div>
-  <h3><span class="n">24.5</span>السرعة والحماية من الضغط</h3>
+  <h3><span class="n">25.5</span>السرعة والحماية من الضغط</h3>
   <div class="table"><table>
     <thead><tr><th>الإعداد</th><th>معناه</th></tr></thead>
     <tbody>
@@ -1273,7 +1407,7 @@ daphne -p 8000 config.asgi:application</code></pre>
       <tr><td><code>CORS_ALLOWED_ORIGINS</code></td><td>المواقع المسموح لها أن تتصل بالـ API (الواجهة على المنفذ 3000).</td></tr>
     </tbody>
   </table></div>
-  <h3><span class="n">24.6</span>الإشعارات والمكالمات والسجلات</h3>
+  <h3><span class="n">25.6</span>الإشعارات والمكالمات والسجلات</h3>
   <div class="table"><table>
     <thead><tr><th>الإعداد</th><th>معناه</th></tr></thead>
     <tbody>
@@ -1283,7 +1417,7 @@ daphne -p 8000 config.asgi:application</code></pre>
     </tbody>
   </table></div>
   <div class="note info"><strong>لماذا تبدأ قيم كثيرة بـ <code>os.environ.get(...)</code>؟</strong>معناها: «اقرأ القيمة من متغيرات البيئة (ملف <code>.env</code> على الخادم)، وإن لم توجد فاستعمل القيمة الافتراضية للتطوير». هكذا لا تُكتب الأسرار (كلمات السر والمفاتيح) داخل الكود، ولا تُرفع إلى GitHub.</div>
-  <h3><span class="n">24.7</span>ملفات إعدادات أخرى قد يُسأل عنها</h3>
+  <h3><span class="n">25.7</span>ملفات إعدادات أخرى قد يُسأل عنها</h3>
   <div class="table"><table>
     <thead><tr><th>الملف</th><th>ماذا يضبط</th></tr></thead>
     <tbody>
@@ -1298,9 +1432,9 @@ daphne -p 8000 config.asgi:application</code></pre>
   </table></div>
 </section>
 
-<!-- ============ 25 -->
+<!-- ============ 26 -->
 <section class="part lesson" id="backend">
-  <h2><span class="n">25</span>ملفات الخادم: مجلد <span class="path">backend</span></h2>
+  <h2><span class="n">26</span>ملفات الخادم: مجلد <span class="path">backend</span></h2>
   <div class="note info"><strong>قاعدة تختصر عليك نصف الملفات</strong>الخادم مقسّم إلى «تطبيقات» Django، وكل تطبيق مجلد له الملفات نفسها بالمعنى نفسه:<br>
   • <code>__init__.py</code>: ملف فارغ يجعل المجلد «حزمة» Python يمكن الاستيراد منها. لا تعدّله.<br>
   • <code>apps.py</code>: تسجيل التطبيق في Django (سطور قليلة ثابتة).<br>
@@ -1310,10 +1444,10 @@ daphne -p 8000 config.asgi:application</code></pre>
   • <code>serializers.py</code>: تحويل البيانات بين Python وJSON.<br>
   • <code>admin.py</code>: ما يظهر في لوحة الإدارة <code>/admin</code>.<br>
   • <code>tests.py</code>: الاختبارات الآلية.<br>
-  • <code>migrations/</code>: سجلّ تغييرات الجداول، يولّده Django (القسم 28).<br>
+  • <code>migrations/</code>: سجلّ تغييرات الجداول، يولّده Django (القسم 29).<br>
   • <code>management/commands/</code>: أوامر إضافية تُشغَّل بـ <code>python manage.py اسم_الأمر</code>.</div>
 
-  <h3><span class="n">25.1</span>ملفات في جذر <span class="path">backend/</span></h3>
+  <h3><span class="n">26.1</span>ملفات في جذر <span class="path">backend/</span></h3>
   <div class="table"><table>
     <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
     <tbody>
@@ -1327,11 +1461,11 @@ daphne -p 8000 config.asgi:application</code></pre>
     </tbody>
   </table></div>
 
-  <h3><span class="n">25.2</span><span class="path">config/</span>: إعدادات المشروع العامة</h3>
+  <h3><span class="n">26.2</span><span class="path">config/</span>: إعدادات المشروع العامة</h3>
   <div class="table"><table>
     <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
     <tbody>
-      <tr><td><span class="path">settings.py</span></td><td><span class="lang py">Python</span></td><td><b>ملف الإعدادات</b>، ومشروح بالتفصيل في القسم 24.</td></tr>
+      <tr><td><span class="path">settings.py</span></td><td><span class="lang py">Python</span></td><td><b>ملف الإعدادات</b>، ومشروح بالتفصيل في القسم 25.</td></tr>
       <tr><td><span class="path">urls.py</span></td><td><span class="lang py">Python</span></td><td>الروابط الرئيسية: <code>/admin/</code> للوحة الإدارة، و<code>/api/</code> تتوزع على التطبيقات الخمسة، و<code>/media/</code> للملفات.</td></tr>
       <tr><td><span class="path">asgi.py</span></td><td><span class="lang py">Python</span></td><td>نقطة الدخول الحديثة: توزّع الاتصالات؛ HTTP إلى Django، وWebSocket إلى Channels (مع التحقق من التوكن).</td></tr>
       <tr><td><span class="path">wsgi.py</span></td><td><span class="lang py">Python</span></td><td>نقطة الدخول التقليدية للطلبات العادية (يستعملها Gunicorn). ملف قياسي.</td></tr>
@@ -1340,7 +1474,7 @@ daphne -p 8000 config.asgi:application</code></pre>
     </tbody>
   </table></div>
 
-  <h3><span class="n">25.3</span><span class="path">accounts/</span>: الحسابات والدخول وجهات الاتصال</h3>
+  <h3><span class="n">26.3</span><span class="path">accounts/</span>: الحسابات والدخول وجهات الاتصال</h3>
   <div class="table"><table>
     <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
     <tbody>
@@ -1357,7 +1491,7 @@ daphne -p 8000 config.asgi:application</code></pre>
     </tbody>
   </table></div>
 
-  <h3><span class="n">25.4</span><span class="path">chat/</span>: قلب النظام (المحادثات والرسائل والقنوات)</h3>
+  <h3><span class="n">26.4</span><span class="path">chat/</span>: قلب النظام (المحادثات والرسائل والقنوات)</h3>
   <div class="table"><table>
     <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
     <tbody>
@@ -1380,7 +1514,7 @@ daphne -p 8000 config.asgi:application</code></pre>
     </tbody>
   </table></div>
 
-  <h3><span class="n">25.5</span><span class="path">calls/</span>: المكالمات</h3>
+  <h3><span class="n">26.5</span><span class="path">calls/</span>: المكالمات</h3>
   <div class="table"><table>
     <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
     <tbody>
@@ -1390,7 +1524,7 @@ daphne -p 8000 config.asgi:application</code></pre>
     </tbody>
   </table></div>
 
-  <h3><span class="n">25.6</span><span class="path">stories/</span>: الحالات (24 ساعة)</h3>
+  <h3><span class="n">26.6</span><span class="path">stories/</span>: الحالات (24 ساعة)</h3>
   <div class="table"><table>
     <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
     <tbody>
@@ -1401,7 +1535,7 @@ daphne -p 8000 config.asgi:application</code></pre>
     </tbody>
   </table></div>
 
-  <h3><span class="n">25.7</span><span class="path">notifications/</span>: الإشعارات</h3>
+  <h3><span class="n">26.7</span><span class="path">notifications/</span>: الإشعارات</h3>
   <div class="table"><table>
     <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
     <tbody>
@@ -1414,12 +1548,12 @@ daphne -p 8000 config.asgi:application</code></pre>
   </table></div>
 </section>
 
-<!-- ============ 26 -->
+<!-- ============ 27 -->
 <section class="part lesson" id="frontend">
-  <h2><span class="n">26</span>ملفات الواجهة: مجلد <span class="path">frontend</span></h2>
+  <h2><span class="n">27</span>ملفات الواجهة: مجلد <span class="path">frontend</span></h2>
   <div class="note info"><strong>قاعدة سريعة</strong>ملفات <code>.tsx</code> فيها <b>شاشات</b> (ما يُرسم)، وملفات <code>.ts</code> فيها <b>منطق</b> بلا شاشات. وفي أول ملفات الشاشات سطر <code>"use client"</code>، ومعناه في Next.js: «هذا المكوّن يعمل في المتصفح»، لأن فيه أزراراً وتفاعلاً.</div>
 
-  <h3><span class="n">26.1</span>ملفات الإعدادات في جذر <span class="path">frontend/</span></h3>
+  <h3><span class="n">27.1</span>ملفات الإعدادات في جذر <span class="path">frontend/</span></h3>
   <div class="table"><table>
     <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
     <tbody>
@@ -1435,7 +1569,7 @@ daphne -p 8000 config.asgi:application</code></pre>
     </tbody>
   </table></div>
 
-  <h3><span class="n">26.2</span><span class="path">app/</span>: الصفحات (نظام Next.js)</h3>
+  <h3><span class="n">27.2</span><span class="path">app/</span>: الصفحات (نظام Next.js)</h3>
   <div class="table"><table>
     <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
     <tbody>
@@ -1450,7 +1584,7 @@ daphne -p 8000 config.asgi:application</code></pre>
     </tbody>
   </table></div>
 
-  <h3><span class="n">26.3</span><span class="path">app/chat/_ui/</span>: شاشات التطبيق</h3>
+  <h3><span class="n">27.3</span><span class="path">app/chat/_ui/</span>: شاشات التطبيق</h3>
   <p class="muted">الشرطة السفلية في <code>_ui</code> تعني في Next.js: «مجلد داخلي، ليس صفحة».</p>
   <div class="table"><table>
     <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
@@ -1472,7 +1606,7 @@ daphne -p 8000 config.asgi:application</code></pre>
     </tbody>
   </table></div>
 
-  <h3><span class="n">26.4</span><span class="path">lib/</span>: المنطق (بلا شاشات)</h3>
+  <h3><span class="n">27.4</span><span class="path">lib/</span>: المنطق (بلا شاشات)</h3>
   <div class="table"><table>
     <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
     <tbody>
@@ -1488,7 +1622,7 @@ daphne -p 8000 config.asgi:application</code></pre>
     </tbody>
   </table></div>
 
-  <h3><span class="n">26.5</span><span class="path">public/</span>: ملفات تُقدَّم كما هي</h3>
+  <h3><span class="n">27.5</span><span class="path">public/</span>: ملفات تُقدَّم كما هي</h3>
   <div class="table"><table>
     <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
     <tbody>
@@ -1500,9 +1634,9 @@ daphne -p 8000 config.asgi:application</code></pre>
   </table></div>
 </section>
 
-<!-- ============ 27 -->
+<!-- ============ 28 -->
 <section class="part lesson" id="other">
-  <h2><span class="n">27</span>ملفات التشغيل والتوثيق</h2>
+  <h2><span class="n">28</span>ملفات التشغيل والتوثيق</h2>
   <div class="table"><table>
     <thead><tr><th>الملف</th><th>اللغة</th><th>عمله ومحتواه</th></tr></thead>
     <tbody>
@@ -1526,9 +1660,9 @@ daphne -p 8000 config.asgi:application</code></pre>
   </table></div>
 </section>
 
-<!-- ============ 28 -->
+<!-- ============ 29 -->
 <section class="part lesson" id="generated">
-  <h2><span class="n">28</span>ما تراه في VS Code ولم نكتبه نحن</h2>
+  <h2><span class="n">29</span>ما تراه في VS Code ولم نكتبه نحن</h2>
   <p>في الشريط الجانبي مجلدات وملفات <b>تولّدها الأدوات تلقائياً</b>. لا تعدّلها، ولا تقلق من حجمها:</p>
   <div class="table"><table>
     <thead><tr><th>المجلد أو الملف</th><th>ما هو</th></tr></thead>
@@ -1551,18 +1685,18 @@ daphne -p 8000 config.asgi:application</code></pre>
   </table></div>
 </section>
 
-<!-- ============ 29 -->
+<!-- ============ 30 -->
 <section class="part lesson" id="qa">
-  <h2><span class="n">29</span>أسئلة المدير المتوقعة وأجوبتها</h2>
-  <details open><summary>29.1 ما لغة المشروع؟</summary><p>الخادم Python بإطار Django، والواجهة TypeScript بإطار Next.js مع React (القسم 23).</p></details>
-  <details><summary>29.2 أين ملف الإعدادات؟ وماذا فيه؟</summary><p><span class="path">backend/config/settings.py</span>: فيه الأمان (SECRET_KEY وDEBUG)، والتطبيقات المفعّلة، وقاعدة البيانات، وهاش كلمات المرور (Argon2)، واللغة، وRedis، وإعدادات الـ API وحدود الطلبات، وأماكن الملفات، والإشعارات، والمكالمات (القسم 24). والأسرار تأتي من ملف <code>.env</code> لا من الكود.</p></details>
-  <details><summary>29.3 أين الـ API؟</summary><p>الروابط في <span class="path">backend/*/urls.py</span>، ومنطقها في <span class="path">backend/*/views.py</span>، وأكبرها <span class="path">backend/chat/views.py</span>. وفي الواجهة تُستدعى من <span class="path">frontend/lib/endpoints.ts</span>.</p></details>
-  <details><summary>29.4 أين قاعدة البيانات والجداول؟</summary><p>تعريف الجداول في <span class="path">backend/*/models.py</span>. في التطوير ملف <span class="path">backend/db.sqlite3</span>، وفي التشغيل الفعلي PostgreSQL داخل Docker.</p></details>
-  <details><summary>29.5 أين الهاش والتشفير؟</summary><p>هاش كلمات المرور: <code>PASSWORD_HASHERS</code> في settings.py (Argon2). هاش التوكن: <span class="path">backend/accounts/tokens.py</span>. تشفير الرسائل والملفات: <span class="path">backend/chat/crypto.py</span> و<span class="path">fields.py</span>.</p></details>
-  <details><summary>29.6 أين الرسائل الفورية (WebSocket)؟</summary><p>الخادم: <span class="path">backend/chat/consumers.py</span> و<span class="path">routing.py</span>. الواجهة: <span class="path">frontend/lib/socket.ts</span>.</p></details>
-  <details><summary>29.7 أين الشاشات؟</summary><p>في <span class="path">frontend/app/chat/_ui/</span>، وكل شاشة في ملف باسمها (القسم 26.3)، وبوابة الدخول في <span class="path">frontend/app/AuthForm.tsx</span>.</p></details>
-  <details><summary>29.8 كيف تشغّل المشروع؟</summary><p>على الحاسوب: <code>./run-mobile.sh</code>. على خادم حقيقي: <code>cd deploy &amp;&amp; ./start.sh</code> (Docker). والاختبارات: <code>cd backend &amp;&amp; python manage.py test</code>.</p></details>
-  <details><summary>29.9 ما الفرق بين views.py وurls.py وmodels.py؟</summary><p><b>models.py</b> يعرّف الجداول (ماذا نحفظ)، و<b>views.py</b> يقرر ماذا يحدث عند كل طلب (المنطق)، و<b>urls.py</b> يربط كل رابط بدالته في views.py. مثال: الرابط <code>/api/conversations/</code> في urls.py يذهب إلى الدالة <code>conversations</code> في views.py، التي تقرأ من جدول <code>Conversation</code> المعرّف في models.py.</p></details>
+  <h2><span class="n">30</span>أسئلة المدير المتوقعة وأجوبتها</h2>
+  <details open><summary>30.1 ما لغة المشروع؟</summary><p>الخادم Python بإطار Django، والواجهة TypeScript بإطار Next.js مع React (القسم 24).</p></details>
+  <details><summary>30.2 أين ملف الإعدادات؟ وماذا فيه؟</summary><p><span class="path">backend/config/settings.py</span>: فيه الأمان (SECRET_KEY وDEBUG)، والتطبيقات المفعّلة، وقاعدة البيانات، وهاش كلمات المرور (Argon2)، واللغة، وRedis، وإعدادات الـ API وحدود الطلبات، وأماكن الملفات، والإشعارات، والمكالمات (القسم 25). والأسرار تأتي من ملف <code>.env</code> لا من الكود.</p></details>
+  <details><summary>30.3 أين الـ API؟</summary><p>الروابط في <span class="path">backend/*/urls.py</span>، ومنطقها في <span class="path">backend/*/views.py</span>، وأكبرها <span class="path">backend/chat/views.py</span>. وفي الواجهة تُستدعى من <span class="path">frontend/lib/endpoints.ts</span>.</p></details>
+  <details><summary>30.4 أين قاعدة البيانات والجداول؟</summary><p>تعريف الجداول في <span class="path">backend/*/models.py</span>. في التطوير ملف <span class="path">backend/db.sqlite3</span>، وفي التشغيل الفعلي PostgreSQL داخل Docker.</p></details>
+  <details><summary>30.5 أين الهاش والتشفير؟</summary><p>هاش كلمات المرور: <code>PASSWORD_HASHERS</code> في settings.py (Argon2). هاش التوكن: <span class="path">backend/accounts/tokens.py</span>. تشفير الرسائل والملفات: <span class="path">backend/chat/crypto.py</span> و<span class="path">fields.py</span>.</p></details>
+  <details><summary>30.6 أين الرسائل الفورية (WebSocket)؟</summary><p>الخادم: <span class="path">backend/chat/consumers.py</span> و<span class="path">routing.py</span>. الواجهة: <span class="path">frontend/lib/socket.ts</span>.</p></details>
+  <details><summary>30.7 أين الشاشات؟</summary><p>في <span class="path">frontend/app/chat/_ui/</span>، وكل شاشة في ملف باسمها (القسم 27.3)، وبوابة الدخول في <span class="path">frontend/app/AuthForm.tsx</span>.</p></details>
+  <details><summary>30.8 كيف تشغّل المشروع؟</summary><p>على الحاسوب: <code>./run-mobile.sh</code>. على خادم حقيقي: <code>cd deploy &amp;&amp; ./start.sh</code> (Docker). والاختبارات: <code>cd backend &amp;&amp; python manage.py test</code>.</p></details>
+  <details><summary>30.9 ما الفرق بين views.py وurls.py وmodels.py؟</summary><p><b>models.py</b> يعرّف الجداول (ماذا نحفظ)، و<b>views.py</b> يقرر ماذا يحدث عند كل طلب (المنطق)، و<b>urls.py</b> يربط كل رابط بدالته في views.py. مثال: الرابط <code>/api/conversations/</code> في urls.py يذهب إلى الدالة <code>conversations</code> في views.py، التي تقرأ من جدول <code>Conversation</code> المعرّف في models.py.</p></details>
 </section>
 
 
