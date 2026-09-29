@@ -5,7 +5,8 @@
   «جهات اتصاله» = من أضافهم هو إلى جهات اتصاله (لا من أضافوه).
 - من حظرني لا يرى آخر ظهوري ولا صورتي، ولا يراسلني ولا يتصل بي (chat/services.post_error، calls).
 
-نحسب مرة واحدة لكل طلب من أضافني ومن حظرني، ثم نطبّق القواعد على كل شخص في القائمة دون استعلامات إضافية.
+لكل طلب مرة واحدة على الأكثر: من حظرني (من الكاش، ولا يُسأل عنه الـ Database إلا كل دقيقة)،
+ومن أضافني (فقط إن كان في القائمة من اختار «جهات اتصالي»، والأغلب يترك «الجميع»).
 """
 from .models import Block, Contact, Profile
 from .serializers import profile_of, user_json
@@ -14,13 +15,28 @@ from .serializers import profile_of, user_json
 class Viewer:
     def __init__(self, viewer_id):
         self.id = viewer_id
-        # من أضافني إلى جهات اتصاله (فأنا من «جهات اتصاله»)
-        self.added_me = set(Contact.objects.filter(contact_id=viewer_id).values_list('owner_id', flat=True))
-        self.blocked_me = set(Block.objects.filter(blocked_id=viewer_id).values_list('blocker_id', flat=True))
+        self._added_me = None
+        self._blocked_me = None
+
+    @property
+    def blocked_me(self):
+        if self._blocked_me is None:
+            from chat.services import block_sets
+            self._blocked_me = block_sets(self.id)[1]
+        return self._blocked_me
+
+    @property
+    def added_me(self):
+        """من أضافني إلى جهات اتصاله (فأنا من «جهات اتصاله»). يُحسب عند الحاجة فقط."""
+        if self._added_me is None:
+            self._added_me = set(Contact.objects.filter(contact_id=self.id).values_list('owner_id', flat=True))
+        return self._added_me
 
     def allowed(self, user, level):
         if user.id == self.id:
             return True
+        if level == Profile.NOBODY:
+            return False
         if user.id in self.blocked_me:
             return False
         if level == Profile.EVERYONE:

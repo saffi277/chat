@@ -119,12 +119,6 @@ def conversations(request):
             pinned=Exists(my_row.filter(is_pinned=True)),
             cleared=Subquery(my_row.values('cleared_at')[:1]),
             my_read=Subquery(my_row.values('last_read_id')[:1]),
-            my_role=Subquery(my_row.values('role')[:1]),
-            my_favorite=Subquery(my_row.values('is_favorite')[:1]),
-            my_muted=Subquery(my_row.values('is_muted')[:1]),
-            my_muted_until=Subquery(my_row.values('muted_until')[:1]),
-            my_wallpaper=Subquery(my_row.values('wallpaper')[:1]),
-            my_archived=Subquery(my_row.values('is_archived')[:1]),
             n_members=Coalesce(Subquery(others.annotate(c=Count('id')).values('c'), output_field=IntegerField()), 0) + 1,
             others_read=Subquery(others.annotate(m=Min('last_read_id')).values('m')),
             others_delivered=Subquery(others.annotate(m=Min('last_delivered_id')).values('m')),
@@ -139,6 +133,14 @@ def conversations(request):
               .prefetch_related(Prefetch('memberships', queryset=Membership.objects.exclude(
                   conversation__kind__in=SHARED).select_related('user__profile'))))
         convs = list(qs)
+        # إعداداتي في كل المحادثات باستعلام واحد صغير (بدل استعلام فرعي لكل إعداد في كل محادثة داخل الاستعلام الكبير)
+        mine_rows = {r['conversation_id']: r for r in Membership.objects.filter(
+            user=request.user, conversation_id__in=[c.id for c in convs]).values(
+            'conversation_id', 'role', 'is_favorite', 'is_muted', 'muted_until', 'wallpaper', 'is_archived')}
+        for c in convs:
+            r = mine_rows.get(c.id, {})
+            c.my_role, c.my_favorite, c.my_muted = r.get('role'), r.get('is_favorite'), r.get('is_muted')
+            c.my_muted_until, c.my_wallpaper, c.my_archived = r.get('muted_until'), r.get('wallpaper'), r.get('is_archived')
         ids = [c.last_msg_id for c in convs if c.last_msg_id]
         last_messages = {m.id: m for m in Message.objects.filter(id__in=ids).select_related(
             'sender__profile', 'reply_to__sender__profile').prefetch_related('reactions')} if ids else {}

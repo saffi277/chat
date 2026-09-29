@@ -20,7 +20,7 @@ const nextConfig: NextConfig = {
       {
         // نسمح للموقع نفسه بس يطلب الكاميرا والمايك والموقع
         source: "/:path*",
-        headers: [{ key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=(self)" }],
+        headers: [{ key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=(self), display-capture=(self)" }],
       },
       {
         // الـ Service Worker لازم ما يتخزن بالكاش، حتى أي تحديث يوصل للمستخدمين فوراً

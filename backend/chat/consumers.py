@@ -173,7 +173,7 @@ class PresenceConsumer(AsyncJsonWebsocketConsumer):
             Profile.objects.create(user=self.user, connections=1, is_online=True, last_seen=now)
         count = Profile.objects.filter(user=self.user).values_list('connections', flat=True).first()
         mark_delivered(self.user)
-        return count == 1, presence_audience(self.user.id)
+        return count == 1, presence_audience(self.user.id, self.privacy_level())
 
     @database_sync_to_async
     def went_offline(self):
@@ -182,4 +182,8 @@ class PresenceConsumer(AsyncJsonWebsocketConsumer):
         if Profile.objects.filter(user=self.user, connections__gt=0).exists():
             return None
         Profile.objects.filter(user=self.user).update(is_online=False, last_seen=timezone.now())
-        return presence_audience(self.user.id)
+        return presence_audience(self.user.id, self.privacy_level())
+
+    def privacy_level(self):
+        # الملف الشخصي محمّل مع المستخدم عند التحقق من التوكن (accounts/tokens.py)
+        return getattr(getattr(self.user, 'profile', None), 'privacy_last_seen', None)

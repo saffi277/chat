@@ -124,12 +124,13 @@ def known_ids(user_id):
     return set(contact_ids(user_id)) - block_sets(user_id)[1]
 
 
-def presence_audience(user_id):
+def presence_audience(user_id, level=None):
     """
     من يصله «متصل الآن / غير متصل» عني: من يعرفني، بحسب إعداد «آخر ظهور» (الجميع، أو جهات اتصالي، أو لا أحد)،
-    ودون من بيني وبينه حظر.
+    ودون من بيني وبينه حظر. level: إعداد «آخر ظهور» إن كان معروفاً (يوفّر استعلاماً).
     """
-    level = Profile.objects.filter(user_id=user_id).values_list('privacy_last_seen', flat=True).first() or Profile.EVERYONE
+    if level is None:
+        level = Profile.objects.filter(user_id=user_id).values_list('privacy_last_seen', flat=True).first() or Profile.EVERYONE
     if level == Profile.NOBODY:
         return []
     i_blocked, blocked_me = block_sets(user_id)

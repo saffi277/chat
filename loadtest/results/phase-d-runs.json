@@ -1,0 +1,77 @@
+{
+ "note": "نفس الجهاز (4 أنوية، الخادم ومولّد الحمل معاً)، 2000 مستخدم، --procs 4 --ramp 60، التخطيط الإنتاجي: gunicorn + uvicorn + Caddy + PostgreSQL 16 + Redis. old = الكود قبل المراحل أ-د (9778b57)، new = الكود بعد المرحلة د.",
+ "old": [
+  {
+   "p50_conversations": 3.1,
+   "p50_post": 3.76,
+   "p50_delivery": 4.63,
+   "unfinished": 460,
+   "sent": 5512
+  },
+  {
+   "p50_conversations": 2.1,
+   "p50_post": 2.63,
+   "p50_delivery": 3.92,
+   "unfinished": 105,
+   "sent": 5933
+  },
+  {
+   "p50_conversations": 3.76,
+   "p50_post": 4.37,
+   "p50_delivery": 5.29,
+   "unfinished": 558,
+   "sent": 5339
+  }
+ ],
+ "new": [
+  {
+   "p50_conversations": 4.57,
+   "p50_post": 5.52,
+   "p50_delivery": 6.53,
+   "unfinished": 930,
+   "sent": 4704
+  },
+  {
+   "p50_conversations": 4.35,
+   "p50_post": 5.14,
+   "p50_delivery": 6.02,
+   "unfinished": 853,
+   "sent": 4975
+  },
+  {
+   "p50_conversations": 4.15,
+   "p50_post": 5.27,
+   "p50_delivery": 7.15,
+   "unfinished": 873,
+   "sent": 4779
+  },
+  {
+   "p50_conversations": 4.4,
+   "p50_post": 5.26,
+   "p50_delivery": 7.32,
+   "unfinished": 815,
+   "sent": 4946
+  },
+  {
+   "p50_conversations": 4.28,
+   "p50_post": 5.02,
+   "p50_delivery": 6.25,
+   "unfinished": 905,
+   "sent": 4683
+  },
+  {
+   "p50_conversations": 4.5,
+   "p50_post": 5.26,
+   "p50_delivery": 7.41,
+   "unfinished": 1008,
+   "sent": 4573
+  },
+  {
+   "p50_conversations": 4.14,
+   "p50_post": 5.08,
+   "p50_delivery": 5.7,
+   "unfinished": 823,
+   "sent": 4869
+  }
+ ]
+}

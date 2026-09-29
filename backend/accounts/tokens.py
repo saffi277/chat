@@ -33,7 +33,8 @@ def user_for_token(key):
     """يرجع (المستخدم، التوكن) أو None. نحدّث "آخر استخدام" مرة بالساعة بس (حتى ما نكتب ويا كل طلب)."""
     if not key:
         return None
-    token = AuthToken.objects.select_related('user').filter(key_hash=hash_token(key)).first()
+    # الملف الشخصي مع المستخدم في الاستعلام نفسه: تحتاجه طلبات كثيرة (اللغة، الخصوصية، علامات القراءة)
+    token = AuthToken.objects.select_related('user__profile').filter(key_hash=hash_token(key)).first()
     if not token or not token.user.is_active:
         return None
     now = timezone.now()
