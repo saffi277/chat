@@ -1117,14 +1117,14 @@ daphne -p 8000 config.asgi:application</code></pre>
   <ul>
     <li><b>الصورة تظهر فوراً</b> عند الإرسال، مع حلقة تقدّم وزر ✕ للإلغاء، و«لم تُرسل» مع «إعادة المحاولة» إن انقطع الاتصال.
       <ul>
-        <li>الرفع بـ <code>XMLHttpRequest</code> لأنه وحده يخبرنا بنسبة التقدّم: الدالة <code>upload()</code> في <span class="path">frontend/lib/api.ts</span>.</li>
-        <li>العرض: <span class="path">frontend/app/chat/_ui/Bubbles.tsx</span>.</li>
+        <li>الرفع بـ <code>XMLHttpRequest</code> لأنه وحده يخبرنا بنسبة التقدّم: الدالة <code>upload()</code> في <span class="path">frontend/lib/api.ts</span></li>
+        <li>العرض: <span class="path">frontend/app/chat/_ui/Bubbles.tsx</span></li>
       </ul>
     </li>
     <li><b>الخادم يحفظ أبعاد الصورة</b> (العرض والارتفاع)، فيحجز المستقبِل مكانها بالشكل الصحيح قبل تحميلها، فلا تقفز الرسائل.
       <ul>
-        <li>الحقلان <code>width</code> و<code>height</code> في <span class="path">backend/chat/models.py</span>.</li>
-        <li>القراءة في <span class="path">backend/chat/media.py</span>.</li>
+        <li>الحقلان <code>width</code> و<code>height</code> في <span class="path">backend/chat/models.py</span></li>
+        <li>القراءة في <span class="path">backend/chat/media.py</span></li>
       </ul>
     </li>
     <li>في الحاسوب: Enter يرسل وShift+Enter سطر جديد. وفي الهاتف: Enter سطر جديد، وزر الإرسال يرسل.
@@ -1137,13 +1137,13 @@ daphne -p 8000 config.asgi:application</code></pre>
     <li><b>إعدادات المحادثة:</b>
       <ul>
         <li>الميزات: الكتم حتى وقت محدد، والرسائل المختفية، و«الإرسال للمشرفين فقط»، والوضع البطيء، ورابط الدعوة، وخلفية خاصة لكل محادثة.</li>
-        <li>الخادم: <span class="path">backend/chat/views.py</span>.</li>
-        <li>الواجهة: <span class="path">frontend/app/chat/_ui/ConvSettings.tsx</span>.</li>
+        <li>الخادم: <span class="path">backend/chat/views.py</span></li>
+        <li>الواجهة: <span class="path">frontend/app/chat/_ui/ConvSettings.tsx</span></li>
       </ul>
     </li>
     <li><b>الرسائل المجدولة، وحذف الرسائل المختفية:</b>
       <ul>
-        <li>يتولّاهما <b>عامل خلفي</b> يعمل كل 15 ثانية: <span class="path">backend/chat/worker.py</span>.</li>
+        <li>يتولّاهما <b>عامل خلفي</b> يعمل كل 15 ثانية: <span class="path">backend/chat/worker.py</span></li>
         <li>إن عمل أكثر من عامل معاً، «يحجز» كل عامل الرسالة بأمر <code>UPDATE</code> واحد يغيّر حالتها من <code>pending</code> إلى <code>sending</code>.</li>
         <li>من ينجح في الحجز يرسلها وحده، فلا تُرسل مرتين.</li>
       </ul>
@@ -1152,13 +1152,13 @@ daphne -p 8000 config.asgi:application</code></pre>
       <ul>
         <li>كل جهاز يتصل بكل جهاز مباشرة (mesh)، لذلك الحد 8.</li>
         <li>مشاركة الشاشة بـ <code>getDisplayMedia</code>.</li>
-        <li>الملفات: <span class="path">frontend/lib/call.ts</span> (<code>GroupCall</code>)، و<span class="path">backend/calls/views.py</span>.</li>
+        <li>الملفات: <span class="path">frontend/lib/call.ts</span> (<code>GroupCall</code>)، و<span class="path">backend/calls/views.py</span></li>
       </ul>
     </li>
     <li><b>المظاهر:</b>
       <ul>
         <li>6 ألوان و6 خلفيات، بمتغيرات CSS تتبدل بالسمتين <code>data-accent</code> و<code>data-wallpaper</code>.</li>
-        <li>الملفات: <span class="path">frontend/app/chat/_ui/Settings.tsx</span>.</li>
+        <li>الملفات: <span class="path">frontend/app/chat/_ui/Settings.tsx</span></li>
       </ul>
     </li>
   </ul>
@@ -1168,7 +1168,7 @@ daphne -p 8000 config.asgi:application</code></pre>
     <li><b>الدور لا يمنحه المستخدم لنفسه:</b>
       <ul>
         <li>من يختار «تدريسي» يبقى طالباً حتى يوافق الإداري من <code>/admin</code>.</li>
-        <li>الملف: <span class="path">backend/accounts/admin.py</span>.</li>
+        <li>الملف: <span class="path">backend/accounts/admin.py</span></li>
       </ul>
     </li>
     <li><b>الحظر، والإبلاغ، والخصوصية</b> (من يرى آخر ظهوري وصورتي):
@@ -1179,15 +1179,15 @@ daphne -p 8000 config.asgi:application</code></pre>
     </li>
     <li><b>الأجهزة، والتحقق بخطوتين، وحذف الحساب:</b>
       <ul>
-        <li>الخادم: <span class="path">backend/accounts/views.py</span>.</li>
-        <li>الواجهة: <span class="path">frontend/app/chat/_ui/Safety.tsx</span>.</li>
+        <li>الخادم: <span class="path">backend/accounts/views.py</span></li>
+        <li>الواجهة: <span class="path">frontend/app/chat/_ui/Safety.tsx</span></li>
       </ul>
     </li>
     <li><b>أدوات الرسائل:</b>
       <ul>
         <li>الميزات: إعادة التوجيه، والبحث داخل الرسائل المشفّرة، والتثبيت، والاستطلاعات، ومعاينة الروابط، والمجلدات.</li>
-        <li>الخادم: <span class="path">backend/chat/features.py</span>.</li>
-        <li>الواجهة: <span class="path">frontend/app/chat/_ui/Tools.tsx</span>.</li>
+        <li>الخادم: <span class="path">backend/chat/features.py</span></li>
+        <li>الواجهة: <span class="path">frontend/app/chat/_ui/Tools.tsx</span></li>
       </ul>
     </li>
     <li><b>معاينة الروابط وهجوم SSRF:</b>
@@ -1208,7 +1208,7 @@ daphne -p 8000 config.asgi:application</code></pre>
     </li>
     <li><b>اختبارات المتصفح في المستودع:</b>
       <ul>
-        <li>عشر حزم في <span class="path">frontend/tests/e2e/</span>.</li>
+        <li>عشر حزم في <span class="path">frontend/tests/e2e/</span></li>
         <li>تُشغَّل بأمر واحد: <code>npm run test:e2e</code>.</li>
       </ul>
     </li>
