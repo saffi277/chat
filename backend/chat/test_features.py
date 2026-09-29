@@ -110,6 +110,22 @@ class GroupTests(Base, TestCase):
         self.assertEqual((r.status_code, r.data['kind']), (201, 'image'), r.data)
         self.assertTrue(r.data['file_url'].startswith('/media/messages/'))
         self.assertEqual(self.client.get(r.data['file_url']).status_code, 200)
+        self.assertEqual((r.data['width'], r.data['height']), (10, 10))  # يحجز المستقبل مكانها بقياسها
+        # صورة هاتف مائلة (علامة تدوير EXIF = 6): المتصفح يعرضها مدوّرة، فالأبعاد تنقلب
+        buf = io.BytesIO()
+        exif = Image.Exif()
+        exif[0x0112] = 6
+        Image.new('RGB', (40, 20), 'blue').save(buf, 'JPEG', exif=exif)
+        tall = SimpleUploadedFile('t.jpg', buf.getvalue(), content_type='image/jpeg')
+        r = self.ali.post(url, {'file': tall}, format='multipart')
+        self.assertEqual((r.status_code, r.data['width'], r.data['height']), (201, 20, 40), r.data)
+        # الفيديو: أبعاده يرسلها المتصفح، وتُرفض القيم غير المعقولة
+        clip = SimpleUploadedFile('c.mp4', b'\x00' * 64, content_type='video/mp4')
+        r = self.ali.post(url, {'file': clip, 'kind': 'video', 'width': '1920', 'height': '1080'}, format='multipart')
+        self.assertEqual((r.data['width'], r.data['height']), (1920, 1080))
+        clip = SimpleUploadedFile('c.mp4', b'\x00' * 64, content_type='video/mp4')
+        r = self.ali.post(url, {'file': clip, 'kind': 'video', 'width': '-5', 'height': 'x'}, format='multipart')
+        self.assertEqual((r.status_code, r.data['width']), (201, None))
         fake = SimpleUploadedFile('x.png', b'not image', content_type='image/png')
         self.assertEqual(self.ali.post(url, {'file': fake, 'kind': 'image'}, format='multipart').status_code, 400)
         voice = SimpleUploadedFile('v.webm', b'\x1aE\xdf\xa3' + b'0' * 100, content_type='audio/webm')
@@ -122,7 +138,7 @@ class GroupTests(Base, TestCase):
         served = self.client.get(r.data['file_url'])
         self.assertEqual(served['Content-Disposition'], 'attachment')  # ما ينفتح بالمتصفح
         media = self.sara.get(f"/api/conversations/{d['id']}/media/?type=media").data
-        self.assertEqual((media['counts']['image'], media['counts']['voice'], len(media['results'])), (1, 1, 1))
+        self.assertEqual((media['counts']['image'], media['counts']['voice'], len(media['results'])), (2, 1, 4))
 
     def test_reply_edit_delete_pagination(self, _):
         d = open_chat(self.ali, self.sara.user['id']).data

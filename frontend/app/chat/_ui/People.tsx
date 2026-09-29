@@ -3,7 +3,7 @@ import { useState } from "react";
 import { canBroadcast, ROLE_LABELS, type User } from "@/lib/api";
 import { contacts as contactsApi, users as usersApi } from "@/lib/endpoints";
 import { useT } from "@/lib/i18n";
-import { Avatar, Empty, IconButton, lastSeenText, nameOf, Panel } from "./bits";
+import { Avatar, Empty, IconButton, lastSeenText, nameOf, Panel, StoryTap } from "./bits";
 import { ScreenHeader, SearchBox } from "./ChatList";
 import { Icon, type IconName } from "./icons";
 import { useWasl } from "./store";
@@ -27,7 +27,7 @@ function ActionRow({ icon, label, hint, onClick }: { icon: IconName; label: stri
  */
 export function PeopleView() {
   const t = useT();
-  const { me, contacts, openWith, setPanel, openSaved } = useWasl();
+  const { me, contacts, openWith, setPanel, openSaved, storyRing, openStory } = useWasl();
   const [q, setQ] = useState("");
   const query = q.trim().toLowerCase();
   const list = contacts
@@ -60,7 +60,9 @@ export function PeopleView() {
         {list.map((u) => (
           <div key={u.id} className="w-hover flex items-center gap-3 px-4 py-2">
             <button onClick={() => setPanel({ type: "contact", userId: u.id })} className="flex min-w-0 flex-1 items-center gap-3 text-start">
-              <Avatar user={u} size={52} online={u.is_online || undefined} />
+              <StoryTap ring={storyRing(u.id)} onOpen={() => openStory(u.id)}>
+                <Avatar user={u} size={storyRing(u.id) ? 46 : 52} online={u.is_online || undefined} ring={storyRing(u.id)} />
+              </StoryTap>
               <span className="min-w-0">
                 <span className="block truncate font-bold" dir="auto">{nameOf(u)}</span>
                 <span className="block truncate text-[13px]" dir="auto" style={{ color: u.is_online ? "var(--online)" : "var(--muted)" }}>{u.bio || lastSeenText(u)}</span>

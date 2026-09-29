@@ -2,6 +2,7 @@
 // التفاصيل الكاملة (شنو يرجع كل واحد، والأخطاء) بملف docs/API.md
 import {
   api,
+  upload,
   type Call,
   type CallKind,
   type ChannelInfo,
@@ -112,6 +113,14 @@ export const conversations = {
 };
 
 // ---------------------------------------------------------------- الرسائل
+export type SendFileOpts = {
+  kind?: MessageKind; caption?: string; duration?: number; replyTo?: number; name?: string;
+  width?: number; height?: number;
+  /** نسبة الرفع 0..1 (تجعل الطلب XMLHttpRequest) */
+  onProgress?: (p: number) => void;
+  signal?: AbortSignal;
+};
+
 export const messages = {
   /** آخر 50 رسالة. للأقدم مرر before = id أقدم رسالة عندك */
   list: (conversationId: number, before?: number) =>
@@ -119,14 +128,17 @@ export const messages = {
   sendText: (conversationId: number, content: string, replyTo?: number) =>
     api<Message>(`/conversations/${conversationId}/messages/`, "POST", { content, reply_to: replyTo }),
   /** صورة/فيديو/صوت/ملف. للصوت مرر duration بالثواني */
-  sendFile: (conversationId: number, file: File | Blob, opts: { kind?: MessageKind; caption?: string; duration?: number; replyTo?: number; name?: string } = {}) => {
+  sendFile: (conversationId: number, file: File | Blob, opts: SendFileOpts = {}) => {
     const form = new FormData();
     form.append("file", file, opts.name ?? (file instanceof File ? file.name : "voice.webm"));
     if (opts.kind) form.append("kind", opts.kind);
     if (opts.caption) form.append("content", opts.caption);
     if (opts.duration) form.append("duration", String(opts.duration));
     if (opts.replyTo) form.append("reply_to", String(opts.replyTo));
-    return api<Message>(`/conversations/${conversationId}/messages/`, "POST", form);
+    // أبعاد الفيديو يقرؤها المتصفح (الخادم يقرأ أبعاد الصورة بنفسه)
+    if (opts.width && opts.height) { form.append("width", String(opts.width)); form.append("height", String(opts.height)); }
+    const path = `/conversations/${conversationId}/messages/`;
+    return opts.onProgress ? upload<Message>(path, form, opts.onProgress, opts.signal) : api<Message>(path, "POST", form);
   },
   /** liveMinutes: 15 أو 60 أو 480 للموقع المباشر */
   sendLocation: (conversationId: number, latitude: number, longitude: number, liveMinutes?: number, caption?: string) =>

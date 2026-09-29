@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { canBroadcast, type Conversation } from "@/lib/api";
 import { useLang, useT } from "@/lib/i18n";
-import { ConvAvatar, Empty, listTime, nameOf, preview } from "./bits";
+import { ConvAvatar, Empty, listTime, nameOf, preview, StoryTap } from "./bits";
 import { CallLog } from "./Calls";
 import { Icon, type IconName } from "./icons";
 import { PushBanner } from "./Settings";
@@ -69,6 +69,7 @@ export function ChatList() {
   const [filter, setFilter] = useState<Filter>("all");
   const [q, setQ] = useState("");
 
+  const saved = convs.find((c) => c.kind === "saved");
   const title = (c: Conversation) => (c.kind === "direct" ? (otherOf(c) ? nameOf(otherOf(c)!) : "") : c.title);
   const query = q.trim().toLowerCase();
   const shown = convs
@@ -103,6 +104,10 @@ export function ChatList() {
         {filter === "calls" ? <CallLog /> : (
           <>
             <PushBanner />
+            {/* الرسائل المحفوظة مثبتة دائماً في الأعلى (تُنشأ محادثتها عند أول فتح) */}
+            {filter === "all" && (!query || t("الرسائل المحفوظة").toLowerCase().includes(query)) && (
+              saved ? <ChatRow conv={saved} /> : <SavedRow onOpen={openSaved} />
+            )}
             {shown.map((c) => <ChatRow key={c.id} conv={c} />)}
             {shown.length === 0 && (
               <Empty icon={filter === "channels" ? "megaphone" : "chats"} title={t(query ? "لا توجد نتائج" : filter === "all" ? "لم تبدأ أي محادثة بعد" : filter === "channels" ? "لم تشترك في أي قناة بعد" : "لا يوجد شيء هنا")}
@@ -119,9 +124,24 @@ export function ChatList() {
   );
 }
 
+/** سطر «الرسائل المحفوظة» قبل إنشاء محادثتها */
+function SavedRow({ onOpen }: { onOpen: () => void }) {
+  const t = useT();
+  return (
+    <button onClick={onOpen} className="w-hover group flex w-full items-center gap-3 px-4 text-start">
+      <div className="py-2.5"><div className="w-tint grid h-[54px] w-[54px] shrink-0 place-items-center rounded-full"><Icon name="bookmark" size={23} filled /></div></div>
+      <div className="w-line min-w-0 flex-1 self-stretch border-b py-3.5">
+        <strong className="block truncate text-[16px] font-bold">{t("الرسائل المحفوظة")}</strong>
+        <span className="w-muted mt-1.5 block truncate text-[14px]">{t("مساحتك الخاصة")}</span>
+      </div>
+      <Icon name="pinned" size={16} className="w-muted shrink-0" />
+    </button>
+  );
+}
+
 /** سطر محادثة: الصورة في البداية، الاسم والمعاينة في الوسط، الوقت والعداد (أو 📌) في النهاية */
 export function ChatRow({ conv, subtitle }: { conv: Conversation; subtitle?: string }) {
-  const { me, otherOf, activeId, openConv } = useWasl();
+  const { me, otherOf, activeId, openConv, storyRing, openStory } = useWasl();
   const t = useT();
   const other = otherOf(conv);
   const name = conv.kind === "direct" ? (other ? nameOf(other) : "") : conv.title;
@@ -135,7 +155,11 @@ export function ChatRow({ conv, subtitle }: { conv: Conversation; subtitle?: str
   return (
     <button onClick={() => openConv(conv.id)}
       className={`group flex w-full items-center gap-3 px-4 text-start transition ${activeId === conv.id ? "w-card" : "w-hover"}`}>
-      <div className="py-2.5"><ConvAvatar conv={conv} other={other} size={54} /></div>
+      <div className="py-2.5">
+        <StoryTap ring={storyRing(other?.id)} onOpen={() => other && openStory(other.id)}>
+          <ConvAvatar conv={conv} other={other} size={54} ring={storyRing(other?.id)} />
+        </StoryTap>
+      </div>
       <div className="w-line min-w-0 flex-1 self-stretch border-b py-3.5 group-last:border-b-0">
         <div className="flex items-center justify-between gap-2">
           <strong className="truncate text-[16px] font-bold" dir="auto">{name}</strong>
@@ -160,7 +184,7 @@ export function ChatRow({ conv, subtitle }: { conv: Conversation; subtitle?: str
             {conv.is_muted && <Icon name="bellOff" size={14} className="w-muted" />}
             {unread ? (
               <span className="w-badge grid h-[22px] min-w-[22px] place-items-center rounded-full px-1.5 text-[12px] font-bold">{conv.unread_count}</span>
-            ) : conv.is_pinned ? (
+            ) : conv.is_pinned || conv.kind === "saved" ? (
               <Icon name="pinned" size={16} className="w-muted" />
             ) : null}
           </span>

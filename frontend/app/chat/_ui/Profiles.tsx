@@ -1,10 +1,10 @@
 "use client";
 // ملف جهة الاتصال، معلومات المجموعة، الوسائط المشتركة، إنشاء مجموعة
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { canBroadcast, mediaUrl, ROLE_LABELS, type ChannelInfo, type Member, type Message, type User } from "@/lib/api";
 import { channels as channelsApi, contacts as contactsApi, conversations as convApi, messages as msgApi, users as usersApi } from "@/lib/endpoints";
 import { dateLocale, t as tr, useLang, useT } from "@/lib/i18n";
-import { Avatar, Chip, ConvAvatar, fileSize, IconButton, lastSeenText, listTime, nameOf, Panel, preview, Section } from "./bits";
+import { Avatar, Chip, ConvAvatar, fileSize, IconButton, ImageViewer, lastSeenText, listTime, nameOf, Panel, preview, Section, StoryTap } from "./bits";
 import { Icon, type IconName } from "./icons";
 import { useUserSearch, useWasl } from "./store";
 
@@ -125,7 +125,7 @@ function useClearChat() {
 // ------------------------------------------------------------ ملف جهة الاتصال
 export function ContactPanel({ userId }: { userId: number }) {
   const t = useT();
-  const { userById, convs, openWith, startCall, setPanel, refreshConvs, notify, isContact, contactAdded, contactRemoved } = useWasl();
+  const { userById, convs, openWith, startCall, setPanel, refreshConvs, notify, isContact, contactAdded, contactRemoved, storyRing, openStory } = useWasl();
   const [user, setUser] = useState<User | null>(userById(userId) ?? null);
   const [menu, setMenu] = useState(false);
   const [info, setInfo] = useState(false);
@@ -191,7 +191,9 @@ export function ContactPanel({ userId }: { userId: number }) {
       </div>
     }>
       <div className="flex flex-col items-center text-center">
-        <Avatar user={u} size={112} />
+        <StoryTap ring={storyRing(u.id)} onOpen={() => openStory(u.id)}>
+          <Avatar user={u} size={storyRing(u.id) ? 106 : 112} ring={storyRing(u.id)} />
+        </StoryTap>
         <h3 className="mt-3 text-[24px] font-extrabold" dir="auto">{nameOf(u)}</h3>
         <p className="w-muted mt-0.5 flex items-center gap-1.5 text-sm">
           {u.is_online && <span className="h-2 w-2 rounded-full" style={{ background: "var(--online)" }} />}{lastSeenText(u)}
@@ -547,6 +549,7 @@ export function MediaPanel({ convId, initial = "media" }: { convId: number; init
   const [tab, setTab] = useState<(typeof mediaTabs)[number]["id"]>(initial);
   const [data, setData] = useState<{ counts: Record<string, number>; results: Message[] } | null>(null);
   const [view, setView] = useState<string | null>(null);
+  const closeView = useCallback(() => setView(null), []);
   useEffect(() => {
     convApi.media(convId, tab).then(setData).catch(() => {});
   }, [convId, tab]);
@@ -589,12 +592,7 @@ export function MediaPanel({ convId, initial = "media" }: { convId: number; init
           )}
         </div>
       ))}
-      {view && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-4" onClick={() => setView(null)}>
-          {/* eslint-disable-next-line @next/next/no-img-element -- عرض الصورة */}
-          <img src={view} alt="" className="max-h-full max-w-full rounded-2xl object-contain" />
-        </div>
-      )}
+      {view && <ImageViewer src={view} onClose={closeView} />}
     </Panel>
   );
 }

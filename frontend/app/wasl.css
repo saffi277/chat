@@ -43,6 +43,10 @@
   --soft-shadow: 0 1px 2px rgba(40, 36, 90, .06);
   --glow: none;
   --ring: linear-gradient(135deg, #6c5ce7, #a29bfe);
+  --story-ring: linear-gradient(135deg, #25d366, #0fa958);
+  --ring-seen: #c5c8d4;
+  /* الخط الفاصل بين القائمة والمحادثة (أوضح من --divider) */
+  --split: #dcdce7;
   --chat-bg: #f2f2f8 url("/bg/doodles-light.svg");
 }
 
@@ -80,6 +84,9 @@
   --soft-shadow: none;
   --glow: none;
   --ring: linear-gradient(135deg, #7f73f6, #a29bfe);
+  --story-ring: linear-gradient(135deg, #2bd46e, #13a85a);
+  --ring-seen: #4a5268;
+  --split: #2c3449;
   --chat-bg: #131929 url("/bg/doodles-dark.svg");
 }
 
@@ -106,6 +113,8 @@
 .w-bubble-out { background: var(--bubble-out); color: var(--bubble-out-text); box-shadow: var(--soft-shadow); }
 .w-shadow { box-shadow: var(--shadow); }
 .w-ring { background: var(--ring); }
+.w-story-ring { background: var(--story-ring); }
+.w-split { border-color: var(--split); }
 .w-danger { background: var(--danger); color: #fff; }
 .w-call { color: var(--call); }
 .w-line { border-color: var(--divider); }

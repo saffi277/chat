@@ -75,6 +75,9 @@ class Message(models.Model):
     file_name = models.CharField(max_length=255, blank=True)
     file_size = models.PositiveBigIntegerField(null=True, blank=True)
     duration = models.FloatField(null=True, blank=True)  # بالثواني، للصوت والفيديو
+    # أبعاد الصورة أو الفيديو: يحجز المستقبل مكانها بالقياس الصحيح قبل أن تكتمل
+    width = models.PositiveIntegerField(null=True, blank=True)
+    height = models.PositiveIntegerField(null=True, blank=True)
     # الموقع
     latitude = models.FloatField(null=True, blank=True)
     longitude = models.FloatField(null=True, blank=True)

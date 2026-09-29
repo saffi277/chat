@@ -1,6 +1,7 @@
 "use client";
 // قطع صغيرة تتكرر في كل الشاشات
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { mediaUrl, type Conversation, type Message, type User } from "@/lib/api";
 import { dateLocale, getLang, t, useT } from "@/lib/i18n";
 import { Icon, type IconName } from "./icons";
@@ -116,7 +117,7 @@ export function systemText(text: string) {
 // ------------------------------------------------------------ الصورة الشخصية
 const palette = ["#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6", "#f59e0b", "#6366f1", "#06b6d4", "#ef4444"];
 export function Avatar({ user, src, name, size = 48, online, ring, square }: {
-  user?: User | null; src?: string | null; name?: string; size?: number; online?: boolean; ring?: boolean | "seen"; square?: boolean;
+  user?: User | null; src?: string | null; name?: string; size?: number; online?: boolean; ring?: boolean | "seen" | "story"; square?: boolean;
 }) {
   const label = name ?? (user ? nameOf(user) : "?");
   const url = mediaUrl(src !== undefined ? src : user?.avatar ?? null);
@@ -136,8 +137,9 @@ export function Avatar({ user, src, name, size = 48, online, ring, square }: {
   return (
     <div className="relative shrink-0" style={{ width: size + (ring ? 6 : 0), height: size + (ring ? 6 : 0) }}>
       {ring ? (
-        <div className={`grid h-full w-full place-items-center ${radius} ${ring === "seen" ? "" : "w-ring"}`}
-          style={ring === "seen" ? { background: "var(--divider)" } : undefined}>
+        // story = حالة لم أشاهدها (أخضر كما في واتساب)، seen = شاهدتها (رمادي)، true = إطار زخرفي بلون التطبيق
+        <div className={`grid h-full w-full place-items-center ${radius} ${ring === "story" ? "w-story-ring" : ring === "seen" ? "" : "w-ring"}`}
+          style={ring === "seen" ? { background: "var(--ring-seen)" } : undefined}>
           <div className={`${radius} p-[2px]`} style={{ background: "var(--panel-strong)" }}>{inner}</div>
         </div>
       ) : inner}
@@ -150,7 +152,7 @@ export function Avatar({ user, src, name, size = 48, online, ring, square }: {
 }
 
 /** صورة المحادثة: مجموعة أو قناة = صورتها، ثنائية = الطرف الآخر، محفوظة = علامة */
-export function ConvAvatar({ conv, other, size = 52, online }: { conv: Conversation; other: User | null; size?: number; online?: boolean }) {
+export function ConvAvatar({ conv, other, size = 52, online, ring }: { conv: Conversation; other: User | null; size?: number; online?: boolean; ring?: "story" | "seen" }) {
   if (conv.kind === "saved") {
     return <div className="w-tint grid shrink-0 place-items-center rounded-full" style={{ width: size, height: size }}><Icon name="bookmark" size={size * 0.42} filled /></div>;
   }
@@ -159,7 +161,21 @@ export function ConvAvatar({ conv, other, size = 52, online }: { conv: Conversat
     if (!conv.avatar) return <div className="w-tint grid shrink-0 place-items-center rounded-full" style={{ width: size, height: size }}><Icon name={conv.kind === "channel" ? "megaphone" : "users"} size={size * 0.44} filled={conv.kind === "group"} /></div>;
     return <Avatar src={conv.avatar} name={conv.title} size={size} user={null} />;
   }
-  return <Avatar user={other} size={size} online={online} />;
+  // مع الحلقة تبقى الصورة بالحجم الكلي نفسه، فلا تختلف الأسطر في القائمة
+  return <Avatar user={other} size={ring ? size - 6 : size} online={online} ring={ring} />;
+}
+
+/** صورة شخص نشر حالة: الضغط عليها يفتح حالته (ولا يفتح ما تحتها) */
+export function StoryTap({ ring, onOpen, children }: { ring?: "story" | "seen"; onOpen: () => void; children: React.ReactNode }) {
+  const tr = useT();
+  if (!ring) return <>{children}</>;
+  return (
+    <span role="button" tabIndex={0} aria-label={tr("عرض الحالة")} className="block rounded-full"
+      onClick={(e) => { e.stopPropagation(); onOpen(); }}
+      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); onOpen(); } }}>
+      {children}
+    </span>
+  );
 }
 
 // ------------------------------------------------------------ أزرار
@@ -192,6 +208,42 @@ export function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boo
       className={`relative h-7 w-12 shrink-0 rounded-full transition ${on ? "w-accent" : "w-card"}`}>
       <span className="absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all" style={{ right: on ? 4 : 24 }} />
     </button>
+  );
+}
+
+// ------------------------------------------------------------ عارض الصور
+/**
+ * الصورة كاملة فوق كل شيء: زر إغلاق واضح (دائرة داكنة بإطار أبيض) وزر تنزيل،
+ * ويُغلق بـ Esc أو بالضغط خارج الصورة. الصورة لا تتجاوز الشاشة أبداً (object-contain).
+ */
+export function ImageViewer({ src, onClose, name }: { src: string; onClose: () => void; name?: string }) {
+  const tr = useT();
+  useEffect(() => {
+    // الالتقاط أولاً: Esc يغلق العارض وحده، لا اللوحة أو المحادثة التي تحته
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      onClose();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [onClose]);
+  const btn = "grid h-12 w-12 place-items-center rounded-full border-2 border-white/85 bg-black/60 text-white shadow-lg backdrop-blur transition hover:bg-black/80 active:scale-95";
+  return createPortal(
+    <div className="fixed inset-0 z-[80] flex flex-col bg-black/90" role="dialog" aria-label={tr("عرض الصورة")} onClick={onClose}>
+      <div className="flex shrink-0 items-center justify-between gap-3 px-4 pb-2 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <button type="button" onClick={onClose} aria-label={tr("إغلاق")} title={tr("إغلاق")} className={btn}><Icon name="x" size={26} strokeWidth={2.6} /></button>
+        <a href={src} download={name || "image"} onClick={(e) => e.stopPropagation()} aria-label={tr("تنزيل")} title={tr("تنزيل")} className={btn}>
+          <Icon name="download" size={22} strokeWidth={2.2} />
+        </a>
+      </div>
+      <div className="grid min-h-0 flex-1 place-items-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        {/* eslint-disable-next-line @next/next/no-img-element -- الصورة كاملة */}
+        <img src={src} alt="" onClick={(e) => e.stopPropagation()}
+          className="block max-h-[calc(100dvh-7rem)] max-w-full select-none rounded-xl object-contain" style={{ WebkitTouchCallout: "default" }} />
+      </div>
+    </div>,
+    document.body,
   );
 }
 

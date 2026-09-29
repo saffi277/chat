@@ -65,6 +65,10 @@ type Ctx = {
   panel: PanelState;
   setPanel: (p: PanelState) => void;
   storyViewer: { userId: number; index: number } | null;
+  /** حلقة الحالة حول صورة الشخص: خضراء إن نشر حالة لم أشاهدها، ورمادية إن شاهدتها كلها */
+  storyRing: (userId: number | undefined) => "story" | "seen" | undefined;
+  /** يفتح حالات الشخص من أول حالة لم أشاهدها */
+  openStory: (userId: number) => void;
   setStoryViewer: (v: { userId: number; index: number } | null) => void;
   userById: (id: number) => User | undefined;
   otherOf: (c: Conversation) => User | null;
@@ -306,6 +310,16 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
   }, [router, signOut, endCallUI, checkRinging]);
 
   // ------------------------------------------------ مساعدات
+  const storyRing = useCallback((userId: number | undefined) => {
+    const g = stories.find((x) => x.user.id === userId && !x.is_me);
+    return g && g.stories.length ? (g.all_seen ? "seen" : "story") : undefined;
+  }, [stories]);
+  const openStory = useCallback((userId: number) => {
+    const g = stories.find((x) => x.user.id === userId);
+    if (!g) return;
+    const first = g.stories.findIndex((x) => !x.seen);
+    setStoryViewer({ userId, index: first === -1 ? 0 : first });
+  }, [stories]);
   const userById = useCallback((id: number) => users.find((u) => u.id === id) ?? contacts.find((u) => u.id === id) ?? (me?.id === id ? me : undefined), [users, contacts, me]);
   const isContact = useCallback((id: number) => contacts.some((u) => u.id === id), [contacts]);
   const contactAdded = useCallback((u: User) => {
@@ -466,7 +480,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
   if (!me) return <>{fallback}</>;
   const value: Ctx = {
     me, users, contacts, isContact, contactAdded, contactRemoved, convs, stories, theme, tab, setTab, activeId, openConv, openWith, openSaved, panel, setPanel,
-    storyViewer, setStoryViewer, userById, otherOf, refreshConvs, refreshStories, updateMe, signOut,
+    storyViewer, setStoryViewer, storyRing, openStory, userById, otherOf, refreshConvs, refreshStories, updateMe, signOut,
     call, startCall, acceptCall, declineCall, hangup, toggleMute, toggleCamera, enableVideo,
     startLiveShare, stopLiveShare, liveShares, toast, notify,
   };

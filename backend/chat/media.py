@@ -28,17 +28,27 @@ def guess_kind(upload):
 
 
 def validate_upload(kind, upload):
+    """يرفض الملف غير الصالح، ويعيد (العرض، الارتفاع) إن كان صورة."""
     if kind not in LIMITS:
         raise ValidationError({'kind': _('هذا النوع لا يقبل ملفات')})
     if upload.size > LIMITS[kind]:
         raise ValidationError({'file': _('الملف أكبر من {n} ميغابايت').format(n=LIMITS[kind] // MB)})
     if kind == Message.IMAGE:
         try:
+            # verify() يجب أن يأتي بعد الفتح مباشرة، فنقرأ الأبعاد بفتح ثانٍ
             Image.open(upload).verify()
+            upload.seek(0)
+            img = Image.open(upload)
+            size = img.size
+            # صورة الهاتف قد تُحفظ مائلة مع علامة تدوير (EXIF 5-8): يعرضها المتصفح مدوّرة فنقلب الأبعاد
+            if img.getexif().get(0x0112) in (5, 6, 7, 8):
+                size = size[::-1]
         except Exception:
             raise ValidationError({'file': _('هذا الملف ليس صورة')})
         upload.seek(0)
+        return size
     elif kind in PREFIX:
         ctype = upload.content_type or mimetypes.guess_type(upload.name)[0] or ''
         if not ctype.startswith(PREFIX[kind]):
             raise ValidationError({'file': _('نوع الملف لا يطابق نوع الرسالة')})
+    return None

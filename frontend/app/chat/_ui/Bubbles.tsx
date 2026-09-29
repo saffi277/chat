@@ -87,8 +87,113 @@ export function VoicePlayer({ m }: { m: Message }) {
 }
 
 // ------------------------------------------------------------ محتوى الرسالة حسب نوعها
-export function MessageBody({ m, mine, onImage, onStopLive, sharingLive }: {
-  m: Message; mine: boolean; onImage: (url: string) => void; onStopLive?: () => void; sharingLive?: boolean;
+/** صور رفعتُها من هذا الجهاز: نعرض النسخة المحلية حتى لا تختفي الصورة لحظة وصول نسخة الخادم */
+export const localPreviews = new Map<number, string>();
+
+/** حالة رسالة ما زالت تُرفع (عند المرسل فقط) */
+export type UploadState = { progress: number; failed: boolean; onCancel: () => void; onRetry: () => void };
+
+/** حجم مكان الصورة أو الفيديو: عرض ثابت، والارتفاع من أبعاد الملف (مع حدود معقولة للصور الطويلة جداً أو العريضة جداً) */
+function boxStyle(w?: number | null, h?: number | null): React.CSSProperties {
+  const ratio = w && h ? Math.min(1.9, Math.max(0.75, w / h)) : 4 / 3;
+  return { width: 264, maxWidth: "100%", aspectRatio: String(ratio) };
+}
+
+function Spinner({ size = 34 }: { size?: number }) {
+  return <span className="block animate-spin rounded-full border-[3px] border-white/35 border-t-white" style={{ width: size, height: size }} />;
+}
+
+/** دائرة التقدّم فوق الصورة أو الفيديو: ✕ يلغي الرفع، وعند الفشل زر «إعادة المحاولة» */
+function UploadOverlay({ up }: { up: UploadState }) {
+  const t = useT();
+  const r = 22, c = 2 * Math.PI * r;
+  return (
+    <div className="absolute inset-0 grid place-items-center bg-black/35" onClick={(e) => e.stopPropagation()}>
+      {up.failed ? (
+        <button type="button" onClick={up.onRetry} className="flex items-center gap-2 rounded-full bg-black/65 px-4 py-2.5 text-sm font-bold text-white">
+          <Icon name="retry" size={18} strokeWidth={2.4} />{t("إعادة المحاولة")}
+        </button>
+      ) : (
+        <button type="button" onClick={up.onCancel} aria-label={t("إلغاء الإرسال")} className="relative grid h-14 w-14 place-items-center rounded-full bg-black/55 text-white">
+          <svg viewBox="0 0 52 52" className="absolute inset-0 h-full w-full -rotate-90" aria-hidden="true">
+            <circle cx="26" cy="26" r={r} fill="none" stroke="rgba(255,255,255,.25)" strokeWidth="3" />
+            <circle cx="26" cy="26" r={r} fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round"
+              strokeDasharray={c} strokeDashoffset={c * (1 - Math.max(0.04, up.progress))} className="transition-[stroke-dashoffset] duration-200" />
+          </svg>
+          <Icon name="x" size={20} strokeWidth={2.6} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** شريط التقدّم تحت الملف أو الرسالة الصوتية أثناء الرفع */
+function UploadBar({ up }: { up: UploadState }) {
+  const t = useT();
+  return (
+    <div className="mt-1.5 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      {up.failed ? (
+        <button type="button" onClick={up.onRetry} className="w-accent-text flex items-center gap-1.5 text-xs font-bold">
+          <Icon name="retry" size={15} strokeWidth={2.4} />{t("إعادة المحاولة")}
+        </button>
+      ) : (
+        <>
+          <span className="h-1 flex-1 overflow-hidden rounded-full" style={{ background: "color-mix(in srgb, var(--muted) 30%, transparent)" }}>
+            <span className="block h-full rounded-full transition-[width] duration-200" style={{ width: `${Math.max(4, up.progress * 100)}%`, background: "var(--accent)" }} />
+          </span>
+          <button type="button" onClick={up.onCancel} aria-label={t("إلغاء الإرسال")} className="w-muted"><Icon name="x" size={15} /></button>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * الصورة في الرسالة: مكانها محجوز بقياسها الصحيح منذ البداية، وفوقه مؤشر تحميل حتى تكتمل
+ * (فلا يرى المستقبل «رسالة فارغة»). الضغط يفتح العارض، ولا يفتح قائمة الرسالة.
+ */
+function ImageThumb({ m, onOpen, up }: { m: Message; onOpen: (url: string) => void; up?: UploadState }) {
+  const t = useT();
+  const src = localPreviews.get(m.id) ?? mediaUrl(m.file_url) ?? "";
+  // النسخة المحلية (blob:) جاهزة فوراً، فلا ننتظر تحميلها
+  const [loaded, setLoaded] = useState(src.startsWith("blob:"));
+  const [broken, setBroken] = useState(false);
+  const [natural, setNatural] = useState<[number, number] | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  return (
+    <button type="button" onClick={(e) => { e.stopPropagation(); if (up) return; if (broken) { setBroken(false); setAttempt((a) => a + 1); } else if (loaded) onOpen(src); }}
+      className="relative block overflow-hidden rounded-[16px]" aria-label={t("عرض الصورة")}
+      style={{ ...boxStyle(m.width ?? natural?.[0], m.height ?? natural?.[1]), background: "color-mix(in srgb, var(--muted) 22%, transparent)" }}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- صورة مرفوعة من الباك اند */}
+      <img key={attempt} src={src} alt={m.content || t("صورة")} draggable={false}
+        onLoad={(e) => { setLoaded(true); setNatural([e.currentTarget.naturalWidth, e.currentTarget.naturalHeight]); }}
+        onError={() => setBroken(true)}
+        className={`h-full w-full select-none object-cover transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`} style={{ WebkitTouchCallout: "none" }} />
+      {!loaded && !broken && !up && <span className="absolute inset-0 grid place-items-center"><Spinner /></span>}
+      {broken && (
+        <span className="w-muted absolute inset-0 grid place-content-center justify-items-center gap-1.5 text-xs font-semibold">
+          <Icon name="retry" size={22} />{t("تعذّر تحميل الصورة. اضغط لإعادة المحاولة")}
+        </span>
+      )}
+      {up && <UploadOverlay up={up} />}
+    </button>
+  );
+}
+
+function VideoThumb({ m, up }: { m: Message; up?: UploadState }) {
+  const [ready, setReady] = useState(false);
+  return (
+    <div className="relative overflow-hidden rounded-[16px] bg-black" style={boxStyle(m.width, m.height)} onClick={up ? (e) => e.stopPropagation() : undefined}>
+      <video src={localPreviews.get(m.id) ?? mediaUrl(m.file_url) ?? undefined} controls={!up} preload="metadata" playsInline
+        onLoadedData={() => setReady(true)} className="h-full w-full object-contain" />
+      {!ready && !up && <span className="pointer-events-none absolute inset-0 grid place-items-center"><Spinner /></span>}
+      {up && <UploadOverlay up={up} />}
+    </div>
+  );
+}
+
+export function MessageBody({ m, mine, onImage, onStopLive, sharingLive, upload }: {
+  m: Message; mine: boolean; onImage: (url: string) => void; onStopLive?: () => void; sharingLive?: boolean; upload?: UploadState;
 }) {
   const t = useT();
   if (m.is_deleted) {
@@ -99,31 +204,31 @@ export function MessageBody({ m, mine, onImage, onStopLive, sharingLive }: {
     case "image":
       return (
         <div className="-mx-1.5 -mt-1">
-          <button onClick={() => url && onImage(url)} className="block overflow-hidden rounded-[16px]">
-            {/* eslint-disable-next-line @next/next/no-img-element -- صورة مرفوعة من الباك اند */}
-            <img src={url ?? ""} alt={m.content || t("صورة")} className="max-h-80 w-full min-w-[220px] max-w-[300px] object-cover" loading="lazy" />
-          </button>
+          <ImageThumb m={m} onOpen={onImage} up={upload} />
           {m.content && <div className="px-1.5 pt-2"><RichText text={m.content} /></div>}
         </div>
       );
     case "video":
       return (
         <div className="-mx-1.5 -mt-1">
-          <video src={url ?? undefined} controls preload="metadata" className="max-h-80 w-full min-w-[220px] max-w-[300px] rounded-[16px] bg-black" />
+          <VideoThumb m={m} up={upload} />
           {m.content && <div className="px-1.5 pt-2"><RichText text={m.content} /></div>}
         </div>
       );
     case "voice":
-      return <VoicePlayer m={m} />;
+      return <><VoicePlayer m={m} />{upload && <UploadBar up={upload} />}</>;
     case "file":
       return (
-        <a href={url ?? "#"} download={m.file_name} className="flex min-w-[210px] items-center gap-3 py-1" dir="ltr" aria-label={t("تنزيل {name}", { name: m.file_name })}>
+        <>
+        <a href={upload ? undefined : url ?? "#"} download={m.file_name} onClick={(e) => e.stopPropagation()} className="flex min-w-[210px] items-center gap-3 py-1" dir="ltr" aria-label={t("تنزيل {name}", { name: m.file_name })}>
           <span className="w-accent grid h-12 w-12 shrink-0 place-items-center rounded-[14px]"><Icon name="fileText" size={24} /></span>
           <span className="min-w-0 flex-1 text-left">
             <span className="block truncate text-[15px] font-bold" dir="auto">{m.file_name}</span>
             <span className="w-muted text-xs">{[fileSize(m.file_size), m.file_name.split(".").pop()?.toUpperCase()].filter(Boolean).join(" • ")}</span>
           </span>
         </a>
+        {upload && <UploadBar up={upload} />}
+        </>
       );
     case "location": {
       const lat = m.latitude ?? 0, lng = m.longitude ?? 0;

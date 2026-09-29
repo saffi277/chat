@@ -62,7 +62,7 @@ class MessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Message
         fields = ['id', 'conversation', 'sender', 'kind', 'content', 'file_url', 'file_name', 'file_size',
-                  'duration', 'latitude', 'longitude', 'live_until', 'is_live', 'reply_to',
+                  'duration', 'width', 'height', 'latitude', 'longitude', 'live_until', 'is_live', 'reply_to',
                   'created_at', 'edited_at', 'is_deleted', 'status', 'is_read', 'reactions']
 
     def get_file_url(self, obj):
@@ -84,7 +84,7 @@ class MessageSerializer(serializers.ModelSerializer):
         return {
             'id': obj.id, 'conversation': obj.conversation_id, 'sender': user_json(obj.sender), 'kind': obj.kind,
             'content': obj.content, 'file_url': self.get_file_url(obj), 'file_name': obj.file_name,
-            'file_size': obj.file_size, 'duration': obj.duration, 'latitude': obj.latitude, 'longitude': obj.longitude,
+            'file_size': obj.file_size, 'duration': obj.duration, 'width': obj.width, 'height': obj.height, 'latitude': obj.latitude, 'longitude': obj.longitude,
             'live_until': iso(obj.live_until), 'is_live': obj.is_live,
             'reply_to': ReplySerializer(obj.reply_to).to_representation(obj.reply_to) if obj.reply_to_id and obj.reply_to else None,
             'created_at': iso(obj.created_at), 'edited_at': iso(obj.edited_at), 'is_deleted': obj.deleted_at is not None,

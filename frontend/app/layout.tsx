@@ -14,6 +14,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  // يمنع الآيفون من تكبير الصفحة تلقائياً عند الضغط على خانة كتابة (تكبير الأصابع يبقى متاحاً في iOS)
+  maximumScale: 1,
   themeColor: [{ media: "(prefers-color-scheme: light)", color: "#ffffff" }, { media: "(prefers-color-scheme: dark)", color: "#0b141a" }],
   // نستخدم الشاشة كلها حتى داخل النتوء، ونحمي الأطراف بـ env(safe-area-inset-*)
   viewportFit: "cover",

@@ -400,4 +400,14 @@ export const EN: Record<string, string> = {
   "📎 ملف": "📎 File",
   "📷 صورة": "📷 Photo",
   "🚫 تم حذف هذه الرسالة": "🚫 This message was deleted",
+  // عارض الصور، والرفع مع التقدّم، وقائمة الرسالة
+  "إعادة المحاولة": "Retry",
+  "إغلاق المحادثة": "Close chat",
+  "إلغاء الإرسال": "Cancel sending",
+  "تعذّر تحميل الصورة. اضغط لإعادة المحاولة": "Couldn't load the photo. Tap to retry",
+  "تنزيل": "Download",
+  "خيارات الرسالة": "Message options",
+  "عرض الحالة": "View status",
+  "عرض الصورة": "View photo",
+  "لم تُرسل": "Not sent",
 };

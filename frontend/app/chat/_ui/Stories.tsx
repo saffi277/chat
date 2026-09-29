@@ -21,7 +21,7 @@ function compact(n: number) {
 
 export function StoriesView() {
   const t = useT();
-  const { stories, me, setPanel, setStoryViewer, setTab } = useWasl();
+  const { stories, me, setPanel, setStoryViewer, setTab, openStory } = useWasl();
   const [kind, setKind] = useState<Kind>("all");
   const mine = stories.find((g) => g.is_me);
   // كل الحالات بشبكة وحدة، الأحدث أول
@@ -43,15 +43,15 @@ export function StoriesView() {
           <button className="grid shrink-0 justify-items-center gap-1 text-[11px]"
             onClick={() => (mine ? setStoryViewer({ userId: me.id, index: 0 }) : setPanel({ type: "storyCompose" }))}>
             <div className="relative">
-              <Avatar user={me} size={60} ring={mine ? true : undefined} />
+              <Avatar user={me} size={60} ring={mine ? "story" : undefined} />
               <span className="w-accent absolute -bottom-0.5 -end-0.5 grid h-6 w-6 place-items-center rounded-full border-2" style={{ borderColor: "var(--panel-strong)" }}
                 onClick={(e) => { e.stopPropagation(); setPanel({ type: "storyCompose" }); }}><Icon name="plus" size={13} strokeWidth={3} /></span>
             </div>
             <span className="w-muted">{t("قصتي")}</span>
           </button>
           {stories.filter((g) => !g.is_me).map((g) => (
-            <button key={g.user.id} className="grid shrink-0 justify-items-center gap-1 text-[11px]" onClick={() => setStoryViewer({ userId: g.user.id, index: 0 })}>
-              <Avatar user={g.user} size={60} ring={g.all_seen ? "seen" : true} />
+            <button key={g.user.id} className="grid shrink-0 justify-items-center gap-1 text-[11px]" onClick={() => openStory(g.user.id)}>
+              <Avatar user={g.user} size={60} ring={g.all_seen ? "seen" : "story"} />
               <span className="w-muted max-w-16 truncate">{nameOf(g.user)}</span>
             </button>
           ))}

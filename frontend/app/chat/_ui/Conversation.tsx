@@ -1,12 +1,12 @@
 "use client";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { Conversation as Conv, Message } from "@/lib/api";
+import type { Conversation as Conv, Message, MessageKind } from "@/lib/api";
 import { t as tr, useT } from "@/lib/i18n";
-import { contacts as contactsApi, conversations as convApi, messages as msgApi } from "@/lib/endpoints";
+import { contacts as contactsApi, conversations as convApi, messages as msgApi, type SendFileOpts } from "@/lib/endpoints";
 import { openSocket, type LiveSocket, type SocketStatus } from "@/lib/socket";
-import { MessageBody, ReplyQuote, SenderName, Ticks } from "./Bubbles";
-import { clock, ConvAvatar, dayLabel, IconButton, lastSeenText, nameOf, systemText } from "./bits";
-import { Composer } from "./Composer";
+import { localPreviews, MessageBody, ReplyQuote, SenderName, Ticks, type UploadState } from "./Bubbles";
+import { clock, ConvAvatar, dayLabel, IconButton, ImageViewer, lastSeenText, nameOf, preview, StoryTap, systemText } from "./bits";
+import { Composer, type MediaSend } from "./Composer";
 import { Icon, type IconName } from "./icons";
 import { useWasl } from "./store";
 
@@ -19,9 +19,35 @@ const upsert = (list: Message[], m: Message) => {
   return copy;
 };
 
+/** وسائط تُرفع الآن: تظهر في المحادثة فوراً (رسالة محلية بمعرّف سالب) حتى يردّ الخادم */
+type Outgoing = { key: number; file: File | Blob; opts: SendFileOpts & { kind: MessageKind }; msg: Message; progress: number; failed: boolean };
+
+/** أبعاد الصورة أو الفيديو قبل الرفع: يُحجز مكانها بالقياس الصحيح عند الطرفين */
+function mediaSize(url: string, kind: MessageKind): Promise<{ width: number; height: number } | null> {
+  return new Promise((resolve) => {
+    const done = (w: number, h: number) => resolve(w && h ? { width: w, height: h } : null);
+    setTimeout(() => resolve(null), 3000);
+    if (kind === "image") {
+      const img = new Image();
+      img.onload = () => done(img.naturalWidth, img.naturalHeight);
+      img.onerror = () => resolve(null);
+      img.src = url;
+    } else if (kind === "video") {
+      const v = document.createElement("video");
+      v.preload = "metadata";
+      v.onloadedmetadata = () => done(v.videoWidth, v.videoHeight);
+      v.onerror = () => resolve(null);
+      v.src = url;
+    } else resolve(null);
+  });
+}
+
+/** مدة الضغط المطوّل التي تفتح قائمة الرسالة في الهاتف */
+const LONG_PRESS_MS = 450;
+
 export function Conversation({ conv }: { conv: Conv }) {
   const t = useT();
-  const { me, otherOf, openConv, setPanel, startCall, liveShares, stopLiveShare, startLiveShare, refreshConvs, notify, isContact, contactAdded } = useWasl();
+  const { me, otherOf, openConv, panel, storyRing, openStory, storyViewer, call, setPanel, startCall, liveShares, stopLiveShare, startLiveShare, refreshConvs, notify, isContact, contactAdded } = useWasl();
   const [msgs, setMsgs] = useState<Message[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -29,8 +55,14 @@ export function Conversation({ conv }: { conv: Conv }) {
   const [conn, setConn] = useState<SocketStatus>("open");
   const [reply, setReply] = useState<Message | null>(null);
   const [editing, setEditing] = useState<Message | null>(null);
-  const [menuFor, setMenuFor] = useState<number | null>(null);
+  // القائمة تُفتح فوق الرسالة إن لم يبقَ تحتها مكان كافٍ
+  const [menuFor, setMenuFor] = useState<{ id: number; up: boolean } | null>(null);
+  const [outgoing, setOutgoing] = useState<Outgoing[]>([]);
+  const uploads = useRef(new Map<number, AbortController>());
+  const seq = useRef(0);
+  const press = useRef<{ timer?: ReturnType<typeof setTimeout>; x: number; y: number; fired: boolean }>({ x: 0, y: 0, fired: false });
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const closeLightbox = useCallback(() => setLightbox(null), []);
   const [moreOpen, setMoreOpen] = useState(false);
   const [starred, setStarred] = useState<Set<number>>(new Set());
   const socketRef = useRef<LiveSocket | null>(null);
@@ -120,6 +152,92 @@ export function Conversation({ conv }: { conv: Conv }) {
     }
   }, [msgs, typing]);
 
+  // ------------------------------------------------ إرسال الوسائط مثل واتساب
+  const patchOut = (key: number, patch: Partial<Outgoing>) => setOutgoing((l) => l.map((o) => (o.key === key ? { ...o, ...patch } : o)));
+
+  function runUpload(o: Outgoing) {
+    const ctrl = new AbortController();
+    uploads.current.set(o.key, ctrl);
+    patchOut(o.key, { progress: 0, failed: false });
+    msgApi.sendFile(id, o.file, { ...o.opts, onProgress: (p) => patchOut(o.key, { progress: p }), signal: ctrl.signal })
+      .then((m) => {
+        // نبقي النسخة المحلية للصورة والفيديو فلا تومض الرسالة وهي تُحمَّل من الخادم
+        if (o.msg.kind === "image" || o.msg.kind === "video") localPreviews.set(m.id, o.msg.file_url!);
+        else URL.revokeObjectURL(o.msg.file_url!);
+        stick.current = true;
+        setMsgs((l) => upsert(l, m));
+        setOutgoing((l) => l.filter((x) => x.key !== o.key));
+      })
+      .catch((e: Error) => {
+        if (e.name === "AbortError") return;
+        patchOut(o.key, { failed: true });
+        notify(e.message);
+      })
+      .finally(() => uploads.current.delete(o.key));
+  }
+
+  const sendMedia: MediaSend = async (file, opts, replyMsg) => {
+    const key = ++seq.current;
+    const url = URL.createObjectURL(file);
+    const size = await mediaSize(url, opts.kind);
+    const r = replyMsg ? { id: replyMsg.id, kind: replyMsg.kind, sender_id: replyMsg.sender.id, sender_name: nameOf(replyMsg.sender), preview: preview(replyMsg).text } : null;
+    const msg: Message = {
+      id: -key, conversation: id, sender: me, kind: opts.kind, content: opts.caption ?? "", file_url: url,
+      file_name: opts.name ?? (file instanceof File ? file.name : "voice"), file_size: file.size, duration: opts.duration ?? null,
+      width: size?.width ?? null, height: size?.height ?? null, latitude: null, longitude: null, live_until: null, is_live: false,
+      reply_to: r, created_at: new Date().toISOString(), edited_at: null, is_deleted: false, status: "sent", is_read: false, reactions: [],
+    };
+    const o: Outgoing = { key, file, opts: { ...opts, ...(opts.kind === "video" && size ? size : {}) }, msg, progress: 0, failed: false };
+    stick.current = true;
+    setOutgoing((l) => [...l, o]);
+    runUpload(o);
+  };
+
+  function cancelUpload(o: Outgoing) {
+    uploads.current.get(o.key)?.abort();
+    URL.revokeObjectURL(o.msg.file_url!);
+    setOutgoing((l) => l.filter((x) => x.key !== o.key));
+  }
+
+  // ------------------------------------------------ قائمة الرسالة: ضغط مطوّل (الهاتف)، نقر أيمن (الحاسوب)، أو زر ⌄
+  function openMenu(msgId: number, el: HTMLElement) {
+    const box = scroller.current?.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    const below = box ? box.bottom - r.bottom : 999;
+    const above = box ? r.top - box.top : 0;
+    setMoreOpen(false);
+    setMenuFor({ id: msgId, up: below < 340 && above > below });
+  }
+  const pressStart = (e: React.PointerEvent<HTMLElement>, msgId: number) => {
+    press.current.fired = false;
+    if (e.pointerType === "mouse") return;
+    const el = e.currentTarget;
+    press.current.x = e.clientX;
+    press.current.y = e.clientY;
+    clearTimeout(press.current.timer);
+    press.current.timer = setTimeout(() => {
+      press.current.fired = true;
+      navigator.vibrate?.(15);
+      openMenu(msgId, el);
+    }, LONG_PRESS_MS);
+  };
+  const pressMove = (e: React.PointerEvent) => {
+    if (Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > 10) clearTimeout(press.current.timer);
+  };
+  const pressEnd = () => clearTimeout(press.current.timer);
+
+  // Esc في الحاسوب: يلغي الرد أو التعديل أولاً، ثم يغلق القائمة، ثم يغلق المحادثة
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || panel || storyViewer || call) return;
+      if (menuFor || moreOpen) { setMenuFor(null); setMoreOpen(false); return; }
+      if (reply || editing) { setReply(null); setEditing(null); return; }
+      openConv(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [panel, storyViewer, call, menuFor, moreOpen, reply, editing, openConv]);
+
   async function loadOlder() {
     if (!hasMore || !msgs.length) return;
     const el = scroller.current!;
@@ -198,11 +316,13 @@ export function Conversation({ conv }: { conv: Conv }) {
   return (
     <div className="flex h-full min-h-0 flex-col" onClick={() => { setMenuFor(null); setMoreOpen(false); }}>
       {/* الترويسة */}
-      <header className="w-shadow relative z-10 flex items-center gap-2 rounded-b-[26px] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:rounded-none md:shadow-none md:border-b md:w-line"
+      <header className="w-shadow relative z-10 flex items-center gap-2 rounded-b-[26px] px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] md:rounded-none md:shadow-none md:border-b md:w-split"
         style={{ background: "var(--panel)" }}>
         <IconButton icon="back" label={t("رجوع")} onClick={() => openConv(null)} className="md:hidden" plain size={34} />
         <button onClick={openInfo} className="flex min-w-0 flex-1 items-center gap-3 text-start">
-          <ConvAvatar conv={conv} other={other} size={46} />
+          <StoryTap ring={storyRing(other?.id)} onOpen={() => other && openStory(other.id)}>
+            <ConvAvatar conv={conv} other={other} size={46} ring={storyRing(other?.id)} />
+          </StoryTap>
           <div className="min-w-0">
             <div className="truncate text-[16px] font-bold" dir="auto">{title}</div>
             <div className="w-muted flex items-center gap-1.5 truncate text-xs" style={{ color: conn !== "open" ? "#f59e0b" : typing ? "var(--accent)" : undefined }}>
@@ -230,6 +350,10 @@ export function Conversation({ conv }: { conv: Conv }) {
             </div>
           )}
         </div>
+        {/* في الحاسوب: زر لإغلاق المحادثة (أو Esc) */}
+        <span className="hidden md:block">
+          <IconButton icon="x" label={t("إغلاق المحادثة")} onClick={() => openConv(null)} plain size={38} />
+        </span>
       </header>
 
       {stranger && (
@@ -274,8 +398,23 @@ export function Conversation({ conv }: { conv: Conv }) {
                 </div>
               ) : (
                 <div id={`m-${m.id}`} className={`group flex items-end gap-1 ${mine ? "justify-end" : "justify-start"} ${grouped ? "mt-1.5" : "mt-3"} ${m.reactions.length ? "mb-3.5" : ""}`}>
-                  <div className={`relative max-w-[80%] rounded-[20px] px-3.5 py-2 md:max-w-[62%] ${mine ? "w-bubble-out" : "w-bubble-in"}`}
-                    onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === m.id ? null : m.id); }}>
+                  <div className={`relative max-w-[80%] rounded-[20px] px-3.5 py-2 [-webkit-touch-callout:none] [@media(hover:none)]:select-none md:max-w-[62%] ${mine ? "w-bubble-out" : "w-bubble-in"}`}
+                    // بعد الضغط المطوّل يصل «نقر» عند رفع الإصبع: نوقفه قبل أن يصل إلى الصورة (فلا يُفتح العارض) أو يغلق القائمة
+                    onClickCapture={(e) => { if (press.current.fired) { press.current.fired = false; e.stopPropagation(); e.preventDefault(); } }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (menuFor?.id === m.id) setMenuFor(null); else openMenu(m.id, e.currentTarget);
+                    }}
+                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); openMenu(m.id, e.currentTarget); }}
+                    onPointerDown={(e) => pressStart(e, m.id)} onPointerMove={pressMove} onPointerUp={pressEnd} onPointerCancel={pressEnd} onPointerLeave={pressEnd}>
+                    {!m.is_deleted && (
+                      // زر ⌄: ظاهر دائماً على الصور والفيديو (فالضغط عليها يفتح العارض)، وعند المرور بالفأرة على غيرها
+                      <button type="button" aria-label={t("خيارات الرسالة")} onClick={(e) => { e.stopPropagation(); openMenu(m.id, e.currentTarget.parentElement!); }}
+                        className={`absolute end-1.5 top-1.5 z-[1] h-7 w-7 place-items-center rounded-full ${media(m) ? "grid bg-black/45 text-white" : "hidden group-hover:grid"}`}
+                        style={media(m) ? undefined : { background: mine ? "var(--bubble-out)" : "var(--bubble-in)", color: "var(--muted)" }}>
+                        <Icon name="chevronDown" size={17} strokeWidth={2.4} />
+                      </button>
+                    )}
                     {conv.kind === "group" && !mine && !grouped && <SenderName m={m} />}
                     {m.reply_to && <ReplyQuote r={m.reply_to} mine={mine} onClick={() => document.getElementById(`m-${m.reply_to!.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })} />}
                     <MessageBody m={m} mine={mine} onImage={setLightbox}
@@ -297,8 +436,8 @@ export function Conversation({ conv }: { conv: Conv }) {
                         ))}
                       </div>
                     )}
-                    {menuFor === m.id && !m.is_deleted && (
-                      <MessageMenu m={m} mine={mine} onClose={() => setMenuFor(null)} meId={me.id}
+                    {menuFor?.id === m.id && !m.is_deleted && (
+                      <MessageMenu m={m} mine={mine} up={menuFor.up} onClose={() => setMenuFor(null)} meId={me.id}
                         onReact={(e) => react(m, e)} starred={starred.has(m.id)} onStar={() => toggleStar(m)}
                         onReply={canPost ? () => { setEditing(null); setReply(m); } : undefined}
                         onEdit={() => { setReply(null); setEditing(m); }}
@@ -309,6 +448,22 @@ export function Conversation({ conv }: { conv: Conv }) {
                 </div>
               )}
             </Fragment>
+          );
+        })}
+        {outgoing.map((o) => {
+          const up: UploadState = { progress: o.progress, failed: o.failed, onCancel: () => cancelUpload(o), onRetry: () => runUpload(o) };
+          return (
+            <div key={`up-${o.key}`} className="mt-3 flex justify-end">
+              <div className="w-bubble-out relative max-w-[80%] rounded-[20px] px-3.5 py-2 md:max-w-[62%]">
+                {o.msg.reply_to && <ReplyQuote r={o.msg.reply_to} mine />}
+                <MessageBody m={o.msg} mine onImage={() => {}} upload={up} />
+                <div className="w-muted mt-1 flex items-center justify-start gap-1 text-[11px]" dir="ltr">
+                  {o.failed
+                    ? <span className="flex items-center gap-1 font-bold" style={{ color: "var(--danger)" }}><Icon name="info" size={13} />{t("لم تُرسل")}</span>
+                    : <span className="flex items-center gap-1" aria-label={t("جارٍ الإرسال...")}><Icon name="clock" size={12} />{Math.round(o.progress * 100)}%</span>}
+                </div>
+              </div>
+            </div>
           );
         })}
         {typing && conv.kind !== "group" && (
@@ -323,7 +478,7 @@ export function Conversation({ conv }: { conv: Conv }) {
       {canPost ? (
         <Composer convId={id} socket={() => socketRef.current} reply={reply} editing={editing}
           onDone={() => { setReply(null); setEditing(null); }}
-          onSent={(m) => { stick.current = true; setMsgs((l) => upsert(l, m)); }} />
+          onSent={(m) => { stick.current = true; setMsgs((l) => upsert(l, m)); }} onMedia={sendMedia} />
       ) : (
         // القناة للمشترك: لا خانة كتابة، بل سطر يوضح ذلك وزر كتم الإشعارات
         <div className="flex items-center gap-3 rounded-t-[26px] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 md:rounded-none md:border-t md:w-line"
@@ -336,21 +491,18 @@ export function Conversation({ conv }: { conv: Conv }) {
         </div>
       )}
 
-      {lightbox && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-4" onClick={() => setLightbox(null)}>
-          {/* eslint-disable-next-line @next/next/no-img-element -- عرض الصورة كاملة */}
-          <img src={lightbox} alt="" className="max-h-full max-w-full rounded-2xl object-contain" />
-          <button className="absolute end-4 top-4 grid h-11 w-11 place-items-center rounded-full bg-white/15 text-white" aria-label={t("إغلاق")}><Icon name="x" /></button>
-        </div>
-      )}
+      {lightbox && <ImageViewer src={lightbox} onClose={closeLightbox} />}
     </div>
   );
 }
 
 const QUICK = ["❤️", "👍", "😂", "😮", "😢", "🙏"];
 
-function MessageMenu({ m, mine, meId, onClose, onReply, onEdit, onDelete, onResumeLive, onReact, starred, onStar }: {
-  m: Message; mine: boolean; meId: number; onClose: () => void; onReply?: () => void; onEdit: () => void; onDelete: () => void;
+/** رسالة وسائط: الضغط عليها يفتح العارض أو المشغّل، فقائمتها من زر ⌄ أو الضغط المطوّل */
+const media = (m: Message) => m.kind === "image" || m.kind === "video";
+
+function MessageMenu({ m, mine, up, meId, onClose, onReply, onEdit, onDelete, onResumeLive, onReact, starred, onStar }: {
+  m: Message; mine: boolean; up?: boolean; meId: number; onClose: () => void; onReply?: () => void; onEdit: () => void; onDelete: () => void;
   onResumeLive?: () => void; onReact: (emoji: string) => void; starred: boolean; onStar: () => void;
 }) {
   const t = useT();
@@ -364,7 +516,7 @@ function MessageMenu({ m, mine, meId, onClose, onReply, onEdit, onDelete, onResu
     ...(mine ? [{ icon: "trash" as IconName, label: t("حذف للجميع"), run: onDelete, danger: true }] : []),
   ];
   return (
-    <div className={`w-strong w-shadow absolute top-full z-20 mt-1 w-60 rounded-2xl p-1.5 text-sm ${mine ? "end-0" : "start-0"}`}
+    <div className={`w-strong w-shadow absolute z-20 w-60 rounded-2xl p-1.5 text-sm ${up ? "bottom-full mb-1" : "top-full mt-1"} ${mine ? "end-0" : "start-0"}`}
       style={{ border: "1px solid var(--border)", color: "var(--text)" }} onClick={(e) => e.stopPropagation()}>
       {m.kind !== "system" && m.kind !== "call" && (
         <div className="w-line mb-1 flex justify-between border-b px-1 pb-1.5" role="group" aria-label={t("تفاعل")}>

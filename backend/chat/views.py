@@ -416,10 +416,18 @@ def send_message(request, conv):
     elif kind in (Message.IMAGE, Message.VIDEO, Message.VOICE, Message.FILE):
         if not upload:
             raise ValidationError({'file': _('الملف مطلوب')})
-        validate_upload(kind, upload)
+        size = validate_upload(kind, upload)
         fields.update(file=upload, file_name=upload.name[:255], file_size=upload.size)
         if data.get('duration'):
             fields['duration'] = float(data['duration'])
+        # أبعاد الصورة نقرؤها بأنفسنا، وأبعاد الفيديو يرسلها المتصفح (يقرؤها قبل الرفع)
+        if size is None and kind == Message.VIDEO:
+            try:
+                size = (int(data.get('width')), int(data.get('height')))
+            except (TypeError, ValueError):
+                size = None
+        if size and all(0 < n <= 20000 for n in size):
+            fields.update(width=size[0], height=size[1])
     else:
         raise ValidationError({'kind': _('نوع رسالة غير معروف')})
     return services.create_message(conv, request.user, content, **fields)

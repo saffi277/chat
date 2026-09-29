@@ -80,8 +80,9 @@ function Shell() {
   const active = convs.find((c) => c.id === activeId);
   return (
     <div className="wasl wasl-shell overflow-hidden" data-theme={theme}>
-      <div className="mx-auto flex h-full max-w-[1600px]">
-        <aside className={`${active ? "hidden md:flex" : "flex"} w-line relative w-full shrink-0 flex-col overflow-hidden md:w-[400px] md:border-e`}
+      {/* في الحاسوب يمتد التطبيق على الشاشة كلها، وعرض القائمة يتدرج مع حجم الشاشة */}
+      <div className="flex h-full">
+        <aside className={`${active ? "hidden md:flex" : "flex"} w-split relative w-full shrink-0 flex-col overflow-hidden md:w-[360px] md:border-e lg:w-[400px] 2xl:w-[440px]`}
           style={{ background: "var(--panel)" }}>
           <div className="min-h-0 flex-1">
             {tab === "chats" && <ChatList />}

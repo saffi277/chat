@@ -91,6 +91,7 @@ import { CallSession } from "@/lib/call";      // المكالمات
 | إرسال نص / رد على رسالة | `messages.sendText(id, "هلو", replyToId?)` |
 | إرسال صورة/فيديو/ملف | `messages.sendFile(id, file, { caption })` |
 | **رسالة صوتية** (الموجة + المدة) | `messages.sendFile(id, blob, { kind: "voice", duration: 24 })` |
+| **رفع مع نسبة التقدّم** (مثل واتساب) | `messages.sendFile(id, file, { kind: "image", onProgress: (p) => ..., signal })`: `p` من 0 إلى 1، و`signal` لإلغاء الرفع |
 | تعديل / حذف رسالة | `messages.edit(msgId, "نص")` / `messages.remove(msgId)` |
 | قراءة المحادثة (✓✓ أزرق) | `conversations.markRead(id)` لما تفتحها |
 | **مشاركة الموقع** + 15 دقيقة/ساعة/8 ساعات | `messages.sendLocation(id, lat, lng, 15 \| 60 \| 480, "تعليق")` |
@@ -153,6 +154,7 @@ import { CallSession } from "@/lib/call";      // المكالمات
 | `content` | النص، أو التعليق على الصورة |
 | `file_url` | مسار الملف: `mediaUrl(m.file_url)` |
 | `file_name`, `file_size`, `duration` | للملفات والصوت/الفيديو (المدة بالثواني) |
+| `width`, `height` | أبعاد الصورة أو الفيديو بالبكسل (أو `null`). يقرؤها الخادم من الصورة، ويرسلها المتصفح للفيديو (`width`/`height` مع الملف). تُستعمل لحجز مكان الوسائط بقياسها الصحيح قبل تحميلها |
 | `latitude`, `longitude`, `is_live`, `live_until` | للموقع |
 | `reply_to` | `{ sender_name, preview }` للفقاعة الصغيرة فوك الرد |
 | `status` | `sent` ✓ ، `delivered` ✓✓ رمادي ، `read` ✓✓ أزرق |

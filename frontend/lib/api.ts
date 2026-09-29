@@ -66,6 +66,9 @@ export type Message = {
   file_name: string;
   file_size: number | null;
   duration: number | null; // ثواني (صوت/فيديو)
+  /** أبعاد الصورة أو الفيديو (إن عُرفت): نحجز مكانها بالقياس الصحيح قبل أن تكتمل */
+  width?: number | null;
+  height?: number | null;
   latitude: number | null;
   longitude: number | null;
   live_until: string | null;
@@ -159,7 +162,8 @@ export function saveSession(token: string, user: User, remember = true) {
 // الصور تنخدم من سيرفر الـ Backend، فنضيف عنوانه على المسار
 export function mediaUrl(path: string | null) {
   if (!path) return null;
-  return /^https?:\/\//.test(path) ? path : `${apiBase()}${path}`;
+  // blob: = معاينة محلية لملف ما زال يُرفع
+  return /^(https?:|blob:)/.test(path) ? path : `${apiBase()}${path}`;
 }
 
 export function saveMe(user: User) {
@@ -206,9 +210,36 @@ export async function api<T>(path: string, method = "GET", body?: unknown): Prom
     throw new NetworkError(t("تعذّر الوصول إلى الخادم. تحقق من اتصالك بالإنترنت."));
   }
   const data = await res.json().catch(() => ({})); // نص JSON → Object
-  if (!res.ok) {
-    const detail = (data as { detail?: string }).detail;
-    throw new ApiError(res.status, detail || Object.values(data).flat().join(" ") || t("خطأ {status}", { status: res.status }));
-  }
+  if (!res.ok) throw errorOf(res.status, data);
   return data as T;
+}
+
+function errorOf(status: number, data: unknown) {
+  const detail = (data as { detail?: string }).detail;
+  return new ApiError(status, detail || Object.values(data as object).flat().join(" ") || t("خطأ {status}", { status }));
+}
+
+/**
+ * رفع ملف مع نسبة التقدّم (0 إلى 1). نستعمل XMLHttpRequest لأن fetch لا يخبرنا كم رُفع.
+ * signal: لإلغاء الرفع (زر ✕ على الرسالة).
+ */
+export function upload<T>(path: string, form: FormData, onProgress: (p: number) => void, signal?: AbortSignal): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${apiBase()}/api${path}`);
+    const token = getToken();
+    if (token) xhr.setRequestHeader("Authorization", `Token ${token}`);
+    xhr.setRequestHeader("Accept-Language", getLang());
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    xhr.onload = () => {
+      let data: unknown = {};
+      try { data = JSON.parse(xhr.responseText); } catch { /* ليس JSON */ }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data as T);
+      else reject(errorOf(xhr.status, data));
+    };
+    xhr.onerror = () => reject(new NetworkError(t("تعذّر الوصول إلى الخادم. تحقق من اتصالك بالإنترنت.")));
+    xhr.onabort = () => reject(new DOMException("aborted", "AbortError"));
+    signal?.addEventListener("abort", () => xhr.abort());
+    xhr.send(form);
+  });
 }
