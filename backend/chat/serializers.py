@@ -4,7 +4,15 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 from rest_framework import serializers
 
-from accounts.serializers import UserSerializer, iso, user_json
+from accounts.privacy import sender_json, viewer_for
+from accounts.serializers import UserSerializer, iso, profile_of, user_json
+
+
+def no_read(viewer, receipts):
+    """علامات القراءة متبادلة (كما في واتساب): من أوقفها لا يرى قراءة الآخرين لرسائله."""
+    if receipts is None or profile_of(viewer).read_receipts:
+        return receipts
+    return [{'no_read': True}, *receipts]
 from config.media import signed_url
 
 from .models import Conversation, Membership, Message
@@ -17,6 +25,8 @@ def message_status(message, receipts):
     """
     if receipts is None:
         return 'read' if message.is_read else 'sent'
+    if receipts and receipts[0].get('no_read'):  # المشاهد أوقف علامات القراءة: لا يرى قراءة الآخرين أيضاً
+        receipts = [{**r, 'last_read_id': 0} for r in receipts[1:]]
     others = [r for r in receipts if r['user_id'] != message.sender_id]
     if not others:  # الرسائل المحفوظة
         return 'read'
@@ -25,6 +35,27 @@ def message_status(message, receipts):
     if all(r['last_delivered_id'] >= message.id for r in others):
         return 'delivered'
     return 'sent'
+
+
+def poll_json(message):
+    """الاستطلاع: الخيارات وعدد الأصوات ومن صوّت لكل خيار (مثل التفاعلات: الواجهة تعرف صوتي منها)."""
+    poll = getattr(message, 'poll', None)
+    if poll is None:
+        return None
+    options = list(poll.options.prefetch_related('votes'))
+    voters = {v.user_id for o in options for v in o.votes.all()}
+    return {'multiple': poll.multiple, 'total_voters': len(voters),
+            'options': [{'id': o.id, 'text': o.text, 'votes': len(o.votes.all()),
+                         'voter_ids': [v.user_id for v in o.votes.all()]} for o in options]}
+
+
+def pinned_json(conv):
+    m = conv.pinned_message
+    if not m or m.deleted_at:
+        return None
+    from .services import preview_text
+    return {'id': m.id, 'kind': m.kind, 'sender_name': profile_of(m.sender).display_name or m.sender.username,
+            'preview': preview_text(m)[:120]}
 
 
 class ReplySerializer(serializers.ModelSerializer):
@@ -83,7 +114,7 @@ class MessageSerializer(serializers.ModelSerializer):
         # نبني الـ JSON مباشرة (سريع). نفس الحقول بالضبط اللي بـ Meta.fields
         status = self.get_status(obj)
         return {
-            'id': obj.id, 'conversation': obj.conversation_id, 'sender': user_json(obj.sender), 'kind': obj.kind,
+            'id': obj.id, 'conversation': obj.conversation_id, 'sender': sender_json(obj.sender), 'kind': obj.kind,
             'content': obj.content, 'file_url': self.get_file_url(obj), 'file_name': obj.file_name,
             'file_size': obj.file_size, 'duration': obj.duration, 'width': obj.width, 'height': obj.height, 'latitude': obj.latitude, 'longitude': obj.longitude,
             'live_until': iso(obj.live_until), 'is_live': obj.is_live,
@@ -91,6 +122,7 @@ class MessageSerializer(serializers.ModelSerializer):
             'created_at': iso(obj.created_at), 'edited_at': iso(obj.edited_at), 'expires_at': iso(obj.expires_at),
             'is_deleted': obj.deleted_at is not None,
             'status': status, 'is_read': status == 'read', 'reactions': self.get_reactions(obj),
+            'forwarded': obj.forwarded, 'poll': poll_json(obj) if obj.kind == Message.POLL and not obj.deleted_at else None,
         }
 
     def get_reactions(self, obj):
@@ -109,7 +141,8 @@ class MemberSerializer(serializers.ModelSerializer):
         fields = ['user', 'role', 'joined_at']
 
     def to_representation(self, obj):
-        return {'user': user_json(obj.user), 'role': obj.role, 'joined_at': iso(obj.joined_at)}
+        viewer = self.context.get('viewer')
+        return {'user': viewer.json(obj.user) if viewer else user_json(obj.user), 'role': obj.role, 'joined_at': iso(obj.joined_at)}
 
 
 class ConversationSerializer(serializers.ModelSerializer):
@@ -161,14 +194,17 @@ class ConversationSerializer(serializers.ModelSerializer):
             if obj.others_read is None:
                 return []
             return [{'user_id': 0, 'last_read_id': obj.others_read, 'last_delivered_id': obj.others_delivered}]
-        return [{'user_id': m.user_id, 'last_delivered_id': m.last_delivered_id, 'last_read_id': m.last_read_id}
+        rows = [{'user_id': m.user_id, 'last_delivered_id': m.last_delivered_id,
+                 'last_read_id': m.last_read_id if profile_of(m.user).read_receipts else 0}
                 for m in self._memberships(obj)]
+        return no_read(self.context['request'].user, rows)
 
     def to_representation(self, obj):
         mine = self._mine(obj)
         admin = bool(mine and mine.role == Membership.ADMIN)
         return {
             **self.get_settings(obj, mine, admin),
+            'pinned_message': pinned_json(obj) if obj.pinned_message_id else None,
             'id': obj.id, 'kind': obj.kind, 'title': self.get_title(obj), 'description': obj.description,
             'avatar': self.get_avatar(obj), 'participants': self.get_participants(obj),
             'member_count': self.get_member_count(obj), 'my_role': self.get_my_role(obj),
@@ -182,7 +218,8 @@ class ConversationSerializer(serializers.ModelSerializer):
         # بالقائمة: المجموعة ما نرجع أعضاءها (ممكن 40 أو 400 شخص بكل طلب). تفاصيلهم من /members/
         if obj.kind == Conversation.CHANNEL or (obj.kind == Conversation.GROUP and self.context.get('compact')):
             return []  # القناة: المشتركون خاصّون (والمشرفون من /members/)
-        return [user_json(m.user) for m in self._memberships(obj)]
+        viewer = viewer_for(self.context['request'])
+        return [viewer.json(m.user) for m in self._memberships(obj)]
 
     def get_title(self, obj):
         if obj.kind == Conversation.SAVED:

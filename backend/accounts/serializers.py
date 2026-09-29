@@ -98,7 +98,9 @@ class MeSerializer(UserSerializer):
     def to_representation(self, user):
         p = profile_of(user)
         return {**user_json(user), 'mode': p.mode, 'theme': p.theme, 'wallpaper': p.wallpaper, 'language': p.language,
-                'email': user.email,
+                'email': user.email, 'requested_role': p.requested_role,
+                'privacy_last_seen': p.privacy_last_seen, 'privacy_photo': p.privacy_photo, 'read_receipts': p.read_receipts,
+                'two_step': bool(p.two_step_hash), 'two_step_hint': p.two_step_hint,
                 'university_id': p.university_id, 'hide_preview': p.hide_preview}
 
     def get_mode(self, user):
@@ -137,7 +139,11 @@ class RegisterSerializer(serializers.ModelSerializer):
         university_id = validated_data.pop('university_id', '')
         # create_user يشفّر (hash) الباسورد، ما نخزنه نص عادي أبداً
         user = User.objects.create_user(**validated_data)
-        Profile.objects.create(user=user, display_name=display_name, role=role, university_id=university_id)
+        # الدور التدريسي والإداري يمنح صلاحية النشر في القنوات: لا يُعطى باختيار المستخدم وحده،
+        # بل يبدأ الحساب طالباً ويُسجَّل الطلب حتى تعتمده الإدارة من /admin
+        requested = role if role in (Profile.FACULTY, Profile.STAFF) else ''
+        Profile.objects.create(user=user, display_name=display_name, role=Profile.STUDENT, requested_role=requested,
+                               university_id=university_id)
         return user
 
 
@@ -147,7 +153,7 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
         fields = ['display_name', 'avatar', 'bio', 'phone', 'city', 'mode', 'theme', 'wallpaper', 'language',
-                  'hide_preview']
+                  'hide_preview', 'privacy_last_seen', 'privacy_photo', 'read_receipts']
 
     def validate_display_name(self, value):
         return value.strip()

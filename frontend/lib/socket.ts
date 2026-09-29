@@ -12,6 +12,7 @@ export type ChatEvent =
   | { type: "typing"; user_id: number; name?: string }
   | { type: "error"; detail: "rate_limited" | "not_allowed" | "slow_mode"; message?: string } // حدّ السرعة، أو مجموعة للمشرفين، أو الوضع البطيء
   | { type: "message_removed"; message_id: number } // رسالة مختفية انتهت مدتها
+  | { type: "pinned"; conversation_id: number } // تغيّرت الرسالة المثبّتة
   // على الاتصال العام /ws/presence/
   | { type: "inbox"; message: Message } // أي رسالة بأي محادثة (حدّث القائمة)
   | { type: "presence"; user_id: number; is_online: boolean }

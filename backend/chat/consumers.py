@@ -15,7 +15,7 @@ from django.utils import timezone, translation
 from accounts.models import Profile
 
 from .models import Membership, Message
-from .services import contact_ids, create_message, group_name, mark_delivered, post_error, user_group
+from .services import create_message, group_name, mark_delivered, post_error, presence_audience, user_group
 
 # حدّ الإرسال عبر WebSocket لكل اتصال (مثل SendThrottle في HTTP): 20 رسالة كل 10 ثوانٍ،
 # و«يكتب الآن» مرة في الثانية على الأكثر. ما زاد يُهمل، فلا يستطيع أحد إغراق المحادثة أو الخادم.
@@ -173,7 +173,7 @@ class PresenceConsumer(AsyncJsonWebsocketConsumer):
             Profile.objects.create(user=self.user, connections=1, is_online=True, last_seen=now)
         count = Profile.objects.filter(user=self.user).values_list('connections', flat=True).first()
         mark_delivered(self.user)
-        return count == 1, contact_ids(self.user.id)
+        return count == 1, presence_audience(self.user.id)
 
     @database_sync_to_async
     def went_offline(self):
@@ -182,4 +182,4 @@ class PresenceConsumer(AsyncJsonWebsocketConsumer):
         if Profile.objects.filter(user=self.user, connections__gt=0).exists():
             return None
         Profile.objects.filter(user=self.user).update(is_online=False, last_seen=timezone.now())
-        return contact_ids(self.user.id)
+        return presence_audience(self.user.id)

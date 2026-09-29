@@ -264,3 +264,71 @@ msgstr "Invalid duration"
 msgid "هذه الإعدادات للمجموعات فقط"
 msgstr "These settings are for groups only"
 
+
+# الخصوصية والأمان، والحظر، وإعادة التوجيه، والتثبيت، والاستطلاعات، والمجلدات
+msgid "اختر الرسائل والمحادثات"
+msgstr "Choose the messages and chats"
+
+msgid "اختر كلمة تحقق مختلفة عن كلمة المرور"
+msgstr "Choose a verification password different from your password"
+
+msgid "اسم المجلد مطلوب"
+msgstr "Folder name is required"
+
+msgid "اكتب سؤال الاستطلاع"
+msgstr "Write the poll question"
+
+msgid "الحد 10 مجلدات"
+msgstr "The limit is 10 folders"
+
+msgid "الرابط مطلوب"
+msgstr "The link is required"
+
+msgid "الرسالة غير موجودة"
+msgstr "Message not found"
+
+msgid "انتهت مهلة الدخول. سجّل الدخول من جديد"
+msgstr "Sign-in timed out. Please sign in again"
+
+msgid "تثبيت الرسائل للمشرفين فقط"
+msgstr "Only admins can pin messages"
+
+msgid "حظرت هذا الشخص. ألغِ الحظر لتراسله"
+msgstr "You blocked this person. Unblock them to send messages"
+
+msgid "خيار غير موجود"
+msgstr "Option not found"
+
+msgid "سبب غير معروف"
+msgstr "Unknown reason"
+
+msgid "كلمة التحقق 4 أحرف على الأقل"
+msgstr "The verification password must be at least 4 characters"
+
+msgid "كلمة التحقق بخطوتين غير صحيحة"
+msgstr "Incorrect two-step verification password"
+
+msgid "كلمة المرور غير صحيحة"
+msgstr "Incorrect password"
+
+msgid "لا يمكن تثبيت هذه الرسالة"
+msgstr "This message can't be pinned"
+
+msgid "لا يمكنك الاتصال بهذا الشخص"
+msgstr "You can't call this person"
+
+msgid "لا يمكنك مراسلة هذا الشخص"
+msgstr "You can't message this person"
+
+msgid "لم نجد الرسائل أو المحادثات"
+msgstr "We couldn't find the messages or chats"
+
+msgid "من خيارين إلى 12 خياراً"
+msgstr "From 2 to 12 options"
+
+msgid "هذا الاستطلاع باختيار واحد"
+msgstr "This poll allows one choice only"
+
+msgid "📊 استطلاع"
+msgstr "📊 Poll"
+

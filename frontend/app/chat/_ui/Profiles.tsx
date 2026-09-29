@@ -7,6 +7,7 @@ import { dateLocale, t as tr, useLang, useT } from "@/lib/i18n";
 import { Avatar, Chip, ConvAvatar, fileSize, IconButton, ImageViewer, lastSeenText, listTime, nameOf, Panel, preview, Section, StoryTap } from "./bits";
 import { Icon, type IconName } from "./icons";
 import { useMuteToggle } from "./ConvSettings";
+import { ReportDialog } from "./Safety";
 import { useUserSearch, useWasl } from "./store";
 
 function Action({ icon, label, onClick, active }: { icon: IconName; label: string; onClick: () => void; active?: boolean }) {
@@ -126,8 +127,9 @@ function useClearChat() {
 // ------------------------------------------------------------ ملف جهة الاتصال
 export function ContactPanel({ userId }: { userId: number }) {
   const t = useT();
-  const { userById, convs, openWith, startCall, setPanel, refreshConvs, notify, isContact, contactAdded, contactRemoved, storyRing, openStory } = useWasl();
+  const { userById, convs, openWith, startCall, setPanel, refreshConvs, notify, isContact, contactAdded, contactRemoved, storyRing, openStory, isBlocked, setBlocked } = useWasl();
   const toggleMute = useMuteToggle();
+  const [reporting, setReporting] = useState(false);
   const [user, setUser] = useState<User | null>(userById(userId) ?? null);
   const [menu, setMenu] = useState(false);
   const [info, setInfo] = useState(false);
@@ -176,6 +178,17 @@ export function ContactPanel({ userId }: { userId: number }) {
     { icon: "bookmark", label: t(conv?.is_favorite ? "إزالة من المفضلة" : "إضافة إلى المفضلة"), run: () => pref("is_favorite") },
     { icon: "pinned", label: t(conv?.is_pinned ? "إلغاء التثبيت" : "تثبيت المحادثة"), run: () => pref("is_pinned") },
   ];
+  const blockedNow = isBlocked(userId);
+  const toggleBlock = async () => {
+    setMenu(false);
+    if (!blockedNow && !confirm(t("حظر {name}؟ لن يستطيع مراسلتك أو الاتصال بك، ولن يرى آخر ظهورك ولا صورتك.", { name: nameOf(live) }))) return;
+    try {
+      await setBlocked(userId, !blockedNow);
+      notify(t(blockedNow ? "أُلغي حظر {name}" : "حُظر {name}", { name: nameOf(live) }));
+    } catch (e) {
+      notify((e as Error).message);
+    }
+  };
 
   return (
     <Panel title={t("جهة الاتصال")} bare onClose={() => setPanel(null)} actions={
@@ -232,11 +245,14 @@ export function ContactPanel({ userId }: { userId: number }) {
             extra={<span className="w-tint rounded-full px-2 py-0.5 text-[10px] font-bold">{t("قريباً")}</span>} />
         </div>
       </Card>
-      {conv && (
-        <Card>
-          <NavRow icon="trash" label={t("حذف المحادثة")} danger onClick={() => clearChat(conv.id)} />
-        </Card>
-      )}
+      <Card>
+        <div className="w-divide">
+          <NavRow icon="x" label={t(blockedNow ? "إلغاء حظر {name}" : "حظر {name}", { name: nameOf(live) })} danger onClick={toggleBlock} />
+          <NavRow icon="info" label={t("إبلاغ عن {name}", { name: nameOf(live) })} danger onClick={() => setReporting(true)} />
+          {conv && <NavRow icon="trash" label={t("حذف المحادثة")} danger onClick={() => clearChat(conv.id)} />}
+        </div>
+      </Card>
+      {reporting && <ReportDialog user={live} onClose={() => setReporting(false)} />}
     </Panel>
   );
 }

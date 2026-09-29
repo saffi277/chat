@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ApiError, getToken, logout, saveMe, type Call, type CallKind, type Conversation, type Me, type Message, type StoryGroup, type User } from "@/lib/api";
 import { CallSession, GroupCall, type GroupPeer } from "@/lib/call";
-import { auth, calls, contacts as contactsApi, conversations as convApi, messages as msgApi, stories as storyApi, users as usersApi } from "@/lib/endpoints";
+import { auth, calls, contacts as contactsApi, conversations as convApi, messages as msgApi, safety, stories as storyApi, users as usersApi } from "@/lib/endpoints";
 import { setLang, t, useLang } from "@/lib/i18n";
 import { isDeviceError, permError } from "@/lib/permissions";
 import { syncPushSubscription } from "@/lib/push";
@@ -29,6 +29,7 @@ export type PanelState =
   | { type: "channels" }
   | { type: "storyCompose" }
   | { type: "convSettings"; convId: number }
+  | { type: "search"; convId: number }
   | null;
 
 export type CallUI = {
@@ -59,6 +60,10 @@ type Ctx = {
   /** أُضيف أو أُزيل من جهات الاتصال (بعد نجاح الطلب) */
   contactAdded: (u: User) => void;
   contactRemoved: (userId: number) => void;
+  /** من حظرتُهم */
+  blocked: number[];
+  isBlocked: (userId: number) => boolean;
+  setBlocked: (userId: number, on: boolean) => Promise<void>;
   convs: Conversation[];
   stories: StoryGroup[];
   theme: "light" | "dark";
@@ -73,6 +78,10 @@ type Ctx = {
   /** نافذة «كتم الإشعارات» (اختيار المدة) لمحادثة */
   muteDialog: number | null;
   setMuteDialog: (convId: number | null) => void;
+  /** الانتقال إلى رسالة (من البحث أو الرسالة المثبّتة): تفتح المحادثة وتُبرز الرسالة */
+  jump: { convId: number; messageId: number } | null;
+  jumpTo: (convId: number, messageId: number) => void;
+  clearJump: () => void;
   /** رابط دعوة فُتح به التطبيق: نعرض المجموعة ونسأل «انضمام؟» */
   joinCode: string | null;
   setJoinCode: (code: string | null) => void;
@@ -134,6 +143,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
   const [me, setMe] = useState<Me | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [contacts, setContacts] = useState<User[]>([]);
+  const [blocked, setBlockedIds] = useState<number[]>([]);
   const [convs, setConvs] = useState<Conversation[]>([]);
   const [stories, setStories] = useState<StoryGroup[]>([]);
   const [tab, setTab] = useState<Tab>("chats");
@@ -141,6 +151,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
   const [panel, setPanel] = useState<PanelState>(null);
   const [muteDialog, setMuteDialog] = useState<number | null>(null);
   const [joinCode, setJoinCode] = useState<string | null>(null);
+  const [jump, setJump] = useState<{ convId: number; messageId: number } | null>(null);
   const [storyViewer, setStoryViewer] = useState<{ userId: number; index: number } | null>(null);
   const [call, setCall] = useState<CallUI | null>(null);
   const [liveShares, setLiveShares] = useState<number[]>([]);
@@ -273,6 +284,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
         setStories(s);
         if (c.some((x) => x.id === wanted)) setActiveId(wanted);
         if (pendingJoin) setJoinCode(pendingJoin);
+        safety.blocked().then((l) => setBlockedIds(l.map((u) => u.id))).catch(() => {});
         syncPushSubscription();
         checkRinging(); // فُتح التطبيق من إشعار مكالمة؟ نعرضها مباشرة للرد
       })
@@ -406,6 +418,11 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     setContacts((list) => list.filter((x) => x.id !== id));
     setUsers((list) => list.map((x) => (x.id === id ? { ...x, is_contact: false } : x)));
   }, []);
+  const isBlocked = useCallback((id: number) => blocked.includes(id), [blocked]);
+  const setBlocked = useCallback(async (id: number, on: boolean) => {
+    await (on ? safety.block(id) : safety.unblock(id));
+    setBlockedIds((l) => (on ? [...l.filter((x) => x !== id), id] : l.filter((x) => x !== id)));
+  }, []);
   const otherOf = useCallback((c: Conversation) => {
     if (c.kind !== "direct") return null;
     const p = c.participants.find((x) => x.id !== me?.id) ?? c.participants[0];
@@ -416,6 +433,14 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     setActiveId(id);
     window.history.replaceState(null, "", id ? `/chat?c=${id}` : "/chat");
   }, []);
+
+  const jumpTo = useCallback((convId: number, messageId: number) => {
+    setPanel(null);
+    setTab("chats");
+    openConv(convId);
+    setJump({ convId, messageId });
+  }, [openConv]);
+  const clearJump = useCallback(() => setJump(null), []);
 
   const openWith = useCallback(async (userId: number) => {
     const c = await convApi.openWith(userId);
@@ -616,8 +641,8 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
 
   if (!me) return <>{fallback}</>;
   const value: Ctx = {
-    me, users, contacts, isContact, contactAdded, contactRemoved, convs, stories, theme, tab, setTab, activeId, openConv, openWith, openSaved, panel, setPanel,
-    muteDialog, setMuteDialog, joinCode, setJoinCode,
+    me, users, contacts, isContact, contactAdded, contactRemoved, blocked, isBlocked, setBlocked, convs, stories, theme, tab, setTab, activeId, openConv, openWith, openSaved, panel, setPanel,
+    muteDialog, setMuteDialog, joinCode, setJoinCode, jump, jumpTo, clearJump,
     storyViewer, setStoryViewer, storyRing, openStory, userById, otherOf, refreshConvs, refreshStories, updateMe, signOut,
     call, startCall, acceptCall, declineCall, hangup, toggleMute, toggleCamera, enableVideo, toggleScreen, joinCall,
     startLiveShare, stopLiveShare, liveShares, toast, notify,

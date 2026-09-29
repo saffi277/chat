@@ -192,6 +192,33 @@ import { CallSession } from "@/lib/call";      // المكالمات
 
 ---
 
+## 🛡️ الخصوصية والأمان (المرحلة ج)
+| الطلب | ماذا يفعل |
+|---|---|
+| التسجيل بدور `faculty` أو `staff` | يُنشأ الحساب **طالباً** و`me.requested_role` = الدور المطلوب، حتى تعتمده الإدارة من `/admin` (الملفات الشخصية ← «اعتماد الدور المطلوب»). يستطيع الدخول بالدور الذي طلبه، بصلاحيات طالب |
+| `auth.updateMe({ privacy_last_seen, privacy_photo, read_receipts })` | من يرى آخر ظهوري وصورتي: `everyone` / `contacts` / `nobody`. وإيقاف علامات القراءة (متبادل) |
+| `safety.blocked()` / `block(id)` / `unblock(id)` | الحظر: لا مراسلة ولا مكالمة في الاتجاهين، ومن حظرني يختفي عندي |
+| `safety.report({ user_id?, message_id?, reason, details? })` | بلاغ للإدارة (`/admin` ← البلاغات) مع نص الرسالة |
+| `auth.sessions()` / `endSession(id)` | الأجهزة المتصلة وإنهاء جلسة جهاز |
+| `auth.setTwoStep(password, code, hint)` / `removeTwoStep(password)` | التحقق بخطوتين. الدخول يعيد `{two_step, ticket, hint}` ثم `auth.loginTwoStep(ticket, code)` |
+| `auth.deleteAccount(password)` | حذف الحساب نهائياً مع رسائله وملفاته |
+
+## ✉️ ميزات الرسائل (المرحلة ج)
+| الطلب | ماذا يفعل |
+|---|---|
+| `messages.forward(ids, convIds)` | إعادة توجيه حتى 20 رسالة إلى 10 محادثات. النسخة فيها `forwarded: true`، والملف يُنسخ مشفّراً |
+| `messages.search(q, convId?)` | البحث في آخر 5000 رسالة (يفك الخادم تشفيرها ويبحث). النتيجة `{message, conversation}` |
+| `messages.pin(id)` / `unpin(id)` | رسالة مثبّتة: `conversation.pinned_message`، وحدث `pinned` |
+| `@اسم_المستخدم` في المجموعة | يصل المُشار إليه إشعار حتى لو كتم المجموعة |
+| `messages.sendPoll(id, question, options, multiple)` / `vote(msgId, optionIds)` | استطلاع: `message.poll = {multiple, total_voters, options[{id, text, votes, voter_ids}]}` |
+| `messages.linkPreview(url)` | معاينة الرابط: الخادم يجلب العنوان والصورة (عناوين الإنترنت العامة فقط: حماية SSRF)، وفي الكاش يوماً |
+| `message.views` | في القناة، للمشرف فقط: كم مشتركاً قرأ المنشور |
+| `folders.list/create/update/remove` | مجلدات المحادثات (حتى 10) |
+| التنسيق | `*عريض*` و`_مائل_` و`~مشطوب~` و`` `كود` `` (في الواجهة: `RichText`) |
+| المسودات | في المتصفح: `lib/drafts.ts` |
+
+---
+
 ## ⚡ الأحداث المباشرة (WebSocket)
 
 **اتصالين:**

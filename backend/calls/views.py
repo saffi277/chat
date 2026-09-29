@@ -12,12 +12,13 @@ from django.utils import timezone, translation
 from django.utils.translation import gettext as _
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
+from accounts.privacy import viewer_for
 from accounts.serializers import UserSerializer, profile_of
 from chat.models import Conversation, Membership, Message
-from chat.services import create_message, member_ids, send_to_users
+from chat.services import create_message, is_blocked, member_ids, send_to_users
 from notifications.push import in_language, send_to_user
 
 from .models import Call
@@ -62,7 +63,7 @@ class CallSerializer(serializers.ModelSerializer):
         me = self.context['request'].user
         other = next((m.user for m in obj.conversation.memberships.select_related('user__profile')
                       if m.user_id != me.id), None)
-        return UserSerializer(other).data if other else None
+        return viewer_for(self.context['request']).json(other) if other else None
 
 
 def ice_servers():
@@ -159,6 +160,10 @@ def calls(request):
         raise ValidationError(_('لا يمكنك الاتصال بنفسك'))
     if conv.kind == Conversation.CHANNEL:  # وإلا رنّ هاتف كل مشترك في القناة
         raise ValidationError(_('لا توجد مكالمات في القنوات'))
+    if conv.kind == Conversation.DIRECT:
+        other = conv.memberships.exclude(user=request.user).values_list('user_id', flat=True).first()
+        if other and is_blocked(request.user.id, other):  # الحظر يمنع المكالمة في الاتجاهين
+            raise PermissionDenied(_('لا يمكنك الاتصال بهذا الشخص'))
     kind = request.data.get('kind', Call.AUDIO)
     if kind not in (Call.AUDIO, Call.VIDEO):
         raise ValidationError({'kind': 'audio | video'})

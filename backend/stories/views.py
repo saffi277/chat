@@ -9,7 +9,7 @@ from rest_framework.decorators import api_view
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
-from accounts.serializers import UserSerializer
+from accounts.privacy import viewer_for
 from chat.media import validate_upload
 from chat.services import known_ids, send_to_contacts, send_to_users
 from config.media import signed_url
@@ -58,7 +58,7 @@ def stories(request):
             all_seen = all(st.seen for st in g['stories'])
             latest = max(st.created_at for st in g['stories'])
             result.append(((not is_me, all_seen, -latest.timestamp()), {
-                'user': UserSerializer(g['user']).data, 'is_me': is_me, 'all_seen': all_seen,
+                'user': viewer_for(request).json(g['user']), 'is_me': is_me, 'all_seen': all_seen,
                 'stories': StorySerializer(g['stories'], many=True).data}))
         return Response([item for _key, item in sorted(result, key=lambda r: r[0])])
 
@@ -107,5 +107,6 @@ def story_viewers(request, pk):
     """صاحب الحالة بس يشوف منو شافها."""
     story = get_object_or_404(Story, pk=pk, user=request.user)
     views = story.views.select_related('viewer__profile').order_by('-viewed_at')
-    return Response([{'user': UserSerializer(v.viewer).data, 'viewed_at': v.viewed_at} for v in views])
+    viewer = viewer_for(request)
+    return Response([{'user': viewer.json(v.viewer), 'viewed_at': v.viewed_at} for v in views])
 

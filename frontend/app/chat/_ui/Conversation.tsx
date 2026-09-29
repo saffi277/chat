@@ -5,9 +5,11 @@ import { t as tr, useT } from "@/lib/i18n";
 import { calls as callsApi, contacts as contactsApi, conversations as convApi, messages as msgApi, type SendFileOpts } from "@/lib/endpoints";
 import { openSocket, type LiveSocket, type SocketStatus } from "@/lib/socket";
 import { localPreviews, MessageBody, ReplyQuote, SenderName, Ticks, type UploadState } from "./Bubbles";
-import { clock, ConvAvatar, dayLabel, IconButton, ImageViewer, lastSeenText, nameOf, preview, StoryTap, systemText } from "./bits";
+import { clock, ConvAvatar, dayLabel, IconButton, ImageViewer, lastSeenText, nameOf, preview, previewText, StoryTap, systemText } from "./bits";
 import { Composer, type MediaSend } from "./Composer";
 import { disappearLabel, ScheduleDialog, useMuteToggle } from "./ConvSettings";
+import { ReportDialog } from "./Safety";
+import { ForwardDialog } from "./Tools";
 import { Icon, type IconName } from "./icons";
 import { useWasl } from "./store";
 
@@ -48,7 +50,7 @@ const LONG_PRESS_MS = 450;
 
 export function Conversation({ conv }: { conv: Conv }) {
   const t = useT();
-  const { me, otherOf, openConv, panel, storyRing, openStory, storyViewer, call, joinCall, setPanel, startCall, liveShares, stopLiveShare, startLiveShare, refreshConvs, notify, isContact, contactAdded } = useWasl();
+  const { me, otherOf, openConv, panel, storyRing, openStory, storyViewer, call, joinCall, setPanel, startCall, isBlocked, setBlocked, jump, clearJump, liveShares, stopLiveShare, startLiveShare, refreshConvs, notify, isContact, contactAdded } = useWasl();
   const [msgs, setMsgs] = useState<Message[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -91,6 +93,11 @@ export function Conversation({ conv }: { conv: Conv }) {
   const inThisCall = !!call && call.phase !== "ended" && call.phase !== "incoming" && call.call.id === activeCall?.id;
   const [scheduledCount, setScheduledCount] = useState(0);
   const [scheduling, setScheduling] = useState(false);
+  const [reporting, setReporting] = useState<Message | null>(null);
+  const [forwarding, setForwarding] = useState<number[] | null>(null);
+  const [flash, setFlash] = useState<number | null>(null);
+  // تثبيت الرسائل: الثنائية لأي طرف، والمجموعة للمشرف (أو للجميع إن سمح)، والقناة للمشرف
+  const canPin = conv.kind === "direct" || conv.kind === "saved" || conv.my_role === "admin" || (conv.kind === "group" && !conv.only_admins_edit);
   const loadScheduled = useCallback(() => {
     if (conv.kind === "saved" || !canPost) return;
     msgApi.scheduled(conv.id).then((l) => setScheduledCount(l.filter((s) => s.status === "pending").length)).catch(() => {});
@@ -134,6 +141,8 @@ export function Conversation({ conv }: { conv: Conv }) {
         notify(tr("أرسلت رسائل كثيرة بسرعة. انتظر قليلاً ثم أعد المحاولة."));
       } else if (e.type === "error") {
         notify(e.message || tr("لا يمكنك الإرسال في هذه المحادثة"));
+      } else if (e.type === "pinned") {
+        refreshConvs();
       } else if (e.type === "message_removed") {
         // رسالة مختفية انتهت مدتها
         setMsgs((l) => l.filter((m) => m.id !== e.message_id));
@@ -148,7 +157,8 @@ export function Conversation({ conv }: { conv: Conv }) {
         typingTimer.current = setTimeout(() => setTyping(null), 2200);
       } else if ((e.type === "read" || e.type === "delivered") && (e.type === "read" ? e.reader_id : e.user_id) !== me.id) {
         if (convRef.current.kind === "direct") {
-          const level = e.type === "read" ? "read" : "delivered";
+          // علامات القراءة متبادلة: من أوقفها لا يرى قراءة الآخرين
+          const level = e.type === "read" && me.read_receipts !== false ? "read" : "delivered";
           setMsgs((l) => l.map((m) => (m.sender.id === me.id && m.id <= e.message_id && m.status !== "read" ? { ...m, status: level, is_read: level === "read" } : m)));
         } else {
           // بالمجموعة الحالة تعتمد على كل الأعضاء، فنجيبها من السيرفر
@@ -170,7 +180,7 @@ export function Conversation({ conv }: { conv: Conv }) {
       document.removeEventListener("visibilitychange", onVisible);
       clearTimeout(refetch);
     };
-  }, [id, me.id, markRead, notify]);
+  }, [id, me.id, me.read_receipts, markRead, notify, refreshConvs]);
 
   // السكرول: ننزل لتحت بالرسائل الجديدة، ونثبت المكان لما نحمل الأقدم
   useLayoutEffect(() => {
@@ -270,6 +280,40 @@ export function Conversation({ conv }: { conv: Conv }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [panel, storyViewer, call, menuFor, moreOpen, reply, editing, openConv]);
 
+  // الانتقال إلى رسالة (من البحث أو المثبّتة): نحمّل الأقدم حتى نصل إليها، ثم نبرزها
+  const reveal = useCallback(async (messageId: number) => {
+    let list = msgs;
+    for (let page = 0; page < 30 && list.length && list[0].id > messageId && !document.getElementById(`m-${messageId}`); page++) {
+      const older = await msgApi.list(id, list[0].id);
+      if (!older.length) break;
+      list = [...older, ...list];
+      setMsgs(list);
+      setHasMore(older.length >= 50);
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    stick.current = false;
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`m-${messageId}`);
+      if (!el) return notify(tr("لم تعد هذه الرسالة موجودة"));
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setFlash(messageId);
+      setTimeout(() => setFlash((f) => (f === messageId ? null : f)), 2200);
+    });
+  }, [msgs, id, notify]);
+  useEffect(() => {
+    if (!jump || jump.convId !== id || loading) return;
+    const target = jump.messageId;
+    // بعد رسم الرسائل (خارج جسم الأثر نفسه)
+    const timer = setTimeout(() => { clearJump(); reveal(target); }, 0);
+    return () => clearTimeout(timer);
+  }, [jump, id, loading, clearJump, reveal]);
+
+  async function togglePin(m: Message) {
+    const pinned = conv.pinned_message?.id === m.id;
+    await (pinned ? msgApi.unpin(m.id) : msgApi.pin(m.id)).catch((e) => notify(e.message));
+    await refreshConvs();
+  }
+
   async function loadOlder() {
     if (!hasMore || !msgs.length) return;
     const el = scroller.current!;
@@ -336,6 +380,7 @@ export function Conversation({ conv }: { conv: Conv }) {
     { icon: "image", label: t("الوسائط والملفات"), run: () => { setMoreOpen(false); setPanel({ type: "media", convId: id }); } },
     ...(canPost ? [{ icon: "pin" as IconName, label: t("مشاركة الموقع"), run: () => { setMoreOpen(false); setPanel({ type: "location", convId: id }); } }] : []),
     { icon: "star", label: t("الرسائل المميزة"), run: () => { setMoreOpen(false); setPanel({ type: "starred", convId: id }); } },
+    { icon: "search", label: t("البحث في المحادثة"), run: () => { setMoreOpen(false); setPanel({ type: "search", convId: id }); } },
     ...(canPost && conv.kind !== "saved" ? [{ icon: "clock" as IconName, label: t("جدولة رسالة"), run: () => { setMoreOpen(false); setScheduling(true); } }] : []),
     { icon: "settings", label: t("إعدادات المحادثة"), run: () => { setMoreOpen(false); setPanel({ type: "convSettings", convId: id }); } },
     ...(conv.kind !== "saved" ? [
@@ -401,6 +446,19 @@ export function Conversation({ conv }: { conv: Conv }) {
           <button onClick={() => joinCall(activeCall)} className="shrink-0 rounded-full px-4 py-1.5 text-xs font-bold text-white" style={{ background: "var(--online)" }}>{t("انضمام")}</button>
         </div>
       )}
+      {conv.pinned_message && (
+        <div className="w-panel mx-3 mt-2 flex items-center gap-3 rounded-2xl px-4 py-2 text-sm md:mx-6" data-testid="pinned-bar">
+          <Icon name="pinned" size={18} className="w-accent-text shrink-0" />
+          <button onClick={() => reveal(conv.pinned_message!.id)} className="min-w-0 flex-1 text-start">
+            <span className="w-accent-text block text-xs font-bold">{t("رسالة مثبّتة")}</span>
+            <span className="block truncate" dir="auto">{previewText(conv.pinned_message.preview)}</span>
+          </button>
+          {canPin && (
+            <button onClick={() => msgApi.unpin(conv.pinned_message!.id).then(refreshConvs).catch((e) => notify(e.message))}
+              aria-label={t("إلغاء التثبيت")} className="w-muted grid h-8 w-8 shrink-0 place-items-center rounded-full"><Icon name="x" size={16} /></button>
+          )}
+        </div>
+      )}
       {stranger && (
         <div className="w-panel mx-3 mt-2 flex items-center gap-3 rounded-2xl px-4 py-2.5 text-sm md:mx-6" role="note">
           <Icon name="info" size={18} className="w-accent-text shrink-0" />
@@ -450,7 +508,8 @@ export function Conversation({ conv }: { conv: Conv }) {
                 </div>
               ) : (
                 <div id={`m-${m.id}`} className={`group flex items-end gap-1 ${mine ? "justify-end" : "justify-start"} ${grouped ? "mt-1.5" : "mt-3"} ${m.reactions.length ? "mb-3.5" : ""}`}>
-                  <div className={`relative max-w-[80%] rounded-[20px] px-3.5 py-2 [-webkit-touch-callout:none] [@media(hover:none)]:select-none md:max-w-[62%] ${mine ? "w-bubble-out" : "w-bubble-in"}`}
+                  <div className={`relative max-w-[80%] rounded-[20px] px-3.5 py-2 transition-shadow [-webkit-touch-callout:none] [@media(hover:none)]:select-none md:max-w-[62%] ${mine ? "w-bubble-out" : "w-bubble-in"}`}
+                    style={flash === m.id ? { boxShadow: "0 0 0 3px var(--accent)" } : undefined}
                     // بعد الضغط المطوّل يصل «نقر» عند رفع الإصبع: نوقفه قبل أن يصل إلى الصورة (فلا يُفتح العارض) أو يغلق القائمة
                     onClickCapture={(e) => { if (press.current.fired) { press.current.fired = false; e.stopPropagation(); e.preventDefault(); } }}
                     onClick={(e) => {
@@ -468,14 +527,20 @@ export function Conversation({ conv }: { conv: Conv }) {
                       </button>
                     )}
                     {conv.kind === "group" && !mine && !grouped && <SenderName m={m} />}
+                    {m.forwarded && !m.is_deleted && (
+                      <span className="w-muted mb-0.5 flex items-center gap-1 text-[11px] italic"><Icon name="forward" size={12} />{t("مُعاد توجيهها")}</span>
+                    )}
                     {m.reply_to && <ReplyQuote r={m.reply_to} mine={mine} onClick={() => document.getElementById(`m-${m.reply_to!.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" })} />}
-                    <MessageBody m={m} mine={mine} onImage={setLightbox}
+                    <MessageBody m={m} mine={mine} onImage={setLightbox} meId={me.id}
+                      onVote={(ids) => msgApi.vote(m.id, ids).then((u) => setMsgs((l) => upsert(l, u))).catch((e) => notify(e.message))}
                       sharingLive={liveShares.includes(m.id)} onStopLive={() => stopLiveShare(m.id)} />
                     <div className="w-muted mt-1 flex items-center justify-start gap-1 text-[11px]" dir="ltr">
                       {mine && !m.is_deleted && !channel && <Ticks m={m} />}
                       <span>{clock(m.created_at)}</span>
                       {m.expires_at && <span title={t("رسالة مختفية")}><Icon name="clock" size={11} /></span>}
                       {starred.has(m.id) && <Icon name="star" size={11} filled />}
+                      {conv.pinned_message?.id === m.id && <Icon name="pinned" size={11} />}
+                      {m.views !== undefined && <span className="flex items-center gap-0.5" title={t("المشاهدات")}><Icon name="eye" size={12} />{m.views}</span>}
                       {m.edited_at && !m.is_deleted && <span>{t("معدّلة")}</span>}
                     </div>
                     {m.reactions.length > 0 && (
@@ -495,7 +560,12 @@ export function Conversation({ conv }: { conv: Conv }) {
                         onReply={canPost ? () => { setEditing(null); setReply(m); } : undefined}
                         onEdit={() => { setReply(null); setEditing(m); }}
                         onDelete={async () => { if (confirm(t("حذف الرسالة لدى الجميع؟"))) await msgApi.remove(m.id).catch((e) => notify(e.message)); }}
-                        onResumeLive={m.is_live && mine && !liveShares.includes(m.id) ? () => startLiveShare(m) : undefined} />
+                        onResumeLive={m.is_live && mine && !liveShares.includes(m.id) ? () => startLiveShare(m) : undefined}
+                        extra={[
+                          ...(m.kind !== "poll" ? [{ icon: "forward" as IconName, label: t("إعادة توجيه"), run: () => setForwarding([m.id]) }] : []),
+                          ...(canPin ? [{ icon: "pinned" as IconName, label: t(conv.pinned_message?.id === m.id ? "إلغاء التثبيت" : "تثبيت"), run: () => togglePin(m) }] : []),
+                          ...(!mine ? [{ icon: "info" as IconName, label: t("إبلاغ"), run: () => setReporting(m), danger: true }] : []),
+                        ]} />
                     )}
                   </div>
                 </div>
@@ -534,9 +604,19 @@ export function Conversation({ conv }: { conv: Conv }) {
           <Icon name="clock" size={14} className="w-accent-text" />{t("رسائل مجدولة: {n}", { n: scheduledCount })}
         </button>
       )}
+      {forwarding && <ForwardDialog messageIds={forwarding} onClose={() => setForwarding(null)} />}
+      {reporting && <ReportDialog user={reporting.sender} messageId={reporting.id} onClose={() => setReporting(null)} />}
       {scheduling && <ScheduleDialog convId={id} replyTo={reply?.id} onClose={() => setScheduling(false)} onDone={loadScheduled} />}
-      {canPost ? (
-        <Composer onScheduled={loadScheduled} convId={id} socket={() => socketRef.current} reply={reply} editing={editing}
+      {conv.kind === "direct" && other && isBlocked(other.id) ? (
+        // حظرتُ هذا الشخص: لا خانة كتابة، بل سطر يوضح ذلك وزر لإلغاء الحظر
+        <div className="flex items-center gap-3 rounded-t-[26px] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 md:rounded-none md:border-t md:w-split"
+          style={{ background: "var(--panel)", boxShadow: "0 -6px 24px rgba(40, 36, 90, .06)" }}>
+          <Icon name="x" size={20} className="w-muted shrink-0" />
+          <span className="w-muted min-w-0 flex-1 text-sm">{t("حظرت {name}. لا يستطيع مراسلتك ولا الاتصال بك.", { name: nameOf(other) })}</span>
+          <button onClick={() => setBlocked(other.id, false).catch((e) => notify(e.message))} className="w-tint shrink-0 rounded-full px-4 py-2 text-sm font-bold">{t("إلغاء الحظر")}</button>
+        </div>
+      ) : canPost ? (
+        <Composer onScheduled={loadScheduled} convId={id} kind={conv.kind} socket={() => socketRef.current} reply={reply} editing={editing}
           onDone={() => { setReply(null); setEditing(null); }}
           onSent={(m) => { stick.current = true; setMsgs((l) => upsert(l, m)); }} onMedia={sendMedia} />
       ) : (
@@ -561,9 +641,11 @@ const QUICK = ["❤️", "👍", "😂", "😮", "😢", "🙏"];
 /** رسالة وسائط: الضغط عليها يفتح العارض أو المشغّل، فقائمتها من زر ⌄ أو الضغط المطوّل */
 const media = (m: Message) => m.kind === "image" || m.kind === "video";
 
-function MessageMenu({ m, mine, up, meId, onClose, onReply, onEdit, onDelete, onResumeLive, onReact, starred, onStar }: {
+type MenuItem = { icon: IconName; label: string; run: () => void; danger?: boolean };
+
+function MessageMenu({ m, mine, up, meId, onClose, onReply, onEdit, onDelete, onResumeLive, onReact, starred, onStar, extra = [] }: {
   m: Message; mine: boolean; up?: boolean; meId: number; onClose: () => void; onReply?: () => void; onEdit: () => void; onDelete: () => void;
-  onResumeLive?: () => void; onReact: (emoji: string) => void; starred: boolean; onStar: () => void;
+  onResumeLive?: () => void; onReact: (emoji: string) => void; starred: boolean; onStar: () => void; extra?: MenuItem[];
 }) {
   const t = useT();
   const myReaction = m.reactions.find((r) => r.user_ids.includes(meId))?.emoji;
@@ -573,6 +655,7 @@ function MessageMenu({ m, mine, up, meId, onClose, onReply, onEdit, onDelete, on
     ...(m.content ? [{ icon: "copy" as IconName, label: t("نسخ"), run: () => navigator.clipboard?.writeText(m.content) }] : []),
     ...(mine && ["text", "image", "video", "file"].includes(m.kind) ? [{ icon: "edit" as IconName, label: t("تعديل"), run: onEdit }] : []),
     ...(onResumeLive ? [{ icon: "navigation" as IconName, label: t("تحديث موقعي من هذا الجهاز"), run: onResumeLive }] : []),
+    ...extra,
     ...(mine ? [{ icon: "trash" as IconName, label: t("حذف للجميع"), run: onDelete, danger: true }] : []),
   ];
   return (

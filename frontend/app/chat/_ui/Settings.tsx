@@ -7,6 +7,7 @@ import { howToEnable, isStandalone, PERM_LABELS, permState, platform, requestPer
 import { disablePush, enablePush, getPushState, testPush, type PushState } from "@/lib/push";
 import { Avatar, IconButton, nameOf, Section, Toggle } from "./bits";
 import { WallTile } from "./ConvSettings";
+import { PrivacyPage } from "./Safety";
 import { Icon } from "./icons";
 import { useWasl } from "./store";
 
@@ -18,7 +19,7 @@ const modes: { value: Mode; label: string; icon: "sun" | "moon" | "device" }[] =
 ];
 
 // ------------------------------------------------------------ الإعدادات: قائمة أقسام، وكل قسم في صفحته
-type Page = "account" | "appearance" | "themes" | "language" | "notifications" | "permissions";
+type Page = "account" | "appearance" | "themes" | "language" | "notifications" | "privacy" | "permissions";
 type IconName = Parameters<typeof Icon>[0]["name"];
 
 /** الحفظ في الخادم مع رسالة نجاح/خطأ (مشترك بين الصفحات) */
@@ -47,12 +48,13 @@ export function SettingsView() {
   const [page, setPage] = useState<Page | null>(null);
 
   if (page) {
-    const titles: Record<Page, string> = { account: "معلوماتي", appearance: "المظهر", themes: "الثيمات", language: "اللغة", notifications: "الإشعارات", permissions: "الأذونات" };
+    const titles: Record<Page, string> = { account: "معلوماتي", appearance: "المظهر", themes: "الثيمات", language: "اللغة", notifications: "الإشعارات", privacy: "الخصوصية والأمان", permissions: "الأذونات" };
     return (
       <SubPage title={t(titles[page])} onBack={() => setPage(null)}>
         {page === "account" && <AccountPage />}
         {page === "appearance" && <AppearancePage />}
         {page === "themes" && <ThemesPage />}
+        {page === "privacy" && <PrivacyWrap />}
         {page === "language" && <LanguagePage />}
         {page === "notifications" && <NotificationsPage />}
         {page === "permissions" && <><p className="w-muted mb-1 mt-3 px-1 text-xs leading-6">{t("تحكّم في ما يستطيع التطبيق استخدامه في جهازك.")}</p><Section><PermissionsList /></Section></>}
@@ -74,6 +76,12 @@ export function SettingsView() {
           <span className="min-w-0 flex-1">
             <span className="block truncate text-lg font-extrabold" dir="auto">{nameOf(me)}</span>
             <span className="w-muted block truncate text-sm">{t(ROLE_LABELS[me.role] ?? me.role)}{me.university_id ? ` • ${me.university_id}` : ""}</span>
+            {me.requested_role && (
+              // سجّل تدريسياً أو إدارياً: ينتظر اعتماد الإدارة
+              <span className="mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold" style={{ background: "color-mix(in srgb, #f59e0b 18%, transparent)", color: "#b45309" }}>
+                <Icon name="clock" size={12} />{t("دور «{role}» بانتظار موافقة الإدارة", { role: t(ROLE_LABELS[me.requested_role]) })}
+              </span>
+            )}
           </span>
           <Icon name="back" size={18} className="w-muted rotate-180" />
         </button>
@@ -85,6 +93,7 @@ export function SettingsView() {
             value={t(THEMES.find((x) => x.id === me.theme)?.label ?? "البنفسجي")} onClick={() => setPage("themes")} />
           <Row icon="globe" color="#10b981" label={t("اللغة")} value={LANGS.find((l) => l.value === me.language)?.label} onClick={() => setPage("language")} />
           <Row icon="bell" color="#f43f5e" label={t("الإشعارات")} onClick={() => setPage("notifications")} />
+          <Row icon="lock" color="#475569" label={t("الخصوصية والأمان")} onClick={() => setPage("privacy")} />
           <Row icon="shield" color="#f59e0b" label={t("الأذونات")} onClick={() => setPage("permissions")} />
         </Group>
 
@@ -280,6 +289,11 @@ function ThemesPage() {
       </Section>
     </>
   );
+}
+
+function PrivacyWrap() {
+  const { run } = useSave();
+  return <PrivacyPage save={run} />;
 }
 
 function LanguagePage() {

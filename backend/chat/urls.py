@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import features, views
 
 urlpatterns = [
     path('conversations/', views.conversations),
@@ -24,4 +24,11 @@ urlpatterns = [
     path('messages/<int:message_id>/react/', views.react),
     path('messages/<int:message_id>/star/', views.star),
     path('starred/', views.starred),
+    path('messages/forward/', features.forward),
+    path('messages/<int:message_id>/pin/', features.pin_message),
+    path('messages/<int:message_id>/vote/', features.vote),
+    path('search/', features.search),
+    path('link-preview/', features.link_preview),
+    path('folders/', features.folders),
+    path('folders/<int:pk>/', features.folder_detail),
 ]

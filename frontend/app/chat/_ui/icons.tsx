@@ -69,6 +69,8 @@ const paths: Record<string, React.ReactNode> = {
   type: <path d="M4 7V4h16v3M9 20h6M12 4v16" />,
   navigation: <path d="m3 11 19-9-9 19-2-8-8-2Z" />,
   screen: <><rect x="2" y="4" width="20" height="13" rx="2" /><path d="M8 21h8M12 17v4M12 8v5M9.5 10.5 12 8l2.5 2.5" /></>,
+  poll: <><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></>,
+  forward: <><path d="m15 17 5-5-5-5" /><path d="M4 18v-2a4 4 0 0 1 4-4h12" /></>,
   retry: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></>,
   globe: <><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z" /></>,
 };
@@ -76,7 +78,7 @@ const paths: Record<string, React.ReactNode> = {
 export type IconName = keyof typeof paths;
 
 // أيقونات لها اتجاه (مرسومة للعربية): تنعكس أفقياً في الواجهة الإنجليزية (wasl.css: .dir-icon)
-const DIRECTIONAL = new Set<IconName>(["back", "chevron", "reply"]);
+const DIRECTIONAL = new Set<IconName>(["back", "chevron", "reply", "forward"]);
 
 export function Icon({ name, size = 20, className = "", strokeWidth = 1.9, filled, style }: { name: IconName; size?: number; className?: string; strokeWidth?: number; filled?: boolean; style?: React.CSSProperties }) {
   return (

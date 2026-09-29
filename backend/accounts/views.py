@@ -1,6 +1,8 @@
 import re
 
 from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.hashers import check_password, make_password
+from django.core import signing
 from django.db.models import Exists, OuterRef, Q
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext as _
@@ -13,8 +15,9 @@ from rest_framework.throttling import AnonRateThrottle
 
 from config.throttles import LoginThrottle, LookupThrottle
 
-from .models import Contact, Profile, SupportRequest
-from .serializers import MeSerializer, ProfileUpdateSerializer, RegisterSerializer, UserSerializer, user_json
+from .models import Block, Contact, Profile, Report, SupportRequest
+from .privacy import viewer_for
+from .serializers import MeSerializer, ProfileUpdateSerializer, RegisterSerializer, UserSerializer, profile_of, user_json
 from .tokens import issue_token
 
 User = get_user_model()
@@ -54,13 +57,117 @@ def login(request):
                         status=status.HTTP_400_BAD_REQUEST)
     profile, _created = Profile.objects.get_or_create(user=user)
     role = request.data.get('role')
+    # سجّل تدريسياً ولم تعتمده الإدارة بعد: يدخل (بصلاحيات طالب)، والواجهة تُظهر أن طلبه قيد المراجعة
+    if role and role != profile.role and role == profile.requested_role:
+        role = profile.role
     if role and role != profile.role:
         # نتحقق بعد كلمة المرور، حتى ما نكشف دور أي حساب لأي أحد
         return Response({'detail': _('هذا الحساب مسجّل بدور «{role}»، اختر الدور الصحيح').format(role=_(profile.get_role_display())),
                          'role': profile.role}, status=status.HTTP_400_BAD_REQUEST)
+    # التحقق بخطوتين: لا توكن بعد، بل «تذكرة» موقّعة صالحة 5 دقائق تُستبدل بكلمة التحقق
+    if profile.two_step_hash:
+        return Response({'two_step': True, 'ticket': signing.dumps(user.pk, salt=TWO_STEP_SALT), 'hint': profile.two_step_hint})
     # كل دخول (كل جهاز) إله توكن جديد، ونحفظ الهاش مالته بس
     token = issue_token(user, request.META.get('HTTP_USER_AGENT', ''))
     return Response({'token': token, 'user': MeSerializer(user).data})
+
+
+TWO_STEP_SALT = 'wasl.two-step'
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([LoginThrottle])
+def login_two_step(request):
+    """الخطوة الثانية: {"ticket": من login, "code": كلمة التحقق} ← التوكن. المحاولات محدودة مثل الدخول."""
+    try:
+        user_id = signing.loads(request.data.get('ticket') or '', salt=TWO_STEP_SALT, max_age=300)
+    except signing.BadSignature:
+        return Response({'detail': _('انتهت مهلة الدخول. سجّل الدخول من جديد')}, status=status.HTTP_400_BAD_REQUEST)
+    user = User.objects.filter(pk=user_id, is_active=True).select_related('profile').first()
+    if not user or not check_password(request.data.get('code') or '', profile_of(user).two_step_hash):
+        return Response({'detail': _('كلمة التحقق بخطوتين غير صحيحة')}, status=status.HTTP_400_BAD_REQUEST)
+    token = issue_token(user, request.META.get('HTTP_USER_AGENT', ''))
+    return Response({'token': token, 'user': MeSerializer(user).data})
+
+
+def require_password(request):
+    if not request.user.check_password(request.data.get('password') or ''):
+        raise ValidationError({'password': _('كلمة المرور غير صحيحة')})
+
+
+@api_view(['POST', 'DELETE'])
+@throttle_classes([LoginThrottle])
+def two_step(request):
+    """
+    POST {password, code, hint?} ← تفعيل أو تغيير كلمة التحقق بخطوتين (تُحفظ هاشاً).
+    DELETE {password} ← إيقافها. في الحالتين نطلب كلمة المرور الحالية.
+    """
+    require_password(request)
+    profile = profile_of(request.user)
+    if request.method == 'DELETE':
+        profile.two_step_hash, profile.two_step_hint = '', ''
+    else:
+        code = request.data.get('code') or ''
+        if len(code) < 4:
+            raise ValidationError({'code': _('كلمة التحقق 4 أحرف على الأقل')})
+        if code == request.data.get('password'):
+            raise ValidationError({'code': _('اختر كلمة تحقق مختلفة عن كلمة المرور')})
+        profile.two_step_hash = make_password(code)
+        profile.two_step_hint = (request.data.get('hint') or '').strip()[:60]
+    profile.save(update_fields=['two_step_hash', 'two_step_hint'])
+    return Response(MeSerializer(request.user).data)
+
+
+def device_name(agent):
+    """وصف مختصر للجهاز من user-agent: «Chrome • Windows»."""
+    agent = agent or ''
+    os_name = next((n for k, n in [('iPhone', 'iPhone'), ('iPad', 'iPad'), ('Android', 'Android'), ('Windows', 'Windows'),
+                                   ('Mac OS', 'Mac'), ('Linux', 'Linux')] if k in agent), '')
+    browser = next((n for k, n in [('Edg/', 'Edge'), ('OPR/', 'Opera'), ('Firefox/', 'Firefox'), ('CriOS', 'Chrome'),
+                                   ('Chrome/', 'Chrome'), ('Safari/', 'Safari')] if k in agent), '')
+    return ' • '.join(x for x in (browser, os_name) if x)
+
+
+@api_view(['GET'])
+def sessions(request):
+    """الأجهزة المتصلة بحسابي (جلسة لكل دخول)، وهذا الجهاز أولاً."""
+    current = request.auth.pk if request.auth is not None else None
+    rows = sorted(request.user.auth_tokens.all(), key=lambda t: (t.pk != current, -(t.last_used or t.created).timestamp()))
+    return Response([{'id': t.pk, 'device': device_name(t.user_agent), 'user_agent': t.user_agent[:200],
+                      'created': t.created.isoformat(), 'last_used': (t.last_used or t.created).isoformat(),
+                      'current': t.pk == current} for t in rows])
+
+
+@api_view(['DELETE'])
+def session_detail(request, pk):
+    """إنهاء جلسة جهاز: يخرج ذلك الجهاز فوراً (توكنه لم يعد صالحاً)."""
+    deleted = request.user.auth_tokens.filter(pk=pk).delete()[0]
+    return Response(status=status.HTTP_204_NO_CONTENT if deleted else status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['POST'])
+@throttle_classes([LoginThrottle])
+def delete_account(request):
+    """
+    حذف الحساب نهائياً: {"password": ...}. تُحذف رسائله وملفاته وحالاته وصورته وجلساته،
+    ويغادر مجموعاته (ويُعيَّن مشرف جديد إن كان المشرف الوحيد).
+    """
+    require_password(request)
+    from chat.models import Membership, Message
+    from chat.views import leave_group
+    user = request.user
+    for m in Membership.objects.filter(user=user, conversation__kind__in=['group', 'channel']).select_related('conversation'):
+        leave_group(user, m, actor=user)
+    for msg in Message.objects.filter(sender=user).exclude(file='').exclude(file__isnull=True).only('file'):
+        msg.file.delete(save=False)
+    p = profile_of(user)
+    if p.pk and p.avatar:
+        p.avatar.delete(save=False)
+    from chat.services import contact_ids, forget_contacts
+    forget_contacts(user.id, *contact_ids(user.id))
+    user.delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(['POST'])
@@ -99,9 +206,10 @@ def me(request):
     return Response(MeSerializer(request.user).data)
 
 
-def with_contact_flag(users, mine):
-    """user_json + هل هو ضمن جهات اتصالي (لزر «إضافة إلى جهات الاتصال»)."""
-    return [{**user_json(u), 'is_contact': u.id in mine} for u in users]
+def with_contact_flag(request, users, mine):
+    """المستخدم (بعد تطبيق خصوصيته عليّ) + هل هو ضمن جهات اتصالي (لزر «إضافة إلى جهات الاتصال»)."""
+    viewer = viewer_for(request)
+    return [viewer.json(u, is_contact=u.id in mine) for u in users]
 
 
 class UserListView(generics.ListAPIView):
@@ -133,7 +241,7 @@ class UserListView(generics.ListAPIView):
         except ValueError:
             limit, offset = 50, 0
         page = self.get_queryset()[offset:offset + limit]
-        return Response(with_contact_flag(page, self.mine))
+        return Response(with_contact_flag(request, page, self.mine))
 
 
 def my_contact_ids(user_id):
@@ -152,7 +260,7 @@ def user_detail(request, pk):
     if not can_see(request.user, pk):
         return Response({'detail': _('لا يوجد حساب بهذا المعرّف')}, status=status.HTTP_404_NOT_FOUND)
     user = get_object_or_404(User.objects.select_related('profile'), pk=pk)
-    return Response(with_contact_flag([user], my_contact_ids(request.user.id))[0])
+    return Response(with_contact_flag(request, [user], my_contact_ids(request.user.id))[0])
 
 
 def lookup(identifier):
@@ -184,7 +292,7 @@ def find(request):
         msg = _('هذا حسابك أنت') if user else _('لم نجد حساباً بهذا المعرّف. تأكد من الرقم الجامعي أو البريد أو اسم المستخدم')
         return Response({'detail': msg}, status=status.HTTP_404_NOT_FOUND)
     user = User.objects.select_related('profile').get(pk=user.pk)
-    return Response(with_contact_flag([user], my_contact_ids(request.user.id))[0])
+    return Response(with_contact_flag(request, [user], my_contact_ids(request.user.id))[0])
 
 
 @api_view(['GET', 'POST'])
@@ -200,7 +308,8 @@ def contacts(request):
     if request.method == 'GET':
         users = (User.objects.filter(contact_of__owner=me).select_related('profile')
                  .order_by('profile__display_name', 'username'))
-        return Response([{**user_json(u), 'is_contact': True} for u in users])
+        viewer = viewer_for(request)
+        return Response([viewer.json(u, is_contact=True) for u in users])
     if request.data.get('identifier'):
         other = lookup(request.data['identifier'])
     else:
@@ -217,7 +326,7 @@ def contacts(request):
     _obj, created = Contact.objects.get_or_create(owner=me, contact=other)
     forget_contacts(me.id, other.id)
     other = User.objects.select_related('profile').get(pk=other.pk)
-    return Response({**user_json(other), 'is_contact': True},
+    return Response(viewer_for(request).json(other, is_contact=True),
                     status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
@@ -255,3 +364,70 @@ def help_request(request):
                                   user=find_user(identifier))
     # نفس الجواب سواء لگينا الحساب أو لا، حتى ما نكشف منو مسجل
     return Response({'detail': _('وصل طلبك إلى الدعم الفني، وسيتواصلون معك قريباً')}, status=status.HTTP_201_CREATED)
+
+
+# ------------------------------------------------------------------ الحظر والإبلاغ
+
+@api_view(['GET', 'POST'])
+def blocks(request):
+    """GET ← من حظرتُهم. POST {"user_id": 5} ← حظر (لمن أعرفه فقط)."""
+    from chat.services import forget_contacts
+    if request.method == 'GET':
+        users = User.objects.filter(blocked_by__blocker=request.user).select_related('profile').order_by('-blocked_by__created_at')
+        return Response([user_json(u) for u in users])
+    try:
+        other_id = int(request.data.get('user_id'))
+    except (TypeError, ValueError):
+        raise ValidationError({'user_id': _('الشخص مطلوب')})
+    if other_id == request.user.id or not can_see(request.user, other_id):
+        return Response({'detail': _('لا يوجد حساب بهذا المعرّف')}, status=status.HTTP_404_NOT_FOUND)
+    Block.objects.get_or_create(blocker=request.user, blocked_id=other_id)
+    forget_contacts(request.user.id, other_id)
+    # يختفي «متصل الآن» عنده فوراً
+    from chat.services import send_to_users
+    send_to_users([other_id], {'type': 'presence', 'user_id': request.user.id, 'is_online': False})
+    return Response({'blocked': True}, status=status.HTTP_201_CREATED)
+
+
+@api_view(['DELETE'])
+def block_detail(request, user_id):
+    from chat.services import forget_contacts
+    Block.objects.filter(blocker=request.user, blocked_id=user_id).delete()
+    forget_contacts(request.user.id, user_id)
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(['POST'])
+@throttle_classes([HelpThrottle])
+def report(request):
+    """
+    بلاغ للإدارة: {"user_id"?, "message_id"?, "reason": spam|abuse|harassment|other, "details"?, "block"?: true}.
+    الرسالة يجب أن تكون في محادثة أنا عضو فيها. مع "block": يُحظر صاحبها أيضاً.
+    """
+    from chat.models import Message
+    data = request.data
+    reason = data.get('reason') or Report.OTHER
+    if reason not in dict(Report.REASONS):
+        raise ValidationError({'reason': _('سبب غير معروف')})
+    msg, target = None, None
+    if data.get('message_id'):
+        msg = Message.objects.filter(pk=data['message_id'], conversation__memberships__user=request.user).select_related('sender').first()
+        if not msg:
+            return Response({'detail': _('الرسالة غير موجودة')}, status=status.HTTP_404_NOT_FOUND)
+        target = msg.sender
+    elif data.get('user_id'):
+        try:
+            uid = int(data['user_id'])
+        except (TypeError, ValueError):
+            uid = 0
+        target = User.objects.filter(pk=uid).first() if can_see(request.user, uid) else None
+    if not target or target == request.user:
+        return Response({'detail': _('لا يوجد حساب بهذا المعرّف')}, status=status.HTTP_404_NOT_FOUND)
+    Report.objects.create(reporter=request.user, user=target, message=msg, conversation=msg.conversation if msg else None,
+                          message_text=(msg.content if msg else '')[:2000], reason=reason,
+                          details=(data.get('details') or '')[:2000])
+    if data.get('block') in (True, 'true', '1', 1):
+        from chat.services import forget_contacts
+        Block.objects.get_or_create(blocker=request.user, blocked=target)
+        forget_contacts(request.user.id, target.id)
+    return Response({'ok': True}, status=status.HTTP_201_CREATED)

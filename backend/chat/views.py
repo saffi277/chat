@@ -1,3 +1,4 @@
+import bisect
 import secrets
 from datetime import timedelta
 
@@ -14,13 +15,14 @@ from rest_framework.exceptions import PermissionDenied, Throttled, ValidationErr
 from rest_framework.response import Response
 
 from accounts.models import Profile
+from accounts.privacy import viewer_for
 from accounts.serializers import profile_of
 from config.throttles import LookupThrottle, SendThrottle, UserThrottle
 
 from . import services
 from .media import guess_kind, validate_upload
 from .models import Conversation, Membership, Message, Reaction, ScheduledMessage, StarredMessage
-from .serializers import ConversationSerializer, MemberSerializer, MessageSerializer
+from .serializers import ConversationSerializer, MemberSerializer, MessageSerializer, no_read
 
 User = get_user_model()
 PAGE = 50
@@ -133,6 +135,7 @@ def conversations(request):
         )
         # "حذفت المحادثة" = تنخفي لحد ما توصل رسالة جديدة بعد الحذف
         qs = (qs.filter(Q(cleared__isnull=True) | Q(last_msg_id__isnull=False)).order_by('-pinned', '-last')
+              .select_related('pinned_message__sender__profile')
               .prefetch_related(Prefetch('memberships', queryset=Membership.objects.exclude(
                   conversation__kind__in=SHARED).select_related('user__profile'))))
         convs = list(qs)
@@ -401,20 +404,20 @@ def members(request, pk):
         # القناة: المشترك يرى المشرفين فقط (قائمة المشتركين خاصة، كما في قنوات واتساب)
         if channel and m.role != Membership.ADMIN:
             qs = qs.filter(role=Membership.ADMIN)
-        return Response(MemberSerializer(qs[:1000] if channel else qs, many=True).data)
+        return Response(MemberSerializer(qs[:1000] if channel else qs, many=True, context={'viewer': viewer_for(request)}).data)
     require_admin(m)
     existing = set(services.member_ids(conv))
     new = [u for u in known_users(request, request.data.get('user_ids') or []) if u.id not in existing]
     Membership.objects.bulk_create([Membership(conversation=conv, user=u) for u in new])
     if channel:
         services.send_to_users([u.id for u in new], {'type': 'conversation_updated', 'conversation_id': conv.id})
-        return Response(MemberSerializer(conv.memberships.select_related('user__profile')[:1000], many=True).data,
+        return Response(MemberSerializer(conv.memberships.select_related('user__profile')[:1000], many=True, context={'viewer': viewer_for(request)}).data,
                         status=status.HTTP_201_CREATED)
     services.forget_contacts(*services.member_ids(conv))
     for u in new:
         services.system_message(conv, request.user, f'{name_of(request.user)} أضاف {name_of(u)}')
     services.send_to_users(services.member_ids(conv), {'type': 'conversation_updated', 'conversation_id': conv.id})
-    return Response(MemberSerializer(conv.memberships.select_related('user__profile'), many=True).data,
+    return Response(MemberSerializer(conv.memberships.select_related('user__profile'), many=True, context={'viewer': viewer_for(request)}).data,
                     status=status.HTTP_201_CREATED)
 
 
@@ -438,7 +441,7 @@ def member_detail(request, pk, user_id):
         raise PermissionDenied(_('مشرفو القناة من التدريسيين والإداريين فقط'))
     target.role = role
     target.save(update_fields=['role'])
-    return Response(MemberSerializer(target).data)
+    return Response(MemberSerializer(target, context={'viewer': viewer_for(request)}).data)
 
 
 # ------------------------------------------------------------------ الرسائل
@@ -461,8 +464,14 @@ def messages(request, pk):
         except ValueError:
             limit = PAGE
         page = list(qs.order_by('-id')[:limit])[::-1]
-        receipts = services.receipts_for(conv)
-        return Response(MessageSerializer(page, many=True, context={'receipts': receipts}).data)
+        receipts = no_read(request.user, services.receipts_for(conv))
+        data = MessageSerializer(page, many=True, context={'receipts': receipts}).data
+        if conv.kind == Conversation.CHANNEL and m.role == Membership.ADMIN and page:
+            # مشاهدات منشورات القناة (للمشرف): كم مشتركاً وصل في القراءة إلى هذه الرسالة أو بعدها
+            reads = sorted(conv.memberships.exclude(role=Membership.ADMIN).values_list('last_read_id', flat=True))
+            for item in data:
+                item['views'] = len(reads) - bisect.bisect_left(reads, item['id'])
+        return Response(data)
     require_can_post(m)
     return Response(send_message(request, conv), status=status.HTTP_201_CREATED)
 
@@ -567,6 +576,7 @@ def send_message(request, conv):
     upload = request.FILES.get('file')
     kind = data.get('kind') or (guess_kind(upload) if upload else Message.TEXT)
     fields = {'kind': kind}
+    after = None
 
     reply_id = data.get('reply_to')
     if reply_id:
@@ -589,6 +599,10 @@ def send_message(request, conv):
             if not 1 <= minutes <= 8 * 60:
                 raise ValidationError({'live_minutes': _('من دقيقة واحدة حتى 8 ساعات')})
             fields['live_until'] = timezone.now() + timedelta(minutes=minutes)
+    elif kind == Message.POLL:
+        # استطلاع: السؤال في content، والخيارات options، وmultiple للاختيار المتعدد
+        from .features import create_poll
+        after = create_poll(data)
     elif kind in (Message.IMAGE, Message.VIDEO, Message.VOICE, Message.FILE):
         if not upload:
             raise ValidationError({'file': _('الملف مطلوب')})
@@ -607,7 +621,7 @@ def send_message(request, conv):
     else:
         raise ValidationError({'kind': _('نوع رسالة غير معروف')})
     # «إرسال دون إشعار»: تصل الرسالة كالعادة لكن بلا إشعار على الهاتف
-    return services.create_message(conv, request.user, content, silent=as_bool(data.get('silent')), **fields)
+    return services.create_message(conv, request.user, content, silent=as_bool(data.get('silent')), after_create=after, **fields)
 
 
 def my_message(request, message_id):

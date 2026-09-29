@@ -35,6 +35,8 @@ class Conversation(models.Model):
     slow_mode = models.PositiveIntegerField(default=0)      # ثوانٍ بين رسالتين لكل عضو (0 = بلا حد)
     # رابط الدعوة: من يملكه ينضم إلى المجموعة. يُلغى بمسحه، ويتغيّر بإنشاء جديد
     invite_code = models.CharField(max_length=32, unique=True, null=True, blank=True)
+    # رسالة مثبّتة أعلى المحادثة
+    pinned_message = models.ForeignKey('Message', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
 
     DISAPPEAR_CHOICES = (0, 24 * 3600, 7 * 24 * 3600, 90 * 24 * 3600)
     SLOW_CHOICES = (0, 10, 30, 60, 300, 900, 3600)
@@ -76,10 +78,10 @@ def message_upload_path(instance, filename):
 
 
 class Message(models.Model):
-    TEXT, IMAGE, VIDEO, VOICE, FILE, LOCATION, SYSTEM, CALL = (
-        'text', 'image', 'video', 'voice', 'file', 'location', 'system', 'call')
+    TEXT, IMAGE, VIDEO, VOICE, FILE, LOCATION, SYSTEM, CALL, POLL = (
+        'text', 'image', 'video', 'voice', 'file', 'location', 'system', 'call', 'poll')
     KINDS = [(TEXT, 'نص'), (IMAGE, 'صورة'), (VIDEO, 'فيديو'), (VOICE, 'رسالة صوتية'),
-             (FILE, 'ملف'), (LOCATION, 'موقع'), (SYSTEM, 'رسالة نظام'), (CALL, 'مكالمة')]
+             (FILE, 'ملف'), (LOCATION, 'موقع'), (SYSTEM, 'رسالة نظام'), (CALL, 'مكالمة'), (POLL, 'استطلاع')]
 
     # ForeignKey = كل رسالة تنتمي لمحادثة وحدة ومرسل واحد
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages')
@@ -107,6 +109,8 @@ class Message(models.Model):
     deleted_at = models.DateTimeField(null=True, blank=True)
     # الرسائل المختفية: وقت حذفها (من Conversation.disappear_after لحظة الإرسال)
     expires_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    # أُعيد توجيهها من محادثة أخرى (تظهر عليها علامة «مُعاد توجيهها»)
+    forwarded = models.BooleanField(default=False)
     # للمحادثات الثنائية: الطرف الثاني قراها. (بالمجموعات نستخدم Membership.last_read_id)
     is_read = models.BooleanField(default=False)
 
@@ -174,3 +178,43 @@ class ScheduledMessage(models.Model):
 
     class Meta:
         ordering = ['send_at', 'id']
+
+
+class Poll(models.Model):
+    """
+    استطلاع داخل رسالة (kind=poll): السؤال هو نص الرسالة نفسها (مشفّر مثل كل النصوص)،
+    والخيارات هنا، باختيار واحد أو متعدد. النتائج تتحدث مباشرة عند الجميع.
+    """
+
+    message = models.OneToOneField(Message, on_delete=models.CASCADE, related_name='poll')
+    multiple = models.BooleanField(default=False)
+
+
+class PollOption(models.Model):
+    poll = models.ForeignKey(Poll, on_delete=models.CASCADE, related_name='options')
+    text = models.CharField(max_length=100)
+    order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['order', 'id']
+
+
+class PollVote(models.Model):
+    option = models.ForeignKey(PollOption, on_delete=models.CASCADE, related_name='votes')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='poll_votes')
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['option', 'user'], name='one_vote_per_option')]
+
+
+class ChatFolder(models.Model):
+    """مجلد محادثات يُنشئه المستخدم (مثل «الدراسة» أو «العائلة»)، ويظهر زراً فوق قائمة المحادثات."""
+
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='chat_folders')
+    name = models.CharField(max_length=30)
+    conversations = models.ManyToManyField(Conversation, blank=True, related_name='+')
+    order = models.PositiveSmallIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['order', 'id']

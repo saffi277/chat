@@ -11,6 +11,7 @@ import { CallOverlay, CallsView } from "./Calls";
 import { ChatList, NavBar } from "./ChatList";
 import { Conversation } from "./Conversation";
 import { ConvSettingsPanel, JoinDialog, MuteDialog } from "./ConvSettings";
+import { SearchPanel } from "./Tools";
 import { Icon } from "./icons";
 import { LocationPanel } from "./Location";
 import { AddContactPanel, PeopleView } from "./People";
@@ -111,6 +112,7 @@ function Shell() {
       {panel?.type === "channels" && <ChannelsPanel />}
       {panel?.type === "storyCompose" && <StoryComposer />}
       {panel?.type === "convSettings" && <ConvSettingsPanel convId={panel.convId} />}
+      {panel?.type === "search" && <SearchPanel convId={panel.convId} />}
       {muteDialog !== null && <MuteDialog convId={muteDialog} onClose={() => setMuteDialog(null)} />}
       {joinCode && <JoinDialog code={joinCode} onClose={() => setJoinCode(null)} />}
       {storyViewer && <StoryViewer />}

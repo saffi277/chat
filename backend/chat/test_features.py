@@ -30,6 +30,10 @@ class Base:
         c.credentials(HTTP_AUTHORIZATION='Token ' + r.data['token'])
         c.user = r.data['user']
         c.token = r.data['token']
+        if role != 'student':  # الدور التدريسي والإداري تعتمده الإدارة (كما في /admin)
+            from accounts.models import Profile
+            Profile.objects.filter(user_id=c.user['id']).update(role=role, requested_role='')
+            c.user['role'] = role
         return c
 
 

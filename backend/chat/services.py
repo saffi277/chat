@@ -1,5 +1,6 @@
 # منطق مشترك بين الـ HTTP API والـ WebSocket حتى ما نكرر الكود
 import asyncio
+import re
 import threading
 
 from asgiref.sync import SyncToAsync, async_to_sync
@@ -7,11 +8,11 @@ from channels.layers import get_channel_layer
 from django.core.cache import cache
 from datetime import timedelta
 
-from django.db.models import Max, OuterRef, Subquery
+from django.db.models import Max, OuterRef, Q, Subquery
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
-from accounts.models import Contact, Profile
+from accounts.models import Block, Contact, Profile
 from notifications.push import notify_new_message
 
 from .models import Conversation, Membership, Message
@@ -22,6 +23,7 @@ PREVIEWS = {
     Message.VOICE: '🎤 رسالة صوتية',
     Message.FILE: '📎 ملف',
     Message.LOCATION: '📍 موقع',
+    Message.POLL: '📊 استطلاع',
 }
 QUIET = (Message.SYSTEM, Message.CALL)  # ما إلها إشعار Push
 
@@ -96,12 +98,45 @@ def contact_ids(user_id):
     return ids
 
 
+def block_sets(user_id):
+    """(من حظرتُهم، ومن حظروني). في الكاش دقيقة مثل contact_ids، ويُمسح عند الحظر أو إلغائه."""
+    key = f'blocks:{user_id}'
+    sets = cache.get(key)
+    if sets is None:
+        rows = list(Block.objects.filter(Q(blocker_id=user_id) | Q(blocked_id=user_id)).values_list('blocker_id', 'blocked_id'))
+        sets = ({b for a, b in rows if a == user_id}, {a for a, b in rows if b == user_id})
+        cache.set(key, sets, 60)
+    return sets
+
+
+def is_blocked(a_id, b_id):
+    """هل حظر أحدهما الآخر؟ (لا مراسلة ولا مكالمة بينهما)"""
+    i_blocked, blocked_me = block_sets(a_id)
+    return b_id in i_blocked or b_id in blocked_me
+
+
 def known_ids(user_id):
     """
     من أستطيع رؤيته والبحث عنه ومراسلته وإضافته إلى مجموعة: جهات اتصالي، ومن يشاركني محادثة،
     ومن أضافني جهةَ اتصال (حتى أستطيع الرد عليه). غيرهم لا يظهرون لي أبداً.
+    من حظرني يختفي عندي (ومن حظرتُه يبقى ظاهراً لي كي أستطيع إلغاء الحظر).
     """
-    return set(contact_ids(user_id))
+    return set(contact_ids(user_id)) - block_sets(user_id)[1]
+
+
+def presence_audience(user_id):
+    """
+    من يصله «متصل الآن / غير متصل» عني: من يعرفني، بحسب إعداد «آخر ظهور» (الجميع، أو جهات اتصالي، أو لا أحد)،
+    ودون من بيني وبينه حظر.
+    """
+    level = Profile.objects.filter(user_id=user_id).values_list('privacy_last_seen', flat=True).first() or Profile.EVERYONE
+    if level == Profile.NOBODY:
+        return []
+    i_blocked, blocked_me = block_sets(user_id)
+    ids = set(contact_ids(user_id)) - i_blocked - blocked_me
+    if level == Profile.CONTACTS:
+        ids &= my_contact_ids(user_id)
+    return sorted(ids)
 
 
 def my_contact_ids(user_id):
@@ -111,7 +146,7 @@ def my_contact_ids(user_id):
 
 def forget_contacts(*user_ids):
     """المحادثات أو جهات الاتصال تغيرت (مجموعة جديدة، عضو انضاف، جهة اتصال جديدة): نمسح الكاش."""
-    cache.delete_many([f'contacts:{u}' for u in user_ids])
+    cache.delete_many([f'contacts:{u}' for u in user_ids] + [f'blocks:{u}' for u in user_ids])
 
 
 def can_broadcast(user):
@@ -123,7 +158,9 @@ def can_broadcast(user):
 
 
 def send_to_contacts(user_id, payload, include_self=True):
-    send_to_users([*contact_ids(user_id), *([user_id] if include_self else [])], payload)
+    i_blocked, blocked_me = block_sets(user_id)
+    ids = [u for u in contact_ids(user_id) if u not in i_blocked and u not in blocked_me]
+    send_to_users([*ids, *([user_id] if include_self else [])], payload)
 
 
 def member_ids(conversation):
@@ -156,7 +193,10 @@ def receipts_for(conversation):
     # القناة: لا علامات قراءة (قد يكون المشتركون آلافاً، وقراءتهم ليست شأن الناشر)
     if conversation.kind == Conversation.CHANNEL:
         return None
-    return list(conversation.memberships.values('user_id', 'last_delivered_id', 'last_read_id'))
+    # من أوقف «علامات القراءة»: تظهر رسائله للآخرين «وصلت» ولا تصير زرقاء أبداً
+    return [{'user_id': r['user_id'], 'last_delivered_id': r['last_delivered_id'],
+             'last_read_id': r['last_read_id'] if r['user__profile__read_receipts'] is not False else 0}
+            for r in conversation.memberships.values('user_id', 'last_delivered_id', 'last_read_id', 'user__profile__read_receipts')]
 
 
 def post_error(membership, check_slow=True):
@@ -166,6 +206,14 @@ def post_error(membership, check_slow=True):
     """
     conv = membership.conversation
     admin = membership.role == Membership.ADMIN
+    if conv.kind == Conversation.DIRECT:
+        other = conv.memberships.exclude(user_id=membership.user_id).values_list('user_id', flat=True).first()
+        if other:
+            i_blocked, blocked_me = block_sets(membership.user_id)
+            if other in i_blocked:
+                return 'blocked', _('حظرت هذا الشخص. ألغِ الحظر لتراسله')
+            if other in blocked_me:
+                return 'blocked', _('لا يمكنك مراسلة هذا الشخص')
     if conv.kind == Conversation.CHANNEL and not admin:
         return 'not_allowed', _('النشر في القناة لمشرفيها فقط')
     if conv.kind == Conversation.GROUP and not admin:
@@ -181,7 +229,21 @@ def post_error(membership, check_slow=True):
     return None
 
 
-def create_message(conversation, sender, content='', silent=False, **fields):
+MENTION_RE = re.compile(r'@([\w.]+)')
+
+
+def mentioned_ids(conversation, sender, content):
+    """الإشارة بـ @اسم_المستخدم في المجموعات: من ذُكر من الأعضاء (يصله إشعار حتى لو كتم المجموعة)."""
+    if conversation.kind != Conversation.GROUP or '@' not in (content or ''):
+        return []
+    names = {n.lower() for n in MENTION_RE.findall(content)}
+    if not names:
+        return []
+    return [uid for uid, username in Membership.objects.filter(conversation=conversation).exclude(user=sender)
+            .values_list('user_id', 'user__username') if username.lower() in names]
+
+
+def create_message(conversation, sender, content='', silent=False, after_create=None, **fields):
     """
     1) نخزن الرسالة بالـ Database  2) نبثها للكل  3) إشعار Push (إلا إن كانت «دون إشعار»)  4) نرجعها JSON.
     في محادثة رسائلها مختفية: نحدد وقت حذفها من الآن.
@@ -190,6 +252,8 @@ def create_message(conversation, sender, content='', silent=False, **fields):
     if conversation.disappear_after and kind not in QUIET and 'expires_at' not in fields:
         fields['expires_at'] = timezone.now() + timedelta(seconds=conversation.disappear_after)
     msg = Message.objects.create(conversation=conversation, sender=sender, content=content, **fields)
+    if after_create:  # مثل خيارات الاستطلاع: قبل البث حتى تصل الرسالة كاملة
+        after_create(msg)
     # المرسل طبعاً "قرا" رسالته
     Membership.objects.filter(conversation=conversation, user=sender).update(
         last_read_id=msg.id, last_delivered_id=msg.id)
@@ -209,7 +273,7 @@ def create_message(conversation, sender, content='', silent=False, **fields):
     # لكل عضو على اتصاله العام: حتى تتحدث قائمته
     send_to_users(member_ids(conversation), {'type': 'inbox', 'message': data})
     if msg.kind not in QUIET and not silent:
-        notify_new_message(msg, lambda tr: preview_text(msg, tr))
+        notify_new_message(msg, lambda tr: preview_text(msg, tr), mentioned=mentioned_ids(conversation, sender, content))
     return data
 
 
@@ -235,6 +299,10 @@ def mark_read(conversation, user):
         return 0
     Membership.objects.filter(conversation=conversation, user=user, last_delivered_id__lt=last).update(
         last_delivered_id=last)
+    # علامات القراءة موقفة: نحسب غير المقروء كالعادة، لكن المرسل يرى «وصلت» فقط
+    if not getattr(getattr(user, 'profile', None), 'read_receipts', True):
+        broadcast(conversation.id, {'type': 'delivered', 'user_id': user.id, 'message_id': last})
+        return updated
     # للمحادثات الثنائية نحدث is_read على الرسائل نفسها (الواجهة القديمة تعتمد عليه)
     if conversation.kind == Conversation.DIRECT:
         conversation.messages.filter(is_read=False).exclude(sender=user).update(is_read=True)

@@ -63,9 +63,25 @@ export const WALLPAPERS: { id: Wallpaper; label: string }[] = [
   { id: "none", label: "بلا خلفية" },
 ];
 /** أنا: نفس User + إعداداتي الخاصة */
-export type Me = User & { mode: Mode; theme: Theme; wallpaper: Wallpaper; language: Lang; email: string; university_id: string; hide_preview: boolean };
+export type Audience = "everyone" | "contacts" | "nobody";
+export type Me = User & {
+  mode: Mode; theme: Theme; wallpaper: Wallpaper; language: Lang; email: string; university_id: string; hide_preview: boolean;
+  /** دور طلبه عند التسجيل ولم تعتمده الإدارة بعد ("" = لا طلب) */
+  requested_role: Role | "";
+  privacy_last_seen: Audience; privacy_photo: Audience; read_receipts: boolean;
+  two_step: boolean; two_step_hint: string;
+};
+/** جهاز متصل بالحساب */
+export type Session = { id: number; device: string; user_agent: string; created: string; last_used: string; current: boolean };
 
-export type MessageKind = "text" | "image" | "video" | "voice" | "file" | "location" | "system" | "call";
+export type MessageKind = "text" | "image" | "video" | "voice" | "file" | "location" | "system" | "call" | "poll";
+
+/** استطلاع: السؤال هو نص الرسالة (content) */
+export type Poll = { multiple: boolean; total_voters: number; options: { id: number; text: string; votes: number; voter_ids: number[] }[] };
+/** معاينة رابط (يجلبها الخادم بأمان) */
+export type LinkPreview = { url: string; title: string; description: string; image: string; site: string };
+/** نتيجة بحث في الرسائل */
+export type SearchHit = { message: Message; conversation: { id: number; kind: ConversationKind; title: string } };
 /** sent = ✓ ، delivered = ✓✓ رمادي ، read = ✓✓ أزرق */
 export type MessageStatus = "sent" | "delivered" | "read";
 
@@ -100,6 +116,11 @@ export type Message = {
   status: MessageStatus;
   is_read: boolean;
   reactions: Reaction[];
+  /** أُعيد توجيهها من محادثة أخرى */
+  forwarded?: boolean;
+  poll?: Poll | null;
+  /** مشاهدات منشور القناة (للمشرف فقط) */
+  views?: number;
 };
 
 /** channel = قناة: ينشر فيها مشرفوها (تدريسيون وإداريون) ويقرأ المشتركون */
@@ -136,6 +157,8 @@ export type Conversation = {
   can_edit_info: boolean;
   /** رابط الدعوة (للمشرف، في صفحة المحادثة فقط) */
   invite_code?: string | null;
+  /** الرسالة المثبّتة أعلى المحادثة */
+  pinned_message?: { id: number; kind: MessageKind; sender_name: string; preview: string } | null;
 };
 
 /** رسالة مجدولة (نص) */

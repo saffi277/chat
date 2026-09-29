@@ -1,13 +1,15 @@
 "use client";
 // خانة الكتابة: نص، إيموجي، إرفاق (صورة/فيديو/ملف/موقع)، تسجيل صوت، رد وتعديل
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { Message, MessageKind } from "@/lib/api";
+import type { ConversationKind, Member, Message, MessageKind } from "@/lib/api";
 import { useT } from "@/lib/i18n";
-import { messages as msgApi, type SendFileOpts } from "@/lib/endpoints";
+import { readDraft, writeDraft } from "@/lib/drafts";
+import { conversations as convApi, messages as msgApi, type SendFileOpts } from "@/lib/endpoints";
 import { permError } from "@/lib/permissions";
 import type { LiveSocket } from "@/lib/socket";
-import { duration, nameOf } from "./bits";
+import { Avatar, duration, nameOf } from "./bits";
 import { ScheduleDialog } from "./ConvSettings";
+import { PollDialog } from "./Tools";
 import { Icon } from "./icons";
 import { useWasl } from "./store";
 
@@ -20,8 +22,9 @@ export type MediaSend = (file: File | Blob, opts: SendFileOpts & { kind: Message
 const hasKeyboard = () => typeof window !== "undefined" && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 const MAX_ROWS_PX = 6 * 24 + 22; // ستة أسطر ثم تمرير داخل الخانة
 
-export function Composer({ convId, socket, reply, editing, onDone, onSent, onMedia, onScheduled }: {
+export function Composer({ convId, kind, socket, reply, editing, onDone, onSent, onMedia, onScheduled }: {
   convId: number;
+  kind: ConversationKind;
   socket: () => LiveSocket | null;
   reply: Message | null;
   editing: Message | null;
@@ -31,8 +34,16 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent, onMed
   onScheduled?: () => void;
 }) {
   const t = useT();
-  const { setPanel, notify } = useWasl();
-  const [text, setText] = useState("");
+  const { me, setPanel, notify } = useWasl();
+  // المسودة المحفوظة لهذه المحادثة (Composer يُنشأ من جديد لكل محادثة)
+  const [text, setText] = useState(() => readDraft(convId));
+  const [polling, setPolling] = useState(false);
+  // الإشارة بـ @ في المجموعات: أعضاؤها، وما يُكتب بعد @ الآن
+  const [members, setMembers] = useState<Member[]>([]);
+  const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
+  useEffect(() => {
+    if (kind === "group") convApi.members(convId).then(setMembers).catch(() => {});
+  }, [convId, kind]);
   const [menu, setMenu] = useState<"emoji" | "attach" | "send" | null>(null);
   const [scheduleText, setScheduleText] = useState<string | null>(null);
   const sendPress = useRef<{ timer?: ReturnType<typeof setTimeout>; fired: boolean }>({ fired: false });
@@ -56,7 +67,7 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent, onMed
     setText(editing.content);
   } else if (!editing && editingId !== null) {
     setEditingId(null);
-    setText("");
+    setText(readDraft(convId));
   }
   useEffect(() => {
     if (reply || editing) input.current?.focus();
@@ -78,8 +89,13 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent, onMed
     return () => clearInterval(timer);
   }, [rec]);
 
-  function onType(v: string) {
+  function onType(v: string, caret?: number) {
     setText(v);
+    if (!editing) writeDraft(convId, v);
+    // «@» ثم حروف قبل المؤشر مباشرة: نقترح الأعضاء
+    const before = v.slice(0, caret ?? v.length);
+    const m = kind === "group" ? before.match(/(^|\s)@([\w.]*)$/) : null;
+    setMention(m ? { start: before.length - m[2].length - 1, query: m[2].toLowerCase() } : null);
     if (Date.now() - lastTyping.current > 1000) {
       lastTyping.current = Date.now();
       socket()?.send({ type: "typing" });
@@ -102,6 +118,8 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent, onMed
       return;
     }
     setText("");
+    writeDraft(convId, "");
+    setMention(null);
     onDone();
     // الطريق السريع: WebSocket. إذا مقطوع نرجع للـ HTTP حتى الرسالة ما تضيع
     if (socket()?.send({ type: "message", content, reply_to: reply?.id, ...(silent ? { silent: true } : {}) })) {
@@ -162,6 +180,22 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent, onMed
   }
 
   const hasText = text.trim().length > 0;
+  const mentionList = mention
+    ? members.filter((mb) => mb.user.id !== me.id && (!mention.query || mb.user.username.toLowerCase().includes(mention.query)
+      || nameOf(mb.user).toLowerCase().includes(mention.query))).slice(0, 6)
+    : [];
+  // اختيار عضو من الاقتراحات: نضع @اسم_المستخدم مكان ما كُتب بعد @
+  function pickMention(username: string) {
+    if (!mention) return;
+    const el = input.current;
+    const caret = el?.selectionStart ?? text.length;
+    const next = `${text.slice(0, mention.start)}@${username} ${text.slice(caret)}`;
+    const pos = mention.start + username.length + 2;
+    setText(next);
+    writeDraft(convId, next);
+    setMention(null);
+    requestAnimationFrame(() => { el?.focus(); el?.setSelectionRange(pos, pos); });
+  }
 
   return (
     <div className="w-composer relative rounded-t-[26px] px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 md:rounded-none md:border-t md:w-split"
@@ -199,13 +233,29 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent, onMed
       )}
       {scheduleText !== null && (
         <ScheduleDialog convId={convId} text={scheduleText} replyTo={reply?.id} onClose={() => setScheduleText(null)}
-          onDone={() => { setText(""); onDone(); onScheduled?.(); }} />
+          onDone={() => { setText(""); writeDraft(convId, ""); onDone(); onScheduled?.(); }} />
+      )}
+      {polling && <PollDialog convId={convId} onClose={() => setPolling(false)} />}
+      {mentionList.length > 0 && (
+          <div className="w-strong w-shadow absolute bottom-full inset-x-3 z-10 mb-2 max-w-sm rounded-2xl p-1.5" role="listbox" aria-label={t("الإشارة إلى عضو")} style={{ border: "1px solid var(--border)" }}>
+            {mentionList.map((mb) => (
+              <button key={mb.user.id} role="option" aria-selected={false} onMouseDown={(e) => e.preventDefault()} onClick={() => pickMention(mb.user.username)}
+                className="w-hover flex w-full items-center gap-3 rounded-xl px-2 py-1.5 text-start">
+                <Avatar user={mb.user} size={34} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-bold" dir="auto">{nameOf(mb.user)}</span>
+                  <span className="w-muted block text-xs" dir="ltr">@{mb.user.username}</span>
+                </span>
+              </button>
+            ))}
+          </div>
       )}
       {menu === "attach" && (
         <div className="w-strong w-shadow absolute bottom-full end-3 z-10 mb-2 grid w-56 gap-1 rounded-2xl p-2" style={{ border: "1px solid var(--border)" }}>
           <AttachItem icon="image" label={t("صورة أو فيديو")} onClick={() => mediaPick.current?.click()} />
           <AttachItem icon="file" label={t("ملف")} onClick={() => filePick.current?.click()} />
           <AttachItem icon="pin" label={t("الموقع")} onClick={() => { setMenu(null); setPanel({ type: "location", convId }); }} />
+          {kind !== "saved" && <AttachItem icon="poll" label={t("استطلاع")} onClick={() => { setMenu(null); setPolling(true); }} />}
         </div>
       )}
       <input ref={mediaPick} type="file" accept="image/*,video/*" hidden onChange={(e) => { pickMedia(e.target.files?.[0]); e.target.value = ""; }} />
@@ -241,7 +291,7 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent, onMed
               className="w-accent grid h-12 w-12 shrink-0 place-items-center rounded-full disabled:opacity-50"><Icon name="mic" size={22} /></button>
           )}
           <div className="w-input flex min-h-12 min-w-0 flex-1 items-end rounded-[24px] ps-4">
-            <textarea ref={input} value={text} rows={1} onChange={(e) => onType(e.target.value)} onFocus={() => setMenu(null)}
+            <textarea ref={input} value={text} rows={1} onChange={(e) => onType(e.target.value, e.target.selectionStart)} onFocus={() => setMenu(null)}
               onKeyDown={(e) => {
                 // Enter يرسل في الحاسوب، وShift+Enter سطر جديد. (isComposing: لا نقطع كتابة لوحات المفاتيح المركّبة)
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing && hasKeyboard()) {
@@ -293,7 +343,7 @@ export function Composer({ convId, socket, reply, editing, onDone, onSent, onMed
   );
 }
 
-function AttachItem({ icon, label, onClick }: { icon: "image" | "file" | "pin"; label: string; onClick: () => void }) {
+function AttachItem({ icon, label, onClick }: { icon: "image" | "file" | "pin" | "poll"; label: string; onClick: () => void }) {
   return (
     <button onClick={onClick} className="w-hover flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold">
       <span className="w-accent grid h-9 w-9 place-items-center rounded-full"><Icon name={icon} size={17} /></span>{label}

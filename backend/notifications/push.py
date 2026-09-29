@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 _pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix='push')
 
 
-def notify_new_message(message, preview=None):
+def notify_new_message(message, preview=None, mentioned=()):
     """
     نرسل إشعاراً لكل عضو في المحادثة عدا المرسل (ومن كتمها)، على كل أجهزته.
     preview(tr) تعيد النص المختصر مترجماً، فكل مستلم يصله الإشعار بلغته.
@@ -35,8 +35,10 @@ def notify_new_message(message, preview=None):
     now = timezone.now()
     muted = Membership.objects.filter(conversation_id=message.conversation_id, is_muted=True).filter(
         Q(muted_until__isnull=True) | Q(muted_until__gt=now)).values('user_id')
+    # من أُشير إليه بـ @ يصله الإشعار حتى لو كتم المجموعة
     subs = list(PushSubscription.objects.filter(user__memberships__conversation_id=message.conversation_id)
-                .exclude(user=sender).exclude(user_id__in=muted).select_related('user__profile'))
+                .exclude(user=sender).filter(~Q(user_id__in=muted) | Q(user_id__in=list(mentioned)))
+                .select_related('user__profile'))
     if not subs:
         return
     base = {'conversation': message.conversation_id, 'url': f'/chat?c={message.conversation_id}',

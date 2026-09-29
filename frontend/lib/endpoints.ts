@@ -10,6 +10,9 @@ import {
   type Me,
   type Member,
   type ScheduledMessage,
+  type SearchHit,
+  type LinkPreview,
+  type Session,
   type InvitePreview,
   type Message,
   type MessageKind,
@@ -29,8 +32,16 @@ const qs = (params: Record<string, string | number | undefined>) => {
 // ---------------------------------------------------------------- الحساب
 export const auth = {
   /** identifier = اسم المستخدم أو البريد الجامعي أو الرقم الجامعي. role لازم يطابق دور الحساب */
+  /** بكلمة المرور. إن كان التحقق بخطوتين مفعّلاً: {two_step, ticket, hint} بدل التوكن */
   login: (identifier: string, password: string, role?: Role) =>
-    api<{ token: string; user: Me }>("/auth/login/", "POST", { identifier, password, role }),
+    api<{ token: string; user: Me } | { two_step: true; ticket: string; hint: string }>("/auth/login/", "POST", { identifier, password, role }),
+  loginTwoStep: (ticket: string, code: string) => api<{ token: string; user: Me }>("/auth/login/two-step/", "POST", { ticket, code }),
+  /** تفعيل أو تغيير كلمة التحقق بخطوتين، أو إيقافها (بكلمة المرور الحالية) */
+  setTwoStep: (password: string, code: string, hint = "") => api<Me>("/auth/two-step/", "POST", { password, code, hint }),
+  removeTwoStep: (password: string) => api<Me>("/auth/two-step/", "DELETE", { password }),
+  sessions: () => api<Session[]>("/auth/sessions/"),
+  endSession: (id: number) => api(`/auth/sessions/${id}/`, "DELETE"),
+  deleteAccount: (password: string) => api("/auth/delete/", "POST", { password }),
   register: (data: { username: string; password: string; display_name?: string; role?: Role; email?: string; university_id?: string }) =>
     api<{ token: string; user: Me }>("/auth/register/", "POST", data),
   /** من صفحة الدخول: نسيت كلمة المرور أو دعم فني (يوصل للإداري) */
@@ -39,7 +50,7 @@ export const auth = {
   me: () => api<Me>("/auth/me/"),
   /** تسجيل خروج: التوكن ينمسح من السيرفر (all = من كل الأجهزة) */
   logout: (all = false) => api("/auth/logout/", "POST", { all }),
-  updateMe: (data: Partial<Pick<Me, "display_name" | "bio" | "phone" | "city" | "email" | "mode" | "theme" | "wallpaper" | "language" | "hide_preview">>) =>
+  updateMe: (data: Partial<Pick<Me, "display_name" | "bio" | "phone" | "city" | "email" | "mode" | "theme" | "wallpaper" | "language" | "hide_preview" | "privacy_last_seen" | "privacy_photo" | "read_receipts">>) =>
     api<Me>("/auth/me/", "PATCH", data),
   setAvatar: (file: File | null) => {
     if (!file) return api<Me>("/auth/me/", "PATCH", { avatar: null });
@@ -142,6 +153,18 @@ export const messages = {
       content, send_at: sendAt.toISOString(), silent: opts.silent, reply_to: opts.replyTo,
     }),
   cancelScheduled: (id: number) => api(`/scheduled/${id}/`, "DELETE"),
+  /** استطلاع: سؤال وخيارات (2 إلى 12)، multiple = اختيار متعدد */
+  sendPoll: (conversationId: number, question: string, options: string[], multiple = false) =>
+    api<Message>(`/conversations/${conversationId}/messages/`, "POST", { kind: "poll", content: question, options, multiple }),
+  vote: (messageId: number, optionIds: number[]) => api<Message>(`/messages/${messageId}/vote/`, "POST", { option_ids: optionIds }),
+  /** إعادة توجيه رسائل إلى محادثات (حتى 20 رسالة و10 محادثات) */
+  forward: (messageIds: number[], conversationIds: number[]) =>
+    api<{ sent: number }>("/messages/forward/", "POST", { message_ids: messageIds, conversation_ids: conversationIds }),
+  pin: (messageId: number) => api(`/messages/${messageId}/pin/`, "POST"),
+  unpin: (messageId: number) => api(`/messages/${messageId}/pin/`, "DELETE"),
+  /** البحث في الرسائل: كلها، أو في محادثة واحدة */
+  search: (q: string, conversationId?: number) => api<SearchHit[]>(`/search/${qs({ q, conversation: conversationId })}`),
+  linkPreview: async (url: string) => (await api<{ preview: LinkPreview | null }>(`/link-preview/${qs({ url })}`)).preview,
   /** صورة/فيديو/صوت/ملف. للصوت مرر duration بالثواني */
   sendFile: (conversationId: number, file: File | Blob, opts: SendFileOpts = {}) => {
     const form = new FormData();
@@ -171,6 +194,26 @@ export const messages = {
   unstar: (messageId: number) => api<{ starred: boolean }>(`/messages/${messageId}/star/`, "DELETE"),
   /** الرسائل المميزة ⭐ (كلها، أو لمحادثة وحدة) */
   starred: (conversationId?: number) => api<Message[]>(`/starred/${qs({ conversation: conversationId })}`),
+};
+
+// ---------------------------------------------------------------- مجلدات المحادثات
+export type ChatFolder = { id: number; name: string; conversation_ids: number[]; order: number };
+export const folders = {
+  list: () => api<ChatFolder[]>("/folders/"),
+  create: (name: string, conversationIds: number[]) => api<ChatFolder>("/folders/", "POST", { name, conversation_ids: conversationIds }),
+  update: (id: number, data: { name?: string; conversation_ids?: number[] }) => api<ChatFolder>(`/folders/${id}/`, "PATCH", data),
+  remove: (id: number) => api(`/folders/${id}/`, "DELETE"),
+};
+
+// ---------------------------------------------------------------- الحظر والإبلاغ
+export type ReportReason = "spam" | "abuse" | "harassment" | "other";
+export const safety = {
+  blocked: () => api<User[]>("/blocks/"),
+  block: (userId: number) => api("/blocks/", "POST", { user_id: userId }),
+  unblock: (userId: number) => api(`/blocks/${userId}/`, "DELETE"),
+  /** بلاغ عن شخص أو رسالة (يصل إلى الإدارة). block: يحظره أيضاً */
+  report: (data: { user_id?: number; message_id?: number; reason: ReportReason; details?: string; block?: boolean }) =>
+    api("/reports/", "POST", data),
 };
 
 // ---------------------------------------------------------------- رابط الدعوة

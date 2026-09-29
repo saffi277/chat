@@ -71,6 +71,7 @@ export function preview(m: Message | null, meId?: number): { icon?: IconName; te
     case "voice": return { icon: "mic", text: t("رسالة صوتية {time}", { time: duration(m.duration) }) };
     case "file": return { icon: "file", text: m.file_name || t("ملف") };
     case "location": return { icon: "pin", text: t(m.is_live ? "الموقع المباشر" : "الموقع الحالي") };
+    case "poll": return { icon: "poll", text: m.content };
     case "call": return { icon: "phone", text: systemText(m.content) };
     case "system": return { text: systemText(m.content) };
     default: return { text: (m.sender.id === meId ? t("أنت: ") : "") + m.content };
@@ -93,6 +94,7 @@ const SYSTEM_PATTERNS: [RegExp, string][] = [
   [/^(.+) فعّل الوضع البطيء$/, "{0} turned on slow mode"],
   [/^(.+) أوقف الوضع البطيء$/, "{0} turned off slow mode"],
   [/^(.+) انضم عبر رابط الدعوة$/, "{0} joined via the invite link"],
+  [/^(.+) ثبّت رسالة$/, "{0} pinned a message"],
   [/^(.+) أضاف (.+)$/, "{0} added {1}"],
   [/^(.+) أزال (.+)$/, "{0} removed {1}"],
   [/^(.+) غادر المجموعة$/, "{0} left the group"],
@@ -102,7 +104,7 @@ const SYSTEM_PATTERNS: [RegExp, string][] = [
   [/^مكالمة فيديو • (.+)$/, "Video call • {0}"],
 ];
 /** النص المختصر القادم من الخادم (مثل الرد على رسالة: "📷 صورة: تعليق") بلغة المستخدم */
-const PREVIEW_PREFIXES = ["📷 صورة", "🎬 فيديو", "🎤 رسالة صوتية", "📎 ملف", "📍 موقع مباشر", "📍 موقع", "🚫 تم حذف هذه الرسالة"];
+const PREVIEW_PREFIXES = ["📊 استطلاع", "📷 صورة", "🎬 فيديو", "🎤 رسالة صوتية", "📎 ملف", "📍 موقع مباشر", "📍 موقع", "🚫 تم حذف هذه الرسالة"];
 export function previewText(text: string) {
   if (getLang() !== "en") return text;
   const hit = PREVIEW_PREFIXES.find((p) => text.startsWith(p));

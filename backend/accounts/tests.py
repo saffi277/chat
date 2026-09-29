@@ -1,6 +1,7 @@
 import io
 import shutil
 import tempfile
+from unittest import mock
 
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -64,7 +65,28 @@ class UniversityLoginTests(TestCase):
             'username': 'dr_ali', 'password': 'secret123', 'display_name': 'د. علي', 'role': 'faculty',
             'email': 'Ali@Asbat.edu.iq', 'university_id': 'F-2041'}, format='json')
         self.assertEqual(r.status_code, 201, r.data)
-        self.user = r.data['user']
+        # لا أحد يمنح نفسه دور «تدريسي» بالتسجيل: يبدأ طالباً وطلبه معلّق حتى تعتمده الإدارة
+        self.assertEqual((r.data['user']['role'], r.data['user']['requested_role']), ('student', 'faculty'))
+        self.pending_login = self.login(identifier='dr_ali', role='faculty')
+        from .admin import ProfileAdmin
+        from .models import Profile
+        from django.contrib.admin.sites import site
+        ProfileAdmin(Profile, site).approve_role(mock.MagicMock(), Profile.objects.filter(user__username='dr_ali'))
+        self.user = APIClient().post('/api/auth/login/', {'identifier': 'dr_ali', 'password': 'secret123'}, format='json').data['user']
+
+    def test_pending_role_can_sign_in_as_student(self):
+        # قبل الاعتماد: يدخل بدور «تدريسي» الذي طلبه، لكن بصلاحيات طالب (والواجهة تُظهر أن طلبه قيد المراجعة)
+        r = self.pending_login
+        self.assertEqual((r.status_code, r.data['user']['role'], r.data['user']['requested_role']), (200, 'student', 'faculty'))
+        self.assertEqual((self.user['role'], self.user['requested_role']), ('faculty', ''))  # بعد الاعتماد
+        # طلب «إداري» ثم رفضته الإدارة: يبقى طالباً
+        from .admin import ProfileAdmin
+        from .models import Profile
+        from django.contrib.admin.sites import site
+        s = APIClient().post('/api/auth/register/', {'username': 'st1', 'password': 'secret123', 'role': 'staff'}, format='json').data
+        ProfileAdmin(Profile, site).reject_role(mock.MagicMock(), Profile.objects.filter(user_id=s['user']['id']))
+        p = Profile.objects.get(user_id=s['user']['id'])
+        self.assertEqual((p.role, p.requested_role), ('student', ''))
 
     def login(self, **data):
         return APIClient().post('/api/auth/login/', {'password': 'secret123', **data}, format='json')

@@ -262,6 +262,9 @@ function LoginForm({ onForgot }: { onForgot: () => void }) {
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // التحقق بخطوتين: بعد كلمة المرور الصحيحة يعطي الخادم «تذكرة» ويطلب كلمة التحقق
+  const [ticket, setTicket] = useState<{ ticket: string; hint: string } | null>(null);
+  const [code, setCode] = useState("");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -269,7 +272,13 @@ function LoginForm({ onForgot }: { onForgot: () => void }) {
     setBusy(true);
     try {
       // POST /api/auth/login/  body: {"identifier", "password", "role"}
-      const data = await auth.login(identifier.trim(), password, role);
+      const first = ticket ? null : await auth.login(identifier.trim(), password, role);
+      if (first && "two_step" in first) {
+        setTicket({ ticket: first.ticket, hint: first.hint });
+        setBusy(false);
+        return;
+      }
+      const data = first ?? await auth.loginTwoStep(ticket!.ticket, code);
       // التطبيق المثبّت على الشاشة الرئيسية يحفظ الدخول دائماً (كتطبيقات الهاتف)
       saveSession(data.token, data.user, remember || isStandalone());
       // اللغة المختارة في صفحة الدخول تُحفظ في الحساب (لتتبعه على أجهزته الأخرى)
@@ -282,6 +291,21 @@ function LoginForm({ onForgot }: { onForgot: () => void }) {
   }
 
   return (
+    ticket ? (
+      <form onSubmit={submit} className="mt-6 space-y-4">
+        <p className="text-[15px] font-bold">{t("حسابك محمي بالتحقق بخطوتين")}</p>
+        <p className="p-muted text-sm leading-7">{t("اكتب كلمة التحقق التي اخترتها في إعدادات الخصوصية.")}{ticket.hint && <> {t("التلميح: {hint}", { hint: ticket.hint })}</>}</p>
+        <Field icon="lock">
+          <input type="password" value={code} onChange={(e) => setCode(e.target.value)} placeholder={t("كلمة التحقق بخطوتين")} autoFocus required
+            autoComplete="one-time-code" className="h-full min-w-0 flex-1 text-base" aria-label={t("كلمة التحقق بخطوتين")} />
+        </Field>
+        <ErrorBox text={error} />
+        <button disabled={busy} className="p-btn flex h-[58px] w-full items-center justify-center gap-3 rounded-2xl text-[19px] font-bold transition active:scale-[.99] disabled:opacity-70">
+          {t(busy ? "جارٍ الدخول..." : "تأكيد الدخول")}
+        </button>
+        <button type="button" onClick={() => { setTicket(null); setCode(""); setError(""); }} className="p-forgot w-full text-center text-sm">{t("رجوع")}</button>
+      </form>
+    ) : (
     <form onSubmit={submit} className="mt-6 space-y-4">
       <RolePicker role={role} setRole={setRole} />
       <Field icon="mail">
@@ -302,6 +326,7 @@ function LoginForm({ onForgot }: { onForgot: () => void }) {
         <span className="rtl:-scale-x-100"><Icon name="logIn" size={23} /></span>
       </button>
     </form>
+    )
   );
 }
 
@@ -332,6 +357,12 @@ function RegisterForm() {
   return (
     <form onSubmit={submit} className="mt-5 space-y-3">
       <RolePicker role={role} setRole={setRole} />
+      {role !== "student" && (
+        // الدور التدريسي والإداري يُعتمد من الإدارة (حتى لا يمنح أحد نفسه صلاحية النشر في القنوات)
+        <p className="p-muted flex items-start gap-2 text-[13px] leading-6" role="note">
+          <Icon name="info" size={16} className="mt-1 shrink-0" />{t("يُعتمد الدور التدريسي أو الإداري بعد تحقق الإدارة. حتى ذلك الحين تستخدم التطبيق بصلاحيات طالب.")}
+        </p>
+      )}
       <Field icon="user">
         <input value={form.display_name} onChange={set("display_name")} placeholder={t("الاسم الكامل")} maxLength={50} className="h-full min-w-0 flex-1 text-base" aria-label={t("الاسم الكامل")} />
       </Field>

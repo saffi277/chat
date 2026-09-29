@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { readDraft } from "@/lib/drafts";
 import { canBroadcast, type Conversation } from "@/lib/api";
 import { useLang, useT } from "@/lib/i18n";
 import { ConvAvatar, Empty, listTime, nameOf, preview, StoryTap } from "./bits";
@@ -7,6 +8,8 @@ import { CallLog } from "./Calls";
 import { Icon, type IconName } from "./icons";
 import { PushBanner } from "./Settings";
 import { useWasl, type Tab } from "./store";
+import { FolderDialog, SearchHitRow, useMessageSearch } from "./Tools";
+import { folders as foldersApi, type ChatFolder } from "@/lib/endpoints";
 
 type Filter = "all" | "unread" | "groups" | "channels" | "calls";
 const filters: { id: Filter; label: string }[] = [
@@ -66,15 +69,31 @@ export function SearchBox({ value, onChange, placeholder }: { value: string; onC
 export function ChatList() {
   const { me, convs, setTab, setPanel, openSaved, otherOf } = useWasl();
   const t = useT();
-  const [filter, setFilter] = useState<Filter>("all");
+  // الفلتر: أحد الأزرار الثابتة، أو رقم مجلد أنشأه المستخدم
+  const [filter, setFilter] = useState<Filter | number>("all");
+  const [userFolders, setUserFolders] = useState<ChatFolder[]>([]);
+  const [folderDialog, setFolderDialog] = useState<ChatFolder | "new" | null>(null);
+  const loadFolders = () => foldersApi.list().then(setUserFolders).catch(() => {});
+  useEffect(() => {
+    foldersApi.list().then(setUserFolders).catch(() => {});
+  }, []);
+  const folder = typeof filter === "number" ? userFolders.find((f) => f.id === filter) : undefined;
   const [q, setQ] = useState("");
+  // المسودات تتغير من خانة الكتابة: نعيد رسم القائمة لتظهر «مسودة: ...»
+  const [, setDraftTick] = useState(0);
+  useEffect(() => {
+    const on = () => setDraftTick((n) => n + 1);
+    window.addEventListener("wasl:draft", on);
+    return () => window.removeEventListener("wasl:draft", on);
+  }, []);
+  const { hits, loading: searching } = useMessageSearch(filter === "calls" ? "" : q);
 
   const saved = convs.find((c) => c.kind === "saved");
   const title = (c: Conversation) => (c.kind === "direct" ? (otherOf(c) ? nameOf(otherOf(c)!) : "") : c.title);
   const query = q.trim().toLowerCase();
   const shown = convs
     .filter((c) => c.kind !== "saved")
-    .filter((c) => (filter === "groups" ? c.kind === "group" : filter === "channels" ? c.kind === "channel" : filter === "unread" ? c.unread_count > 0 : true))
+    .filter((c) => (folder ? folder.conversation_ids.includes(c.id) : filter === "groups" ? c.kind === "group" : filter === "channels" ? c.kind === "channel" : filter === "unread" ? c.unread_count > 0 : true))
     .filter((c) => !query || title(c).toLowerCase().includes(query) || c.last_message?.content.toLowerCase().includes(query));
 
   return (
@@ -97,7 +116,19 @@ export function ChatList() {
               {t(f.label)}
             </button>
           ))}
+          {userFolders.map((f) => (
+            <button key={f.id} type="button" aria-pressed={filter === f.id} onClick={(e) => { e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }); if (filter === f.id) setFolderDialog(f); else setFilter(f.id); }}
+              className="w-chip flex shrink-0 items-center gap-1 rounded-full px-3.5 py-2 text-[13px] font-semibold transition" title={filter === f.id ? t("تعديل المجلد") : undefined}>
+              {f.name}{filter === f.id && <Icon name="edit" size={12} />}
+            </button>
+          ))}
+          <button type="button" onClick={() => setFolderDialog("new")} aria-label={t("مجلد جديد")} title={t("مجلد جديد")}
+            className="w-chip grid h-9 w-9 shrink-0 place-items-center rounded-full"><Icon name="plus" size={16} /></button>
         </div>
+        {folderDialog && (
+          <FolderDialog folder={folderDialog === "new" ? undefined : folderDialog} onClose={() => setFolderDialog(null)}
+            onSaved={() => { loadFolders(); if (folderDialog !== "new" && !userFolders.some((f) => f.id === folderDialog.id)) setFilter("all"); }} />
+        )}
       </header>
 
       <div className="w-scroll mt-2 flex-1 overflow-y-auto pb-2">
@@ -109,8 +140,16 @@ export function ChatList() {
               saved ? <ChatRow conv={saved} /> : <SavedRow onOpen={openSaved} />
             )}
             {shown.map((c) => <ChatRow key={c.id} conv={c} />)}
-            {shown.length === 0 && (
-              <Empty icon={filter === "channels" ? "megaphone" : "chats"} title={t(query ? "لا توجد نتائج" : filter === "all" ? "لم تبدأ أي محادثة بعد" : filter === "channels" ? "لم تشترك في أي قناة بعد" : "لا يوجد شيء هنا")}
+            {/* البحث في نصوص الرسائل أيضاً (لا في أسماء المحادثات فقط) */}
+            {query.length >= 2 && (hits.length > 0 || searching) && (
+              <>
+                <p className="w-muted px-4 pb-1 pt-4 text-[13px] font-semibold">{t("الرسائل")}</p>
+                {hits.map((h) => <SearchHitRow key={h.message.id} hit={h} q={q} showConv />)}
+                {searching && !hits.length && <p className="w-muted px-4 py-2 text-sm">{t("جارٍ البحث...")}</p>}
+              </>
+            )}
+            {shown.length === 0 && !(query.length >= 2 && hits.length > 0) && (
+              <Empty icon={filter === "channels" ? "megaphone" : "chats"} title={t(query ? "لا توجد نتائج" : filter === "all" ? "لم تبدأ أي محادثة بعد" : filter === "channels" ? "لم تشترك في أي قناة بعد" : folder ? "المجلد فارغ. اضغط على اسمه لإضافة محادثات." : "لا يوجد شيء هنا")}
                 text={filter === "all" && !query ? t("انتقل إلى جهات الاتصال واختر شخصاً لتبدأ.") : undefined}>
                 {filter === "channels" && !query && (
                   <button onClick={() => setPanel({ type: "channels" })} className="w-accent mt-4 rounded-full px-5 py-2.5 text-sm font-bold">{t("استكشاف القنوات")}</button>
@@ -148,6 +187,8 @@ export function ChatRow({ conv, subtitle }: { conv: Conversation; subtitle?: str
   const last = conv.last_message;
   // بلا "أنت:"، فعلامات ✓✓ تكفي (كما في التصميم)
   const p = conv.kind === "saved" && !last ? { text: t("مساحتك الخاصة") } : preview(last);
+  // مسودة لم تُرسل (والمحادثة ليست المفتوحة الآن)
+  const draft = activeId !== conv.id ? readDraft(conv.id).trim() : "";
   const mine = last && last.sender.id === me.id && last.kind !== "system" && last.kind !== "call" && conv.kind !== "channel";
   const groupSender = conv.kind === "group" && last && last.sender.id !== me.id && last.kind !== "system" && last.kind !== "call" ? `${nameOf(last.sender)}: ` : "";
   const unread = conv.unread_count > 0;
@@ -167,7 +208,9 @@ export function ChatRow({ conv, subtitle }: { conv: Conversation; subtitle?: str
         </div>
         <div className="mt-1.5 flex items-center justify-between gap-2">
           <span className="w-muted flex min-w-0 items-center gap-1 text-[14px]">
-            {subtitle ? <span className="truncate" dir="auto">{subtitle}</span> : (
+            {subtitle ? <span className="truncate" dir="auto">{subtitle}</span> : draft ? (
+              <span className="truncate" dir="auto"><span className="font-bold" style={{ color: "var(--danger)" }}>{t("مسودة:")} </span>{draft}</span>
+            ) : (
               <>
                 {mine && (
                   <span className="shrink-0" style={{ color: last.status === "read" ? "var(--tick-read)" : undefined }}

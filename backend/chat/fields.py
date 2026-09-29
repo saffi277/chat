@@ -36,3 +36,12 @@ encrypted_storage = EncryptedFileStorage()
 def get_encrypted_storage():
     # دالة (مو الكائن نفسه) حتى الـ migrations تكون بسيطة وثابتة
     return encrypted_storage
+
+
+def copy_encrypted_file(name, new_name):
+    """نسخة من ملف مشفّر كما هو (دون فك التشفير وإعادته): لإعادة توجيه الوسائط. يعيد اسم النسخة."""
+    with encrypted_storage.open(name, 'rb') as f:
+        raw = f.read()
+    target = encrypted_storage.get_available_name(new_name)
+    # الحفظ بدالة الأب مباشرة: المحتوى مشفّر أصلاً، فلا نشفّره مرة ثانية
+    return FileSystemStorage._save(encrypted_storage, target, ContentFile(raw))

@@ -19,6 +19,9 @@ class Profile(models.Model):
     STUDENT, FACULTY, STAFF = 'student', 'faculty', 'staff'
     ROLES = [(STUDENT, 'طالب'), (FACULTY, 'تدريسي'), (STAFF, 'إداري')]
     role = models.CharField(max_length=10, choices=ROLES, default=STUDENT)
+    # من سجّل «تدريسياً» أو «إدارياً» يبدأ طالباً حتى تعتمد الإدارة دوره (من /admin): لا أحد يمنح نفسه
+    # صلاحية النشر في القنوات بمجرد اختيار الدور. فارغ = لا طلب معلّق
+    requested_role = models.CharField(max_length=10, choices=ROLES, blank=True)
     # الرقم الجامعي (اختياري). يكدر يدخل بيه بدل اسم المستخدم
     university_id = models.CharField(max_length=30, blank=True, db_index=True)
     # الوضع: نهاري/ليلي (مو ثيم). والثيم (شكل التطبيق) شي منفصل، نضيف ثيمات بعدين
@@ -37,6 +40,15 @@ class Profile(models.Model):
     # لغة الواجهة (وتُستخدم أيضاً لنص الإشعارات التي تصله)
     LANGUAGES = [('ar', 'العربية'), ('en', 'English')]
     language = models.CharField(max_length=5, choices=LANGUAGES, default='ar')
+    # الخصوصية: من يرى آخر ظهوري (والاتصال الآن)، ومن يرى صورتي. و«علامات القراءة»: إن أوقفتها لا يرى أحد ✓✓ الزرقاء مني
+    EVERYONE, CONTACTS, NOBODY = 'everyone', 'contacts', 'nobody'
+    AUDIENCE = [(EVERYONE, 'الجميع'), (CONTACTS, 'جهات اتصالي'), (NOBODY, 'لا أحد')]
+    privacy_last_seen = models.CharField(max_length=10, choices=AUDIENCE, default=EVERYONE)
+    privacy_photo = models.CharField(max_length=10, choices=AUDIENCE, default=EVERYONE)
+    read_receipts = models.BooleanField(default=True)
+    # التحقق بخطوتين: كلمة سر ثانية تُطلب بعد كلمة المرور عند كل دخول جديد (تُحفظ هاشاً مثل كلمة المرور)
+    two_step_hash = models.CharField(max_length=200, blank=True)
+    two_step_hint = models.CharField(max_length=60, blank=True)
     is_online = models.BooleanField(default=False)
     # كم تبويب/جهاز فاتح هسه. "غير متصل" بس لما يصير صفر
     connections = models.IntegerField(default=0)
@@ -108,3 +120,46 @@ class Contact(models.Model):
 
     def __str__(self):
         return f'{self.owner} → {self.contact}'
+
+
+class Block(models.Model):
+    """حظر: المحظور لا يراسلني ولا يتصل بي، ولا يرى آخر ظهوري ولا صورتي."""
+
+    blocker = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='blocks')
+    blocked = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='blocked_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['blocker', 'blocked'], name='unique_block')]
+        verbose_name = 'حظر'
+        verbose_name_plural = 'الحظر'
+
+    def __str__(self):
+        return f'{self.blocker} ⛔ {self.blocked}'
+
+
+class Report(models.Model):
+    """بلاغ عن شخص أو رسالة، يصل إلى الإدارة في /admin."""
+
+    SPAM, ABUSE, HARASSMENT, OTHER = 'spam', 'abuse', 'harassment', 'other'
+    REASONS = [(SPAM, 'رسائل مزعجة'), (ABUSE, 'محتوى مسيء'), (HARASSMENT, 'تحرّش أو تهديد'), (OTHER, 'سبب آخر')]
+
+    reporter = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='reports_made')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                             related_name='reports_received', verbose_name='المُبلَّغ عنه')
+    conversation = models.ForeignKey('chat.Conversation', on_delete=models.SET_NULL, null=True, blank=True)
+    message = models.ForeignKey('chat.Message', on_delete=models.SET_NULL, null=True, blank=True)
+    # نص الرسالة وقت البلاغ (قد تُحذف أو تُعدّل بعده)
+    message_text = models.TextField(blank=True)
+    reason = models.CharField(max_length=12, choices=REASONS, default=OTHER)
+    details = models.TextField(blank=True)
+    handled = models.BooleanField('تمت المراجعة', default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['handled', '-created_at']
+        verbose_name = 'بلاغ'
+        verbose_name_plural = 'البلاغات'
+
+    def __str__(self):
+        return f'{self.get_reason_display()}: {self.user}'

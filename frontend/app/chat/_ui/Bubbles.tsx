@@ -1,25 +1,111 @@
 "use client";
 // شكل كل نوع من الرسائل: نص، صورة، فيديو، صوت، ملف، موقع
 import { useEffect, useRef, useState } from "react";
-import { mediaUrl, type Message } from "@/lib/api";
+import { mediaUrl, type LinkPreview, type Message } from "@/lib/api";
+import { messages as msgApi } from "@/lib/endpoints";
 import { useT } from "@/lib/i18n";
 import { Avatar, clock, duration, fileSize, MiniMap, nameOf, previewText } from "./bits";
 import { Icon } from "./icons";
 
-// نحوّل الروابط في النص إلى روابط قابلة للضغط
-const urlRe = /(https?:\/\/[^\s]+)/g;
+// ------------------------------------------------------------ النص: روابط، وتنسيق واتساب، وإشارات @
+// *عريض*  _مائل_  ~مشطوب~  `كود`  — العلامة تبدأ بعد مسافة أو في أول السطر (فلا تتأثر كلمات مثل snake_case)
+const TOKEN = /(https?:\/\/[^\s]+)|(^|[\s(\[«])([*_~`])(\S(?:[^\n]*?\S)?)\3(?=$|[\s.,!?؟،:;)\]»])|(@[\w.]+)/g;
+
+function inline(text: string, depth = 0): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(TOKEN)) {
+    const i = m.index ?? 0;
+    if (i > last) out.push(text.slice(last, i));
+    const key = `${depth}-${i}`;
+    if (m[1]) {
+      out.push(<a key={key} href={m[1]} target="_blank" rel="noreferrer noopener" className="underline underline-offset-2" dir="ltr" onClick={(e) => e.stopPropagation()}>{m[1]}</a>);
+    } else if (m[3]) {
+      if (m[2]) out.push(m[2]);
+      const body = m[3] === "`" ? m[4] : inline(m[4], depth + 1);
+      out.push(m[3] === "*" ? <strong key={key}>{body}</strong>
+        : m[3] === "_" ? <em key={key}>{body}</em>
+          : m[3] === "~" ? <s key={key}>{body}</s>
+            : <code key={key} className="rounded bg-black/10 px-1 py-0.5 font-mono text-[.9em]" dir="ltr">{body}</code>);
+    } else if (m[5]) {
+      out.push(<span key={key} className="w-accent-text font-bold" dir="ltr">{m[5]}</span>);
+    }
+    last = i + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
 export function RichText({ text }: { text: string }) {
-  const parts = text.split(urlRe);
+  return <p className="whitespace-pre-wrap break-words leading-7" dir="auto">{inline(text)}</p>;
+}
+
+// ------------------------------------------------------------ معاينة الرابط (أول رابط في الرسالة)
+const previews = new Map<string, Promise<LinkPreview | null>>();
+function usePreview(url: string | null) {
+  const [data, setData] = useState<{ url: string; p: LinkPreview | null } | null>(null);
+  useEffect(() => {
+    if (!url) return;
+    let alive = true;
+    if (!previews.has(url)) previews.set(url, msgApi.linkPreview(url).catch(() => null));
+    previews.get(url)!.then((p) => alive && setData({ url, p }));
+    return () => { alive = false; };
+  }, [url]);
+  return data?.url === url ? data.p : null;
+}
+
+function LinkCard({ url }: { url: string }) {
+  const p = usePreview(url);
+  if (!p) return null;
   return (
-    <p className="whitespace-pre-wrap break-words leading-7" dir="auto">
-      {parts.map((part, i) =>
-        /^https?:\/\//.test(part) ? (
-          <a key={i} href={part} target="_blank" rel="noreferrer noopener" className="underline underline-offset-2" dir="ltr">{part}</a>
-        ) : (
-          <span key={i}>{part}</span>
-        ),
-      )}
-    </p>
+    <a href={p.url} target="_blank" rel="noreferrer noopener" onClick={(e) => e.stopPropagation()} data-testid="link-preview"
+      className="mt-1.5 block max-w-[300px] overflow-hidden rounded-xl" style={{ background: "color-mix(in srgb, var(--accent) 8%, transparent)" }}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- صورة الموقع الخارجي */}
+      {p.image && <img src={p.image} alt="" className="max-h-40 w-full object-cover" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
+      <span className="block px-3 py-2">
+        <span className="w-muted block text-[11px]" dir="ltr">{p.site}</span>
+        <span className="line-clamp-2 block text-sm font-bold" dir="auto">{p.title}</span>
+        {p.description && <span className="w-muted line-clamp-2 block text-xs" dir="auto">{p.description}</span>}
+      </span>
+    </a>
+  );
+}
+
+// ------------------------------------------------------------ الاستطلاع
+function PollView({ m, meId, onVote }: { m: Message; meId: number; onVote?: (ids: number[]) => void }) {
+  const t = useT();
+  const poll = m.poll!;
+  const mine = poll.options.filter((o) => o.voter_ids.includes(meId)).map((o) => o.id);
+  const max = Math.max(1, ...poll.options.map((o) => o.votes));
+  const toggle = (id: number) => {
+    if (!onVote) return;
+    if (poll.multiple) onVote(mine.includes(id) ? mine.filter((x) => x !== id) : [...mine, id]);
+    else onVote(mine.includes(id) ? [] : [id]);
+  };
+  return (
+    <div className="min-w-[240px] max-w-[320px]" onClick={(e) => e.stopPropagation()}>
+      <p className="flex items-start gap-1.5 font-bold leading-7" dir="auto"><Icon name="poll" size={18} className="w-accent-text mt-1 shrink-0" />{m.content}</p>
+      <p className="w-muted mb-1.5 text-[11px]">{t(poll.multiple ? "اختر خياراً أو أكثر" : "اختر خياراً واحداً")}</p>
+      <div className="grid gap-1.5" role="group" aria-label={m.content}>
+        {poll.options.map((o) => {
+          const on = mine.includes(o.id);
+          return (
+            <button key={o.id} type="button" onClick={() => toggle(o.id)} aria-pressed={on} disabled={!onVote}
+              className="relative overflow-hidden rounded-xl px-3 py-2 text-start text-sm" style={{ background: "color-mix(in srgb, var(--muted) 12%, transparent)" }}>
+              <span className="absolute inset-y-0 start-0 transition-[width] duration-300" style={{ width: `${(o.votes / max) * 100}%`, background: "color-mix(in srgb, var(--accent) 22%, transparent)" }} />
+              <span className="relative flex items-center gap-2">
+                <span className={`grid h-4 w-4 shrink-0 place-items-center border-2 ${poll.multiple ? "rounded" : "rounded-full"}`} style={{ borderColor: on ? "var(--accent)" : "var(--muted)", background: on ? "var(--accent)" : undefined }}>
+                  {on && <Icon name="check" size={10} strokeWidth={3.5} className="text-white" />}
+                </span>
+                <span className="min-w-0 flex-1 font-semibold" dir="auto">{o.text}</span>
+                <span className="text-xs font-bold">{o.votes}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="w-muted mt-1.5 text-[11px]">{t("المصوّتون: {n}", { n: poll.total_voters })}</p>
+    </div>
   );
 }
 
@@ -192,8 +278,9 @@ function VideoThumb({ m, up }: { m: Message; up?: UploadState }) {
   );
 }
 
-export function MessageBody({ m, mine, onImage, onStopLive, sharingLive, upload }: {
+export function MessageBody({ m, mine, onImage, onStopLive, sharingLive, upload, meId, onVote }: {
   m: Message; mine: boolean; onImage: (url: string) => void; onStopLive?: () => void; sharingLive?: boolean; upload?: UploadState;
+  meId?: number; onVote?: (optionIds: number[]) => void;
 }) {
   const t = useT();
   if (m.is_deleted) {
@@ -253,8 +340,12 @@ export function MessageBody({ m, mine, onImage, onStopLive, sharingLive, upload 
         </div>
       );
     }
-    default:
-      return <RichText text={m.content} />;
+    case "poll":
+      return m.poll ? <PollView m={m} meId={meId ?? 0} onVote={onVote} /> : <RichText text={m.content} />;
+    default: {
+      const link = m.content.match(/https?:\/\/[^\s]+/)?.[0] ?? null;
+      return <><RichText text={m.content} />{link && <LinkCard url={link} />}</>;
+    }
   }
 }
 
