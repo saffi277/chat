@@ -111,6 +111,51 @@ class PushTests(TestCase):
         self.assertNotRegex(contact, r'\.local\b|localhost')
         self.assertEqual(kwargs['headers'], {'Urgency': 'high'})
 
+    def real_subscription(self, client):
+        # اشتراك بمفاتيح حقيقية حتى يمر التشفير والتوقيع الحقيقيان (لا نحاكي إلا طلب الشبكة)
+        import base64
+        import os
+
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+
+        b64 = lambda raw: base64.urlsafe_b64encode(raw).rstrip(b'=').decode()  # noqa: E731
+        public = ec.generate_private_key(ec.SECP256R1()).public_key().public_bytes(
+            serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
+        client.post('/api/push/subscribe/', {'endpoint': 'https://web.push.apple.com/real',
+                                             'keys': {'p256dh': b64(public), 'auth': b64(os.urandom(16))}}, format='json')
+
+    @mock.patch('requests.post')
+    def test_real_signing_with_the_default_contact(self, post):
+        # كان العنوان الافتراضي https://github.com/saffi277/chat، ومكتبة التوقيع ترفض الرابط ذا المسار:
+        # فلا يُرسل أي إشعار على الخادم (Docker) دون أن يظهر أي خطأ
+        post.return_value = mock.Mock(status_code=201)
+        ali, _ = self.register('ali')
+        self.real_subscription(ali)
+        results = ali.post('/api/push/test/').data['results']
+        self.assertEqual((results[0]['ok'], results[0]['status']), (True, 201), results)
+        import base64
+        import json
+        token = post.call_args.kwargs['headers']['authorization'].split()[-1]
+        claims = json.loads(base64.urlsafe_b64decode(token.split('.')[1] + '=='))
+        self.assertEqual((claims['sub'], claims['aud']), ('https://github.com', 'https://web.push.apple.com'))
+
+    def test_contact_url_is_reduced_to_its_origin(self):
+        from config.settings import _vapid_contact
+        self.assertEqual(_vapid_contact('https://github.com/saffi277/chat'), 'https://github.com')
+        self.assertEqual(_vapid_contact('https://chat.asbat.edu.iq/'), 'https://chat.asbat.edu.iq')
+        self.assertEqual(_vapid_contact('mailto:it@asbat.edu.iq'), 'mailto:it@asbat.edu.iq')
+
+    @mock.patch('requests.post')
+    def test_signing_error_is_reported_not_swallowed(self, post):
+        ali, _ = self.register('ali')
+        self.real_subscription(ali)
+        with override_settings(VAPID_CONTACT='https://github.com/saffi277/chat'), self.assertLogs('notifications', 'ERROR'):
+            results = ali.post('/api/push/test/').data['results']
+        self.assertFalse(results[0]['ok'])
+        self.assertIn('VapidException', results[0]['reason'])
+        post.assert_not_called()
+
     @mock.patch('notifications.push.webpush')
     def test_test_endpoint_reports_each_device(self, webpush):
         from pywebpush import WebPushException

@@ -121,6 +121,11 @@ def _deliver(sub, payload):
         if status not in (404, 410):
             log.warning('push failed for %s (%s): %s', host, status, reason)
         return {'ok': False, 'host': host, 'status': status, 'reason': reason}
+    except Exception as exc:  # noqa: BLE001
+        # خطأ قبل الإرسال (توقيع VAPID، مفاتيح الاشتراك، الشبكة): كان يضيع بصمت داخل _pool فلا يصل أي إشعار
+        # ولا يظهر أي سجل. نسجّله ونعيده لزر الإشعار التجريبي
+        log.exception('push failed for %s before sending', host)
+        return {'ok': False, 'host': host, 'status': None, 'reason': f'{type(exc).__name__}: {exc}'[:200]}
 
 
 def _gone(result):

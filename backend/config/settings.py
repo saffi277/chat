@@ -219,7 +219,15 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 60 * 1024 * 1024
 # إشعارات Push: وسيلة تواصل معك تُعطى لخدمات الإشعارات (Google/Apple) إن حدثت مشكلة.
 # يجب أن تكون بريداً حقيقياً (mailto:) أو رابط https: خدمة Apple ترفض أي نطاق وهمي مثل ‎.local‎ أو localhost
 # (ترد 403 BadJwtToken فلا يصل أي إشعار إلى الآيفون، بينما يقبله أندرويد).
-VAPID_CONTACT = os.environ.get('VAPID_CONTACT') or 'https://github.com/saffi277/chat'
+# ومكتبة التوقيع (py_vapid) لا تقبل رابطاً فيه مسار (https://github.com/saffi277/chat): ترفض توقيع كل إشعار
+# قبل إرساله. لذا نأخذ من الرابط أصله فقط (https://github.com).
+def _vapid_contact(value):
+    if value.startswith('https://'):
+        return 'https://' + value[len('https://'):].split('/', 1)[0]
+    return value
+
+
+VAPID_CONTACT = _vapid_contact(os.environ.get('VAPID_CONTACT') or 'https://github.com')
 
 # السجلات: تحذيرات الإشعارات (سبب رفض الإرسال) تظهر في مخرجات الخادم
 LOGGING = {
