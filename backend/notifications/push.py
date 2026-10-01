@@ -123,12 +123,19 @@ def _deliver(sub, payload):
         return {'ok': False, 'host': host, 'status': status, 'reason': reason}
 
 
+def _gone(result):
+    """
+    اشتراك لن يصل عليه أي إشعار بعد الآن، فنحذفه:
+    404/410 = ألغاه المتصفح أو Apple، و VapidPkHashMismatch = أُنشئ بمفتاح خادم آخر (خادم جديد أو مفاتيح جديدة).
+    """
+    return result['status'] in (404, 410) or (result['status'] == 403 and 'VapidPkHashMismatch' in result['reason'])
+
+
 def _send_all(jobs):
     """jobs = [(اشتراك, نص الإشعار)]: كل مستخدم يصله الإشعار بحسب إعداده."""
     dead = []
     for sub, payload in jobs:
-        result = _deliver(sub, payload)
-        if result['status'] in (404, 410):  # ألغى المتصفح الاشتراك (أو ألغته Apple)
+        if _gone(_deliver(sub, payload)):
             dead.append(sub.id)
     if dead:
         PushSubscription.objects.filter(id__in=dead).delete()
@@ -143,6 +150,6 @@ def send_test(user):
         payload = json.dumps({'title': _('وَصل'), 'body': _('هذا إشعار تجريبي. الإشعارات تعمل ✅'),
                               'url': '/chat', 'tag': 'test', 'lang': _language(user)}, ensure_ascii=False)
     results = [_deliver(sub, payload) for sub in subs]
-    dead = [sub.id for sub, r in zip(subs, results) if r['status'] in (404, 410)]
+    dead = [sub.id for sub, r in zip(subs, results) if _gone(r)]
     PushSubscription.objects.filter(id__in=dead).delete()
     return results

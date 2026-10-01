@@ -57,6 +57,23 @@ class PushTests(TestCase):
         self.assertEqual(PushSubscription.objects.count(), 0)
 
     @mock.patch('notifications.push.webpush')
+    def test_subscription_made_with_another_server_key_is_removed(self, webpush):
+        # اشتراك من خادم سابق (مفاتيح VAPID مختلفة): Apple ترفضه دائماً، فلا فائدة من إبقائه
+        from pywebpush import WebPushException
+        ali, _ = self.register('ali')
+        sara, s = self.register('sara')
+        sara.post('/api/push/subscribe/', {**SUB, 'endpoint': 'https://web.push.apple.com/old'}, format='json')
+        webpush.side_effect = WebPushException('bad', response=mock.Mock(status_code=403, text='{"reason":"VapidPkHashMismatch"}'))
+        cid = open_chat(ali, s['id']).data['id']
+        ali.post(f'/api/conversations/{cid}/messages/', {'content': 'hi'}, format='json')
+        self.assertEqual(PushSubscription.objects.count(), 0)
+        # أما رفض التوقيع لسبب آخر (BadJwtToken) فخلل في الخادم لا في الاشتراك: يبقى
+        sara.post('/api/push/subscribe/', SUB, format='json')
+        webpush.side_effect = WebPushException('bad', response=mock.Mock(status_code=403, text='{"reason":"BadJwtToken"}'))
+        ali.post(f'/api/conversations/{cid}/messages/', {'content': 'hi'}, format='json')
+        self.assertEqual(PushSubscription.objects.count(), 1)
+
+    @mock.patch('notifications.push.webpush')
     def test_hide_preview_hides_sender_and_text(self, webpush):
         ali, _ = self.register('ali')
         sara, s = self.register('sara')

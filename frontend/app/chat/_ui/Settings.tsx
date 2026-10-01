@@ -413,7 +413,7 @@ export function PushToggle() {
     try {
       const results = await testPush(5);
       const failed = results.filter((r) => !r.ok);
-      if (!results.length || failed.some((r) => r.status === 404 || r.status === 410)) {
+      if (!results.length || failed.some((r) => r.status === 404 || r.status === 410 || r.reason.includes("VapidPkHashMismatch"))) {
         notify(t("انتهى اشتراك هذا الجهاز. أوقف الإشعارات ثم فعّلها من جديد."));
       } else if (failed.length) {
         const f = failed[0];

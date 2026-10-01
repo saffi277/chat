@@ -42,16 +42,38 @@ export async function enablePush(): Promise<PushState> {
   if (permission !== "granted") return permission === "denied" ? "denied" : "off";
   await registerServiceWorker();
   const reg = await navigator.serviceWorker.ready;
-  const { public_key } = await api<{ public_key: string }>("/push/key/");
-  const sub =
-    (await reg.pushManager.getSubscription()) ??
-    (await withTimeout(
-      reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(public_key) }),
-      15000,
-      t("لم تستجب خدمة الإشعارات. حاول مرة أخرى."),
-    ));
+  const key = await serverKey();
+  let sub = await reg.pushManager.getSubscription();
+  if (sub && !sameKey(sub, key)) {
+    await dropSubscription(sub);
+    sub = null;
+  }
+  sub ??= await withTimeout(
+    reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }),
+    15000,
+    t("لم تستجب خدمة الإشعارات. حاول مرة أخرى."),
+  );
   await api("/push/subscribe/", "POST", sub.toJSON());
   return "on";
+}
+
+async function serverKey() {
+  const { public_key } = await api<{ public_key: string }>("/push/key/");
+  return urlBase64ToUint8Array(public_key);
+}
+
+// اشتراك أُنشئ بمفتاح خادم آخر (خادم جديد أو مفاتيح جديدة) لا يصل عليه أي إشعار:
+// خدمة Apple ترفضه (403 VapidPkHashMismatch)، فلا يصح إعادة استعماله
+function sameKey(sub: PushSubscription, key: Uint8Array) {
+  const current = sub.options?.applicationServerKey;
+  if (!current) return true; // متصفح لا يكشف المفتاح: نبقي الاشتراك كما هو
+  const bytes = new Uint8Array(current);
+  return bytes.length === key.length && bytes.every((b, i) => b === key[i]);
+}
+
+async function dropSubscription(sub: PushSubscription) {
+  await api("/push/subscribe/", "DELETE", { endpoint: sub.endpoint }).catch(() => {});
+  await sub.unsubscribe().catch(() => false);
 }
 
 export async function disablePush(): Promise<PushState> {
@@ -71,7 +93,14 @@ export async function syncPushSubscription() {
   if (Notification.permission !== "granted") return;
   const reg = await navigator.serviceWorker.ready;
   const sub = await reg.pushManager.getSubscription();
-  if (sub) await api("/push/subscribe/", "POST", sub.toJSON()).catch(() => {});
+  if (!sub) return;
+  // اشتراك بمفتاح قديم: نلغيه فيظهر زر "فعّل الإشعارات" من جديد (الاشتراك يحتاج ضغطة من المستخدم على الآيفون)
+  const key = await serverKey().catch(() => null);
+  if (key && !sameKey(sub, key)) {
+    await dropSubscription(sub);
+    return;
+  }
+  await api("/push/subscribe/", "POST", sub.toJSON()).catch(() => {});
 }
 
 export type PushTestResult = { ok: boolean; host: string; status: number | null; reason: string };
