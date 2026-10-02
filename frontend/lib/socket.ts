@@ -10,7 +10,7 @@ export type ChatEvent =
   | { type: "read"; reader_id: number; message_id: number } // ✓✓ أزرق
   | { type: "delivered"; user_id: number; message_id: number } // ✓✓ رمادي
   | { type: "typing"; user_id: number; name?: string }
-  | { type: "error"; detail: "rate_limited" | "not_allowed" | "slow_mode"; message?: string } // حدّ السرعة، أو مجموعة للمشرفين، أو الوضع البطيء
+  | { type: "error"; detail: "rate_limited" | "not_allowed" | "slow_mode"; message?: string; client_id?: string } // حدّ السرعة، أو مجموعة للمشرفين، أو الوضع البطيء
   | { type: "message_removed"; message_id: number } // رسالة مختفية انتهت مدتها
   | { type: "pinned"; conversation_id: number } // تغيّرت الرسالة المثبّتة
   // على الاتصال العام /ws/presence/
@@ -22,6 +22,8 @@ export type ChatEvent =
   | { type: "call_incoming"; call: Call }
   | { type: "call_answered"; call_id: number; user_id: number }
   | { type: "call_left"; call_id: number; user_id: number } // غادر أحدهم المكالمة الجماعية
+  | { type: "call_invited"; call_id: number; user_ids: number[] } // أُضيف أشخاص إلى المكالمة: صارت جماعية
+  | { type: "call_invite_declined"; call_id: number; user_id: number } // رفض أحدهم الدعوة
   | { type: "scheduled_changed"; conversation_id: number } // أُرسلت رسالة مجدولة (أو تعذّر إرسالها)
   | { type: "call_ended"; call_id: number; status: Call["status"] }
   | { type: "call_video"; call_id: number; user_id: number } // الطرف الآخر حوّل المكالمة إلى فيديو
@@ -29,7 +31,11 @@ export type ChatEvent =
 
 export type CallSignal =
   | { description: RTCSessionDescriptionInit }
-  | { candidate: RTCIceCandidateInit };
+  | { candidate: RTCIceCandidateInit }
+  /** كل طرف يعلن متى تعمل كاميرته أو شاشته (لا نعتمد على حدث mute/unmute للمسار: سفاري لا يرسله بانتظام) */
+  | { media: MediaState };
+
+export type MediaState = { video: boolean; screen: boolean };
 
 export type SocketStatus = "connecting" | "open" | "closed";
 

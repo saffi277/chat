@@ -13,7 +13,12 @@ export const metadata: Metadata = {
   description: "تطبيق محادثات سريع وآمن",
   // عند إضافته إلى الشاشة الرئيسية في الآيفون يفتح كتطبيق (دون شريط المتصفح)
   appleWebApp: { capable: true, title: "وَصل", statusBarStyle: "default" },
-  icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
+  // أيقونة تبويب المتصفح: شعار الكلية (القوس والكتاب). أيقونة التطبيق على الشاشة الرئيسية تبقى أيقونة «وَصل»
+  icons: {
+    // favicon.ico (16/32/48) يضيفه Next.js تلقائياً من app/favicon.ico، وهذه للشاشات عالية الدقة
+    icon: [{ url: "/icons/college-192.png", type: "image/png", sizes: "192x192" }],
+    apple: "/icons/apple-touch-icon.png",
+  },
 };
 
 export const viewport: Viewport = {

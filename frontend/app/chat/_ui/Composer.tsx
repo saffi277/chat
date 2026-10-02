@@ -22,14 +22,15 @@ export type MediaSend = (file: File | Blob, opts: SendFileOpts & { kind: Message
 const hasKeyboard = () => typeof window !== "undefined" && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
 const MAX_ROWS_PX = 6 * 24 + 22; // ستة أسطر ثم تمرير داخل الخانة
 
-export function Composer({ convId, kind, socket, reply, editing, onDone, onSent, onMedia, onScheduled }: {
+export function Composer({ convId, kind, socket, reply, editing, onDone, onSend, onMedia, onScheduled }: {
   convId: number;
   kind: ConversationKind;
   socket: () => LiveSocket | null;
   reply: Message | null;
   editing: Message | null;
   onDone: () => void;
-  onSent: (m: Message) => void;
+  /** نص جديد: تعرضه المحادثة فوراً «قيد الإرسال» وترسله (Conversation.tsx) */
+  onSend: (content: string, reply: Message | null, silent: boolean) => void;
   onMedia: MediaSend;
   onScheduled?: () => void;
 }) {
@@ -127,16 +128,8 @@ export function Composer({ convId, kind, socket, reply, editing, onDone, onSent,
     writeDraft(convId, "");
     setMention(null);
     onDone();
-    // الطريق السريع: WebSocket. إذا مقطوع نرجع للـ HTTP حتى الرسالة ما تضيع
-    if (socket()?.send({ type: "message", content, reply_to: reply?.id, ...(silent ? { silent: true } : {}) })) {
-      if (silent) notify(t("أُرسلت دون إشعار"));
-      return;
-    }
-    try {
-      onSent(await msgApi.sendText(convId, content, reply?.id, silent));
-    } catch {
-      setText(content);
-    }
+    onSend(content, reply, silent);
+    if (silent) notify(t("أُرسلت دون إشعار"));
   }
 
   // الوسائط لا تنتظر الخادم: تظهر في المحادثة فوراً مع دائرة التقدّم

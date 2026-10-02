@@ -144,8 +144,8 @@ export const messages = {
   /** آخر 50 رسالة. للأقدم مرر before = id أقدم رسالة عندك */
   list: (conversationId: number, before?: number) =>
     api<Message[]>(`/conversations/${conversationId}/messages/${qs({ before })}`),
-  sendText: (conversationId: number, content: string, replyTo?: number, silent?: boolean) =>
-    api<Message>(`/conversations/${conversationId}/messages/`, "POST", { content, reply_to: replyTo, silent }),
+  sendText: (conversationId: number, content: string, replyTo?: number, silent?: boolean, clientId?: string) =>
+    api<Message>(`/conversations/${conversationId}/messages/`, "POST", { content, reply_to: replyTo, silent, client_id: clientId }),
   /** الرسائل المجدولة (رسائلي في هذه المحادثة) */
   scheduled: (conversationId: number) => api<ScheduledMessage[]>(`/conversations/${conversationId}/scheduled/`),
   schedule: (conversationId: number, content: string, sendAt: Date, opts: { silent?: boolean; replyTo?: number } = {}) =>
@@ -253,4 +253,6 @@ export const calls = {
   ringing: async () => (await api<{ call: Call | null }>("/calls/ringing/")).call,
   /** حوّلتُ المكالمة إلى فيديو: يُبلَّغ الطرف الآخر ويُحدَّث السجل */
   video: (id: number) => api(`/calls/${id}/video/`, "POST"),
+  /** إضافة أشخاص إلى المكالمة الجارية (مثل واتساب): يرنّ عندهم، وتصير جماعية */
+  invite: (id: number, userIds: number[]) => api<Call & { invited: number[] }>(`/calls/${id}/invite/`, "POST", { user_ids: userIds }),
 };

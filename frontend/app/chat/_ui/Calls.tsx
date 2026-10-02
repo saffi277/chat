@@ -7,7 +7,18 @@ import { calls as callsApi, conversations as convApi } from "@/lib/endpoints";
 import { Avatar, Chip, duration, Empty, IconButton, listTime, nameOf } from "./bits";
 import { ScreenHeader } from "./ChatList";
 import { Icon } from "./icons";
+import { PickPeople } from "./Profiles";
 import { useWasl } from "./store";
+
+/** «إضافة» أثناء المكالمة (مثل واتساب): نختار من جهات الاتصال، فيرنّ عندهم وتصير المكالمة جماعية */
+function AddToCall({ exclude, onClose }: { exclude: number[]; onClose: () => void }) {
+  const t = useT();
+  const { inviteToCall } = useWasl();
+  return (
+    <PickPeople title={t("إضافة إلى المكالمة")} confirmLabel={t("إضافة")} exclude={exclude} onCancel={onClose}
+      onConfirm={(ids) => { onClose(); inviteToCall(ids); }} />
+  );
+}
 
 // ------------------------------------------------------------ سجل المكالمات
 export function CallsView() {
@@ -73,10 +84,27 @@ export function CallLog({ missed }: { missed?: boolean }) {
 }
 
 // ------------------------------------------------------------ شاشة المكالمة
-function Video({ stream, muted, className }: { stream: MediaStream | null; muted?: boolean; className: string }) {
+/** onFrames: هل وصلت صورة فعلاً؟ (حتى تبقى الصورة الشخصية ظاهرة بدل مربع أسود ريثما يصل الفيديو) */
+function Video({ stream, muted, className, onFrames }: { stream: MediaStream | null; muted?: boolean; className: string; onFrames?: (has: boolean) => void }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
-    if (ref.current && stream && ref.current.srcObject !== stream) ref.current.srcObject = stream;
+    const el = ref.current;
+    if (!el || !onFrames) return;
+    const check = () => onFrames(el.videoWidth > 0);
+    const events = ["loadeddata", "resize", "playing", "emptied"];
+    events.forEach((e) => el.addEventListener(e, check));
+    check();
+    return () => {
+      events.forEach((e) => el.removeEventListener(e, check));
+      onFrames(false);
+    };
+  }, [onFrames]);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !stream || el.srcObject === stream) return;
+    el.srcObject = stream;
+    // سفاري (الآيفون) لا يبدأ أحياناً بثاً أُسند بعد ظهور العنصر رغم autoPlay: نطلب التشغيل صراحة
+    el.play().catch(() => {});
   }, [stream]);
   return <video ref={ref} autoPlay playsInline muted={muted} className={className} />;
 }
@@ -92,8 +120,10 @@ function Timer({ since }: { since: number }) {
 
 export function CallOverlay() {
   const t = useT();
-  const { call, acceptCall, declineCall, hangup, toggleMute, toggleCamera, enableVideo, toggleScreen } = useWasl();
+  const { call, me, acceptCall, declineCall, hangup, toggleMute, toggleCamera, enableVideo, toggleScreen } = useWasl();
   const [speaker, setSpeaker] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [remoteFrames, setRemoteFrames] = useState(false);
   const remoteAudio = useRef<HTMLAudioElement>(null);
   useEffect(() => {
     if (remoteAudio.current && call?.remote && remoteAudio.current.srcObject !== call.remote) remoteAudio.current.srcObject = call.remote;
@@ -102,20 +132,22 @@ export function CallOverlay() {
     if (remoteAudio.current) remoteAudio.current.volume = speaker ? 1 : 0.35;
   }, [speaker]);
   if (!call) return null;
-  // المكالمة الجماعية بعد الرد: شبكة المشاركين
-  if (call.call.conversation_kind === "group" && call.phase !== "incoming" && call.phase !== "ended") return <GroupCallView />;
+  // المكالمة الجماعية (أو الثنائية بعد إضافة أحد إليها) بعد الرد: شبكة المشاركين
+  if ((call.call.conversation_kind === "group" || call.call.multi) && call.phase !== "incoming" && call.phase !== "ended") return <GroupCallView />;
 
   const video = call.call.kind === "video";
-  const groupIncoming = call.call.conversation_kind === "group";
-  // المجموعة: اسمها في الأعلى، ومن يتصل تحته
-  const peerName = groupIncoming ? call.call.title : call.peer ? nameOf(call.peer) : "";
+  const groupIncoming = call.call.conversation_kind === "group" || !!call.call.multi;
+  const invitedBy = call.call.invited_by;
+  // المجموعة: اسمها في الأعلى، ومن يتصل تحته. والدعوة إلى مكالمة جارية: من دعاني
+  const peerName = invitedBy ? nameOf(invitedBy) : groupIncoming ? call.call.title || t("مكالمة جماعية") : call.peer ? nameOf(call.peer) : "";
   const statusText =
     call.phase === "incoming" ? t(video ? "مكالمة فيديو واردة..." : "مكالمة صوتية واردة...")
       : call.phase === "outgoing" ? t("يرنّ...")
         : call.phase === "connecting" ? t("جارٍ الاتصال...")
           : call.phase === "ended" ? call.endedText ?? t("انتهت المكالمة") : null;
   // نعرض الفيديو متى وصل مسار فيديو فعلاً (حتى لو بدأت المكالمة صوتية ثم تحوّلت)
-  const showVideo = call.phase === "active" && !!call.remote && !!call.remoteVideo;
+  const videoOn = call.phase === "active" && !!call.remote && !!call.remoteVideo;
+  const showVideo = videoOn && remoteFrames;
   const myCamera = !!call.local?.getVideoTracks().length;
 
   return (
@@ -123,7 +155,9 @@ export function CallOverlay() {
       <div className="w-strong relative flex h-full w-full max-w-md flex-col items-center overflow-hidden md:h-[88dvh] md:rounded-[36px]"
         style={{ border: "1px solid var(--border)", background: showVideo ? "#000" : undefined }}>
         {/* الصوت يخرج من عنصر audio في الأسفل، لذا الفيديو مكتوم كي لا يتكرر الصوت */}
-        {showVideo && <Video stream={call.remote} muted className="absolute inset-0 h-full w-full object-cover" />}
+        {/* الشاشة المشاركة تُعرض كاملة (contain) كي لا يُقصّ منها شيء على الهاتف، والكاميرا تملأ الشاشة (cover) */}
+        {videoOn && <Video stream={call.remote} muted onFrames={setRemoteFrames}
+          className={`absolute inset-0 h-full w-full ${call.remoteScreen ? "object-contain" : "object-cover"} ${showVideo ? "" : "opacity-0"}`} />}
         {myCamera && call.local && call.phase !== "ended" && (
           <Video stream={call.local} muted className="absolute start-4 top-[max(1rem,env(safe-area-inset-top))] z-10 h-40 w-28 rounded-2xl object-cover shadow-xl" />
         )}
@@ -132,10 +166,11 @@ export function CallOverlay() {
         {!showVideo && (
           <div className="mt-[18dvh] flex flex-col items-center text-center">
             <div className={`rounded-full p-1.5 ${call.phase === "incoming" || call.phase === "outgoing" ? "w-pulse" : ""}`}>
-              <Avatar user={call.peer} size={132} ring />
+              <Avatar user={invitedBy ?? call.peer} size={132} ring />
             </div>
             <h2 className="mt-6 text-3xl font-extrabold" dir="auto">{peerName}</h2>
-            {groupIncoming && call.peer && <p className="mt-1 text-sm font-semibold">{t("{name} يتصل بالمجموعة", { name: nameOf(call.peer) })}</p>}
+            {invitedBy ? <p className="mt-1 text-sm font-semibold">{t("يدعوك إلى المكالمة")}</p>
+              : groupIncoming && call.peer && <p className="mt-1 text-sm font-semibold">{t("{name} يتصل بالمجموعة", { name: nameOf(call.peer) })}</p>}
             <p className="w-muted mt-2 text-lg font-bold" dir="ltr">{statusText ?? (call.startedAt ? <Timer since={call.startedAt} /> : "")}</p>
             {call.phase === "active" && (
               <div className="w-wave mt-8 flex h-10 items-center gap-1" aria-hidden>
@@ -163,7 +198,8 @@ export function CallOverlay() {
             </div>
           ) : call.phase !== "ended" ? (
             <>
-              <div className="flex gap-6">
+              {/* حتى خمسة أزرار: تلتفّ إلى سطرين في الهاتف بدل أن تخرج عن الشاشة */}
+              <div className="flex flex-wrap justify-center gap-x-4 gap-y-3 px-2">
                 <Ctl icon={call.muted ? "micOff" : "mic"} label={t(call.muted ? "إلغاء الكتم" : "كتم الصوت")} on={call.muted} onClick={toggleMute} />
                 {myCamera ? (
                   <Ctl icon={call.cameraOff ? "videoOff" : "video"} label={t(call.cameraOff ? "تشغيل الكاميرا" : "إيقاف الكاميرا")} on={call.cameraOff} onClick={toggleCamera} />
@@ -176,6 +212,7 @@ export function CallOverlay() {
                 {canShareScreen() && call.phase === "active" && (
                   <Ctl icon="screen" label={t(call.sharing ? "إيقاف المشاركة" : "مشاركة الشاشة")} on={!!call.sharing} onClick={toggleScreen} />
                 )}
+                {call.phase === "active" && <Ctl icon="userPlus" label={t("إضافة")} on={false} onClick={() => setAdding(true)} />}
               </div>
               <button onClick={hangup} aria-label={t("إنهاء المكالمة")} className="w-danger grid h-18 w-18 place-items-center rounded-full p-5 shadow-lg">
                 <Icon name="phoneOff" size={30} />
@@ -184,6 +221,7 @@ export function CallOverlay() {
           ) : null}
         </div>
       </div>
+      {adding && <AddToCall exclude={[me.id, ...(call.peer ? [call.peer.id] : [])]} onClose={() => setAdding(false)} />}
     </div>
   );
 }
@@ -192,6 +230,7 @@ export function CallOverlay() {
 function GroupCallView() {
   const t = useT();
   const { call, me, userById, hangup, toggleMute, toggleCamera, enableVideo, toggleScreen } = useWasl();
+  const [adding, setAdding] = useState(false);
   if (!call) return null;
   const peers = call.peers ?? [];
   const myCamera = !!call.local?.getVideoTracks().length;
@@ -217,10 +256,12 @@ function GroupCallView() {
           ? <RoundBtn icon={call.cameraOff ? "videoOff" : "video"} label={t(call.cameraOff ? "تشغيل الكاميرا" : "إيقاف الكاميرا")} on={call.cameraOff} onClick={toggleCamera} />
           : <RoundBtn icon="video" label={t("تشغيل الكاميرا")} on={false} onClick={enableVideo} />}
         {canShareScreen() && <RoundBtn icon="screen" label={t(call.sharing ? "إيقاف المشاركة" : "مشاركة الشاشة")} on={!!call.sharing} onClick={toggleScreen} />}
+        {call.call.id > 0 && <RoundBtn icon="userPlus" label={t("إضافة")} on={false} onClick={() => setAdding(true)} />}
         <button onClick={hangup} aria-label={t("مغادرة المكالمة")} title={t("مغادرة المكالمة")} className="w-danger grid h-14 w-14 place-items-center rounded-full shadow-lg">
           <Icon name="phoneOff" size={26} />
         </button>
       </div>
+      {adding && <AddToCall exclude={[me.id, ...peers.map((p) => p.userId)]} onClose={() => setAdding(false)} />}
     </div>
   );
 }
@@ -232,7 +273,7 @@ function PeerTile({ peer, name, user }: { peer: GroupPeer; name: string; user?: 
   }, [peer.stream]);
   return (
     <>
-      <Tile name={name} user={user} stream={peer.stream} video={peer.video} connecting={peer.state !== "connected"} />
+      <Tile name={name} user={user} stream={peer.stream} video={peer.video} sharing={peer.screen} connecting={peer.state !== "connected"} />
       {/* الصوت من عنصر audio (الفيديو مكتوم كي لا يتكرر الصوت) */}
       <audio ref={audio} autoPlay />
     </>
@@ -243,11 +284,13 @@ function Tile({ name, user, stream, video, muted, self, sharing, connecting }: {
   name: string; user?: Parameters<typeof Avatar>[0]["user"]; stream: MediaStream | null; video: boolean; muted?: boolean; self?: boolean; sharing?: boolean; connecting?: boolean;
 }) {
   const t = useT();
+  const [frames, setFrames] = useState(false);
+  const live = video && !!stream;
   return (
     <div className="relative grid min-h-0 place-items-center overflow-hidden rounded-2xl bg-white/[.06]" data-testid="call-tile">
-      {video && stream
-        ? <Video stream={stream} muted className={`absolute inset-0 h-full w-full ${sharing ? "object-contain" : "object-cover"} ${self && !sharing ? "-scale-x-100" : ""}`} />
-        : <Avatar user={user ?? null} name={name} size={72} />}
+      {live && <Video stream={stream} muted onFrames={setFrames}
+        className={`absolute inset-0 h-full w-full ${sharing ? "object-contain" : "object-cover"} ${self && !sharing ? "-scale-x-100" : ""} ${frames ? "" : "opacity-0"}`} />}
+      {!(live && frames) && <Avatar user={user ?? null} name={name} size={72} />}
       <span className="absolute bottom-2 start-2 flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-xs font-bold">
         {muted && <Icon name="micOff" size={12} />}{name}{sharing && ` • ${t("يشارك الشاشة")}`}
       </span>
@@ -256,7 +299,7 @@ function Tile({ name, user, stream, video, muted, self, sharing, connecting }: {
   );
 }
 
-function RoundBtn({ icon, label, on, onClick }: { icon: "mic" | "micOff" | "video" | "videoOff" | "screen"; label: string; on: boolean; onClick: () => void }) {
+function RoundBtn({ icon, label, on, onClick }: { icon: "mic" | "micOff" | "video" | "videoOff" | "screen" | "userPlus"; label: string; on: boolean; onClick: () => void }) {
   return (
     <button onClick={onClick} aria-label={label} title={label} aria-pressed={on}
       className={`grid h-14 w-14 place-items-center rounded-full transition ${on ? "bg-white text-[#0b0f1a]" : "bg-white/15 text-white"}`}>
@@ -265,9 +308,9 @@ function RoundBtn({ icon, label, on, onClick }: { icon: "mic" | "micOff" | "vide
   );
 }
 
-function Ctl({ icon, label, on, onClick, disabled }: { icon: "mic" | "micOff" | "video" | "videoOff" | "speaker" | "screen"; label: string; on: boolean; onClick: () => void; disabled?: boolean }) {
+function Ctl({ icon, label, on, onClick, disabled }: { icon: "mic" | "micOff" | "video" | "videoOff" | "speaker" | "screen" | "userPlus"; label: string; on: boolean; onClick: () => void; disabled?: boolean }) {
   return (
-    <button onClick={onClick} disabled={disabled} className="grid justify-items-center gap-1.5 text-xs font-bold disabled:opacity-40" aria-label={label} aria-pressed={on}>
+    <button onClick={onClick} disabled={disabled} className="grid w-[72px] justify-items-center gap-1.5 text-center text-xs font-bold disabled:opacity-40" aria-label={label} aria-pressed={on}>
       <span className={`grid h-16 w-16 place-items-center rounded-full ${on ? "w-accent" : "w-card"}`}><Icon name={icon} size={26} /></span>
       {label}
     </button>

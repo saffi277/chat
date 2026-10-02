@@ -118,6 +118,8 @@ export type Message = {
   reactions: Reaction[];
   /** أُعيد توجيهها من محادثة أخرى */
   forwarded?: boolean;
+  /** معرّف وضعه جهاز المرسل: تظهر الرسالة عنده فوراً «قيد الإرسال» ثم تُطابق بما يصل من الخادم */
+  client_id?: string;
   poll?: Poll | null;
   /** مشاهدات منشور القناة (للمشرف فقط) */
   views?: number;
@@ -205,6 +207,10 @@ export type Call = {
   duration: number | null;
   /** من في المكالمة الآن (المجموعة) */
   participants?: number[];
+  /** بين أكثر من شخصين (مجموعة، أو ثنائية أُضيف إليها أحد): يتصل كل مشارك بالجميع */
+  multi?: boolean;
+  /** دُعيتُ إليها أثناءها (لستُ عضواً في محادثتها): من دعاني */
+  invited_by?: User | null;
   ice_servers?: RTCIceServer[];
 };
 

@@ -17,6 +17,9 @@ class Call(models.Model):
     kind = models.CharField(max_length=10, choices=[(AUDIO, 'صوتية'), (VIDEO, 'فيديو')], default=AUDIO)
     status = models.CharField(max_length=10, choices=STATUSES, default=RINGING)
     joined = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='calls_joined', blank=True)
+    # من أُضيف إلى المكالمة أثناءها وليس عضواً في محادثتها (مثل «إضافة» في واتساب): يرنّ عنده ويستطيع الانضمام
+    invited = models.ManyToManyField(settings.AUTH_USER_MODEL, through='CallInvite', through_fields=('call', 'user'),
+                                     related_name='calls_invited', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     answered_at = models.DateTimeField(null=True, blank=True)
     ended_at = models.DateTimeField(null=True, blank=True)
@@ -26,3 +29,15 @@ class Call(models.Model):
         if self.answered_at and self.ended_at:
             return round((self.ended_at - self.answered_at).total_seconds())
         return None
+
+
+class CallInvite(models.Model):
+    """دعوة شخص إلى مكالمة جارية: من دعاه ومتى (يتوقف الرنين عنده بعد دقيقة)."""
+
+    call = models.ForeignKey(Call, on_delete=models.CASCADE, related_name='invites')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='call_invites')
+    invited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='+')
+    created_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['call', 'user'], name='call_invite_once')]

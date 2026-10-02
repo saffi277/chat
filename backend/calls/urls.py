@@ -12,4 +12,5 @@ urlpatterns = [
     path('calls/<int:pk>/answer/', views.answer),
     path('calls/<int:pk>/decline/', views.decline),
     path('calls/<int:pk>/end/', views.end),
+    path('calls/<int:pk>/invite/', views.invite),
 ]

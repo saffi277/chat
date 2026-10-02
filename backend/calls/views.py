@@ -18,10 +18,10 @@ from rest_framework.response import Response
 from accounts.privacy import viewer_for
 from accounts.serializers import UserSerializer, profile_of
 from chat.models import Conversation, Membership, Message
-from chat.services import create_message, is_blocked, member_ids, send_to_users
+from chat.services import create_message, is_blocked, known_ids, member_ids, send_to_users
 from notifications.push import in_language, send_to_user
 
-from .models import Call
+from .models import Call, CallInvite
 
 RING_TIMEOUT = timedelta(seconds=60)
 # المكالمة الجماعية: كل مشارك يتصل بكل مشارك مباشرة (Mesh)، فنضع حداً معقولاً لعدد المشاركين
@@ -37,11 +37,23 @@ class CallSerializer(serializers.ModelSerializer):
     conversation_kind = serializers.CharField(source='conversation.kind', read_only=True)
     title = serializers.CharField(source='conversation.title', read_only=True)
     participants = serializers.SerializerMethodField()
+    multi = serializers.SerializerMethodField()
+    invited_by = serializers.SerializerMethodField()
 
     class Meta:
         model = Call
         fields = ['id', 'conversation', 'conversation_kind', 'title', 'caller', 'peer', 'kind', 'status',
-                  'direction', 'created_at', 'answered_at', 'ended_at', 'duration', 'participants']
+                  'direction', 'created_at', 'answered_at', 'ended_at', 'duration', 'participants', 'multi', 'invited_by']
+
+    def get_multi(self, obj):
+        """مكالمة بين أكثر من شخصين (مجموعة، أو ثنائية أُضيف إليها أحد): يتصل كل مشارك بالجميع."""
+        return is_multi(obj)
+
+    def get_invited_by(self, obj):
+        """دُعيتُ إلى هذه المكالمة (لستُ عضواً في محادثتها): من دعاني."""
+        me = self.context['request'].user
+        invite = next((i for i in obj.invites.all() if i.user_id == me.id), None) if obj.pk else None
+        return UserSerializer(invite.invited_by).data if invite else None
 
     def get_participants(self, obj):
         """من في المكالمة الآن (المكالمة الجماعية: يتصل المنضم الجديد بكل واحد منهم)."""
@@ -61,6 +73,8 @@ class CallSerializer(serializers.ModelSerializer):
         if obj.conversation.kind != Conversation.DIRECT:
             return None
         me = self.context['request'].user
+        if not obj.conversation.memberships.filter(user=me).exists():
+            return None  # دُعيت إلى مكالمة بين شخصين آخرين: لا «طرف ثانٍ» واحد
         other = next((m.user for m in obj.conversation.memberships.select_related('user__profile')
                       if m.user_id != me.id), None)
         return viewer_for(self.context['request']).json(other) if other else None
@@ -111,6 +125,15 @@ def turn_servers():
     return result
 
 
+def is_multi(call):
+    return call.conversation.kind == Conversation.GROUP or call.invited.exists()
+
+
+def audience(call):
+    """من يهمه ما يحدث في المكالمة: أعضاء محادثتها ومن دُعي إليها."""
+    return sorted(set(member_ids(call.conversation)) | set(call.invited.values_list('id', flat=True)))
+
+
 def expire_ringing():
     """اللي ظلت ترن أكثر من دقيقة = فائتة."""
     for call in Call.objects.filter(status=Call.RINGING, created_at__lt=timezone.now() - RING_TIMEOUT):
@@ -134,12 +157,17 @@ def finish(call, final_status):
     call.save(update_fields=['status', 'ended_at'])
     # تطلع بالمحادثة مثل واتساب: "مكالمة فيديو • 2:15" أو "مكالمة صوتية فائتة"
     create_message(call.conversation, call.caller, call_summary(call), kind=Message.CALL)
-    send_to_users(member_ids(call.conversation), {'type': 'call_ended', 'call_id': call.id, 'status': final_status})
+    send_to_users(audience(call), {'type': 'call_ended', 'call_id': call.id, 'status': final_status})
+
+
+def visible_calls(user):
+    """مكالمات محادثاتي، والمكالمات التي دُعيت إليها."""
+    ids = Call.objects.filter(Q(conversation__memberships__user=user) | Q(invited=user)).values('id')
+    return Call.objects.filter(id__in=ids)
 
 
 def my_call(request, pk):
-    return get_object_or_404(Call.objects.select_related('conversation'), pk=pk,
-                             conversation__memberships__user=request.user)
+    return get_object_or_404(visible_calls(request.user).select_related('conversation'), pk=pk)
 
 
 @api_view(['GET', 'POST'])
@@ -147,8 +175,8 @@ def calls(request):
     if request.method == 'GET':
         # سجل المكالمات. ?filter=missed للفائتة بس
         expire_ringing()
-        qs = (Call.objects.filter(conversation__memberships__user=request.user)
-              .select_related('caller__profile', 'conversation').order_by('-created_at'))
+        qs = (visible_calls(request.user).select_related('caller__profile', 'conversation')
+              .prefetch_related('invites__invited_by__profile').order_by('-created_at'))
         if request.query_params.get('filter') == 'missed':
             qs = qs.filter(~Q(caller=request.user), status__in=[Call.MISSED, Call.DECLINED])
         return Response(CallSerializer(qs[:100], many=True, context={'request': request}).data)
@@ -199,14 +227,19 @@ def answer(request, pk):
         call.status, call.answered_at = Call.ONGOING, timezone.now()
         call.save(update_fields=['status', 'answered_at'])
     call.joined.add(request.user)
-    send_to_users(member_ids(call.conversation),
-                  {'type': 'call_answered', 'call_id': call.id, 'user_id': request.user.id})
+    send_to_users(audience(call), {'type': 'call_answered', 'call_id': call.id, 'user_id': request.user.id})
     return Response({**CallSerializer(call, context={'request': request}).data, 'ice_servers': ice_servers()})
 
 
 @api_view(['POST'])
 def decline(request, pk):
     call = my_call(request, pk)
+    invite = call.invites.filter(user=request.user).first()
+    if invite and not call.joined.filter(id=request.user.id).exists():
+        # رفض دعوة إلى مكالمة جارية: تخصّني وحدي، وتبقى المكالمة لمن فيها
+        send_to_users(list(call.joined.values_list('id', flat=True)),
+                      {'type': 'call_invite_declined', 'call_id': call.id, 'user_id': request.user.id})
+        return Response({'ok': True})
     if call.status != Call.RINGING or call.caller_id == request.user.id:
         raise ValidationError(_('لا يمكنك رفض هذه المكالمة'))
     # بالمجموعة الرفض يخصك إنت بس؛ بالثنائية تنتهي المكالمة
@@ -232,14 +265,16 @@ def leave(request, pk):
     call = my_call(request, pk)
     if call.status not in (Call.RINGING, Call.ONGOING):
         return Response(CallSerializer(call, context={'request': request}).data)
-    if call.conversation.kind != Conversation.GROUP:
+    if not is_multi(call):
         finish(call, Call.ENDED if call.status == Call.ONGOING else Call.MISSED)
         return Response(CallSerializer(call, context={'request': request}).data)
     call.joined.remove(request.user)
-    if not call.joined.exists():
+    # بقي شخص واحد في مكالمة أُضيف إليها آخرون (ليست مجموعة): لا معنى لبقائها، فتنتهي كما في واتساب
+    alone = call.conversation.kind != Conversation.GROUP and call.joined.count() <= 1 and call.answered_at
+    if not call.joined.exists() or alone:
         finish(call, Call.ENDED if call.answered_at else Call.MISSED)
     else:
-        send_to_users(member_ids(call.conversation), {'type': 'call_left', 'call_id': call.id, 'user_id': request.user.id})
+        send_to_users(audience(call), {'type': 'call_left', 'call_id': call.id, 'user_id': request.user.id})
     return Response(CallSerializer(call, context={'request': request}).data)
 
 
@@ -265,8 +300,12 @@ def ringing(request):
     أو عند عودة الاتصال، لأن حدث call_incoming ربما وصل وهو مغلق.
     """
     expire_ringing()
-    call = (Call.objects.filter(conversation__memberships__user=request.user, status=Call.RINGING)
-            .exclude(caller=request.user).select_related('caller__profile', 'conversation')
+    me = request.user
+    # مكالمة في محادثاتي ترنّ، أو دعوة إلى مكالمة جارية لم تمضِ عليها دقيقة ولم أنضمّ بعد
+    invited = CallInvite.objects.filter(user=me, created_at__gte=timezone.now() - RING_TIMEOUT).values('call_id')
+    call = (Call.objects.filter(Q(conversation__memberships__user=me, status=Call.RINGING)
+                                | Q(id__in=invited, status__in=[Call.RINGING, Call.ONGOING]))
+            .exclude(caller=me).exclude(joined=me).select_related('caller__profile', 'conversation')
             .order_by('-created_at').first())
     return Response({'call': CallSerializer(call, context={'request': request}).data if call else None})
 
@@ -280,6 +319,51 @@ def upgrade_video(request, pk):
     if call.kind != Call.VIDEO:
         call.kind = Call.VIDEO
         call.save(update_fields=['kind'])
-    send_to_users([uid for uid in member_ids(call.conversation) if uid != request.user.id],
+    send_to_users([uid for uid in audience(call) if uid != request.user.id],
                   {'type': 'call_video', 'call_id': call.id, 'user_id': request.user.id})
     return Response({'ok': True})
+
+
+@api_view(['POST'])
+def invite(request, pk):
+    """
+    إضافة أشخاص إلى مكالمة جارية (مثل واتساب): {"user_ids": [5, 9]}.
+    يرنّ عندهم ويستطيعون الانضمام، وتصير المكالمة الثنائية جماعية (يتصل كل مشارك بالجميع).
+    يدعو من هو في المكالمة الآن، ولمن يعرفه فقط (جهات اتصاله ومن يشاركه محادثة)، وما لم يحظر أحدهما الآخر.
+    """
+    call = my_call(request, pk)
+    me = request.user
+    if call.status not in (Call.RINGING, Call.ONGOING):
+        raise ValidationError(_('انتهت المكالمة'))
+    if not call.joined.filter(id=me.id).exists():
+        raise PermissionDenied(_('انضمّ إلى المكالمة أولاً'))
+    try:
+        ids = list(dict.fromkeys(int(i) for i in request.data.get('user_ids') or []))
+    except (TypeError, ValueError):
+        raise ValidationError({'user_ids': _('قائمة غير صحيحة')})
+    joined = set(call.joined.values_list('id', flat=True))
+    ids = [i for i in ids if i != me.id and i not in joined]
+    if not ids:
+        raise ValidationError({'user_ids': _('اختر شخصاً واحداً على الأقل')})
+    allowed = known_ids(me.id)
+    if any(i not in allowed or is_blocked(me.id, i) for i in ids):
+        raise PermissionDenied(_('لا يمكنك إضافة هذا الشخص'))
+    if len(joined) + len(ids) > MAX_PARTICIPANTS:
+        raise ValidationError(_('المكالمة ممتلئة: الحد {n} مشاركين').format(n=MAX_PARTICIPANTS))
+    members = set(member_ids(call.conversation))
+    from django.contrib.auth import get_user_model
+    targets = list(get_user_model().objects.filter(id__in=ids).select_related('profile'))
+    for user in targets:
+        if user.id not in members:  # عضو المحادثة يرنّ عنده من جديد فقط، وغيره يُدعى
+            CallInvite.objects.update_or_create(call=call, user=user, defaults={'invited_by': me})
+    # من في المكالمة: تصير جماعية عندهم (يقبلون اتصال المنضمّين الجدد)
+    send_to_users(audience(call), {'type': 'call_invited', 'call_id': call.id, 'user_ids': [u.id for u in targets]})
+    data = CallSerializer(call, context={'request': request}).data
+    inviter = UserSerializer(me).data
+    name = profile_of(me).display_name or me.username
+    for user in targets:
+        send_to_users([user.id], {'type': 'call_incoming', 'call': {**data, 'peer': None, 'multi': True, 'invited_by': inviter}})
+        body = in_language(user, lambda: _('يدعوك إلى مكالمة فيديو') if call.kind == Call.VIDEO else _('يدعوك إلى مكالمة صوتية'))
+        send_to_user(user, {'title': f'📞 {name}', 'body': body, 'url': f'/chat?call={call.id}', 'tag': f'call-{call.id}',
+                            'lang': in_language(user, translation.get_language)})
+    return Response({**data, 'invited': [u.id for u in targets]})

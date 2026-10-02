@@ -8,6 +8,7 @@ from channels.layers import get_channel_layer
 from django.core.cache import cache
 from datetime import timedelta
 
+from django.db import IntegrityError, transaction
 from django.db.models import Max, OuterRef, Q, Subquery
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -276,6 +277,32 @@ def create_message(conversation, sender, content='', silent=False, after_create=
     if msg.kind not in QUIET and not silent:
         notify_new_message(msg, lambda tr: preview_text(msg, tr), mentioned=mentioned_ids(conversation, sender, content))
     return data
+
+
+def clean_client_id(value):
+    """معرّف الرسالة من جهاز المرسل: نص قصير من حروف وأرقام وشرطات فقط، وإلا نتجاهله."""
+    value = value if isinstance(value, str) else ''
+    return value if re.fullmatch(r'[A-Za-z0-9_-]{8,40}', value) else ''
+
+
+def send_once(conversation, sender, content, client_id='', **fields):
+    """
+    مثل create_message، لكن رسالة لها client_id لا تُنشأ مرتين: إن وصلت من قبل (أعاد الجهاز إرسالها بعد انقطاع
+    لم يصله فيه الرد) نعيد المحفوظة دون بثها من جديد. يعيد (الرسالة JSON، أُنشئت الآن؟).
+    """
+    if not client_id:
+        return create_message(conversation, sender, content, **fields), True
+    existing = Message.objects.filter(sender=sender, client_id=client_id).first()
+    if existing:
+        return serialize_message(existing), False
+    try:
+        with transaction.atomic():
+            return create_message(conversation, sender, content, client_id=client_id, **fields), True
+    except IntegrityError:  # وصلت النسختان في اللحظة نفسها: سبقتها الأخرى
+        existing = Message.objects.filter(sender=sender, client_id=client_id).first()
+        if existing is None:
+            raise
+        return serialize_message(existing), False
 
 
 def system_message(conversation, actor, text):

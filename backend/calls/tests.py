@@ -97,6 +97,60 @@ class CallTests(TestCase):
         self.assertEqual(Call.objects.get(pk=c['id']).kind, 'video')
 
 
+@override_settings(PUSH_RUN_INLINE=True)
+@mock.patch('notifications.push.webpush')
+class InviteTests(TestCase):
+    """إضافة أشخاص إلى مكالمة جارية (مثل واتساب)."""
+
+    def setUp(self):
+        self.ali, self.sara, self.omar, self.zaid = [register(n) for n in ('ali', 'sara', 'omar', 'zaid')]
+        self.conv = open_chat(self.ali, self.sara.user['id']).data['id']
+        open_chat(self.ali, self.omar.user['id'])  # عمر من معارف علي، وزيد لا يعرفه علي
+        self.call = self.ali.post('/api/calls/', {'conversation_id': self.conv, 'kind': 'audio'}, format='json').data
+        self.sara.post(f"/api/calls/{self.call['id']}/answer/")
+
+    def invite(self, client, *users):
+        return client.post(f"/api/calls/{self.call['id']}/invite/", {'user_ids': [u.user['id'] for u in users]}, format='json')
+
+    def test_invite_ring_join_and_leave(self, webpush):
+        self.assertFalse(self.ali.get('/api/calls/active/', {'conversation': self.conv}).data['call']['multi'])
+        self.omar.post('/api/push/subscribe/', {'endpoint': 'https://push.example.com/omar', 'keys': {'p256dh': 'P', 'auth': 'A'}}, format='json')
+        r = self.invite(self.ali, self.omar)
+        self.assertEqual((r.status_code, r.data['invited'], r.data['multi']), (200, [self.omar.user['id']], True))
+        # يرنّ عند عمر (ولو فتح التطبيق من الإشعار) ومعه من دعاه، وليس عضواً في المحادثة
+        ringing = self.omar.get('/api/calls/ringing/').data['call']
+        self.assertEqual((ringing['id'], ringing['multi'], ringing['invited_by']['username'], ringing['peer']),
+                         (self.call['id'], True, 'ali', None))
+        self.assertIn(f"/chat?call={self.call['id']}", webpush.call_args.args[1])  # الإشعار يفتح المكالمة مباشرة
+        joined = self.omar.post(f"/api/calls/{self.call['id']}/answer/").data
+        self.assertEqual(sorted(joined['participants']), sorted([self.ali.user['id'], self.sara.user['id'], self.omar.user['id']]))
+        self.assertIsNone(self.omar.get('/api/calls/ringing/').data['call'])
+        # صارت جماعية: مغادرة سارة لا تنهيها لمن بقي
+        self.assertEqual(self.sara.post(f"/api/calls/{self.call['id']}/leave/").data['status'], 'ongoing')
+        # بقي شخص واحد بعد مغادرة علي: تنتهي
+        self.assertEqual(self.ali.post(f"/api/calls/{self.call['id']}/leave/").data['status'], 'ended')
+        self.assertEqual(self.omar.get('/api/calls/').data[0]['id'], self.call['id'])  # في سجل عمر أيضاً
+
+    def test_only_known_people_and_only_from_inside_the_call(self, _):
+        self.assertEqual(self.invite(self.ali, self.zaid).status_code, 403)  # لا يعرفه
+        self.assertEqual(self.invite(self.omar, self.zaid).status_code, 404)  # ليس في المكالمة ولا في محادثتها
+        self.assertEqual(self.invite(self.ali).status_code, 400)
+        self.assertEqual(self.invite(self.ali, self.sara).status_code, 400)  # موجودة فيها أصلاً
+        self.omar.post('/api/blocks/', {'user_id': self.ali.user['id']}, format='json')
+        self.assertEqual(self.invite(self.ali, self.omar).status_code, 403)  # حظره
+
+    def test_invitee_declines_and_the_call_goes_on(self, _):
+        self.invite(self.ali, self.omar)
+        self.assertEqual(self.omar.post(f"/api/calls/{self.call['id']}/decline/").status_code, 200)
+        self.assertEqual(Call.objects.get(pk=self.call['id']).status, 'ongoing')
+
+    def test_invite_stops_ringing_after_a_minute(self, _):
+        from .models import CallInvite
+        self.invite(self.ali, self.omar)
+        CallInvite.objects.update(created_at=timezone.now() - timedelta(seconds=90))
+        self.assertIsNone(self.omar.get('/api/calls/ringing/').data['call'])
+
+
 class IceServerTests(TestCase):
     def setUp(self):
         from django.core.cache import cache
@@ -147,5 +201,18 @@ class SignalingTests(TransactionTestCase):
         self.assertEqual((got['type'], got['from'], got['data']['sdp']), ('call.signal', ali.user['id'], 'offer-sdp'))
         # لشخص مو بالمكالمة: ما يوصل
         await a.send_json_to({'type': 'call.signal', 'call_id': call['id'], 'to': omar.user['id'], 'data': {}})
+        o = WebsocketCommunicator(application, f'/ws/presence/?token={omar.token}')
+        await o.connect()
+        while not await o.receive_nothing(timeout=0.3):
+            await o.receive_json_from()
+        await a.send_json_to({'type': 'call.signal', 'call_id': call['id'], 'to': omar.user['id'], 'data': {'sdp': 'x'}})
+        self.assertTrue(await o.receive_nothing(timeout=0.3))
+        # بعد دعوته إلى المكالمة (وليس عضواً في المحادثة): تصله رسائل التعارف
+        from .models import Call, CallInvite
+        await sync_to_async(CallInvite.objects.create)(call_id=call['id'], user_id=omar.user['id'], invited_by_id=ali.user['id'])
+        await a.send_json_to({'type': 'call.signal', 'call_id': call['id'], 'to': omar.user['id'], 'data': {'sdp': 'y'}})
+        got = await o.receive_json_from()
+        self.assertEqual((got['type'], got['data']['sdp']), ('call.signal', 'y'))
+        await o.disconnect()
         await a.disconnect()
         await s.disconnect()

@@ -409,7 +409,7 @@ export function GroupPanel({ convId }: { convId: number }) {
 }
 
 /** اختيار أشخاص (لإنشاء مجموعة أو إضافة أعضاء) */
-function PickPeople({ title, exclude = [], confirmLabel, onConfirm, onCancel, children }: {
+export function PickPeople({ title, exclude = [], confirmLabel, onConfirm, onCancel, children }: {
   title: string; exclude?: number[]; confirmLabel: string; onConfirm: (ids: number[]) => void; onCancel: () => void; children?: React.ReactNode;
 }) {
   const t = useT();
@@ -417,8 +417,9 @@ function PickPeople({ title, exclude = [], confirmLabel, onConfirm, onCancel, ch
   const [picked, setPicked] = useState<number[]>([]);
   const list = useUserSearch(q).list.filter((u) => !exclude.includes(u.id));
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={onCancel}>
-      <div className="w-strong w-shadow flex max-h-[85dvh] w-full max-w-md flex-col rounded-3xl p-4" style={{ border: "1px solid var(--border)" }} onClick={(e) => e.stopPropagation()}>
+    // فوق شاشة المكالمة أيضاً (z-[60]): منها يُضاف أشخاص إلى المكالمة
+    <div className="fixed inset-0 z-[70] grid place-items-center bg-black/40 p-4" onClick={onCancel}>
+      <div className="w-strong w-shadow flex max-h-[85dvh] w-full max-w-md flex-col rounded-3xl p-4" style={{ border: "1px solid var(--border)", color: "var(--text)" }} onClick={(e) => e.stopPropagation()}>
         <h3 className="mb-3 text-lg font-extrabold">{title}</h3>
         {children}
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("ابحث...")} className="w-input mb-2 h-11 rounded-full px-4 text-base outline-none md:text-sm" />

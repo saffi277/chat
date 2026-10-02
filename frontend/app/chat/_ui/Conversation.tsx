@@ -25,6 +25,15 @@ const upsert = (list: Message[], m: Message) => {
 /** وسائط تُرفع الآن: تظهر في المحادثة فوراً (رسالة محلية بمعرّف سالب) حتى يردّ الخادم */
 type Outgoing = { key: number; file: File | Blob; opts: SendFileOpts & { kind: MessageKind }; msg: Message; progress: number; failed: boolean };
 
+/**
+ * نص يُرسل الآن: يظهر في المحادثة فوراً «قيد الإرسال» (ساعة) حتى يصل من الخادم بالمعرّف نفسه (client_id).
+ * إن لم يصل خلال SEND_TIMEOUT أو رفضه الخادم: «لم تُرسل» وزر إعادة المحاولة (لا تتكرر الرسالة: الخادم يعرف معرّفها).
+ */
+type PendingText = { cid: string; msg: Message; silent: boolean; failed: boolean };
+const SEND_TIMEOUT = 20000;
+const newClientId = () =>
+  typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+
 /** أبعاد الصورة أو الفيديو قبل الرفع: يُحجز مكانها بالقياس الصحيح عند الطرفين */
 function mediaSize(url: string, kind: MessageKind): Promise<{ width: number; height: number } | null> {
   return new Promise((resolve) => {
@@ -61,6 +70,10 @@ export function Conversation({ conv }: { conv: Conv }) {
   // القائمة تُفتح فوق الرسالة إن لم يبقَ تحتها مكان كافٍ
   const [menuFor, setMenuFor] = useState<{ id: number; up: boolean } | null>(null);
   const [outgoing, setOutgoing] = useState<Outgoing[]>([]);
+  const [pendingTexts, setPendingTexts] = useState<PendingText[]>([]);
+  const pendingRef = useRef<PendingText[]>([]);
+  pendingRef.current = pendingTexts;
+  const sendTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const uploads = useRef(new Map<number, AbortController>());
   const seq = useRef(0);
   const press = useRef<{ timer?: ReturnType<typeof setTimeout>; x: number; y: number; fired: boolean }>({ x: 0, y: 0, fired: false });
@@ -122,8 +135,12 @@ export function Conversation({ conv }: { conv: Conv }) {
   // تحميل الرسائل + اتصال المحادثة
   useEffect(() => {
     let alive = true;
-    const load = () => msgApi.list(id).then((list) => {
+    const load = (again = false) => msgApi.list(id).then((list) => {
       if (!alive) return;
+      // بعد عودة الاتصال: ما وصل الخادمَ يظهر في القائمة، والباقي يُعاد إرساله (لا يتكرر: الخادم يعرف معرّفه)
+      const arrived = new Set(list.map((m) => m.client_id).filter(Boolean));
+      pendingRef.current.filter((p) => arrived.has(p.cid)).forEach((p) => settle(p.cid));
+      if (again) pendingRef.current.filter((p) => !p.failed && !arrived.has(p.cid)).forEach(deliver);
       setMsgs(list);
       setHasMore(list.length >= 50);
       setLoading(false);
@@ -135,8 +152,12 @@ export function Conversation({ conv }: { conv: Conv }) {
     let refetch: ReturnType<typeof setTimeout> | undefined;
     const ws = openSocket(`/ws/chat/${id}/`, (e) => {
       if (e.type === "message") {
+        if (e.message.client_id) settle(e.message.client_id);
         setMsgs((l) => upsert(l, e.message));
         if (e.message.sender.id !== me.id) markRead();
+      } else if (e.type === "error" && e.client_id) {
+        failPending(e.client_id);
+        notify(e.detail === "rate_limited" ? tr("أرسلت رسائل كثيرة بسرعة. انتظر قليلاً ثم أعد المحاولة.") : e.message || tr("لا يمكنك الإرسال في هذه المحادثة"));
       } else if (e.type === "error" && e.detail === "rate_limited") {
         notify(tr("أرسلت رسائل كثيرة بسرعة. انتظر قليلاً ثم أعد المحاولة."));
       } else if (e.type === "error") {
@@ -169,7 +190,7 @@ export function Conversation({ conv }: { conv: Conv }) {
           })), 400);
         }
       }
-    }, { onStatus: setConn, onOpen: (again) => again && load() });
+    }, { onStatus: setConn, onOpen: (again) => again && load(true) });
     socketRef.current = ws;
     const onVisible = () => document.visibilityState === "visible" && markRead();
     document.addEventListener("visibilitychange", onVisible);
@@ -180,7 +201,10 @@ export function Conversation({ conv }: { conv: Conv }) {
       document.removeEventListener("visibilitychange", onVisible);
       clearTimeout(refetch);
     };
+    // settle/deliver/failPending تقرأ من المراجع (refs) فقط، فلا تحتاج أن تكون في القائمة
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, me.id, me.read_receipts, markRead, notify, refreshConvs]);
+  useEffect(() => () => sendTimers.current.forEach(clearTimeout), []);
 
   // السكرول: ننزل لتحت بالرسائل الجديدة، ونثبت المكان لما نحمل الأقدم
   useLayoutEffect(() => {
@@ -193,6 +217,46 @@ export function Conversation({ conv }: { conv: Conv }) {
       el.scrollTop = el.scrollHeight;
     }
   }, [msgs, typing]);
+
+  // ------------------------------------------------ إرسال النص: يظهر فوراً «قيد الإرسال» مثل واتساب
+  function settle(cid: string) {
+    clearTimeout(sendTimers.current.get(cid));
+    sendTimers.current.delete(cid);
+    setPendingTexts((l) => l.filter((p) => p.cid !== cid));
+  }
+  function failPending(cid: string) {
+    clearTimeout(sendTimers.current.get(cid));
+    sendTimers.current.delete(cid);
+    setPendingTexts((l) => l.map((p) => (p.cid === cid ? { ...p, failed: true } : p)));
+  }
+  function deliver(p: PendingText) {
+    const { cid, msg, silent } = p;
+    setPendingTexts((l) => l.map((x) => (x.cid === cid ? { ...x, failed: false } : x)));
+    clearTimeout(sendTimers.current.get(cid));
+    // الطريق السريع: WebSocket. إن كان مقطوعاً فـ HTTP حتى لا تضيع الرسالة
+    if (socketRef.current?.send({ type: "message", content: msg.content, reply_to: msg.reply_to?.id, client_id: cid, ...(silent ? { silent: true } : {}) })) {
+      // الاتصال الضعيف قد يبتلع الرسالة دون خطأ: إن لم يصل ردها خلال المهلة نعرض «لم تُرسل» وإعادة المحاولة
+      sendTimers.current.set(cid, setTimeout(() => failPending(cid), SEND_TIMEOUT));
+      return;
+    }
+    msgApi.sendText(id, msg.content, msg.reply_to?.id, silent, cid)
+      .then((m) => { settle(cid); stick.current = true; setMsgs((l) => upsert(l, m)); })
+      .catch((e: Error) => { failPending(cid); notify(e.message); });
+  }
+  function sendText(content: string, replyMsg: Message | null, silent: boolean) {
+    const cid = newClientId();
+    const key = ++seq.current;
+    const r = replyMsg ? { id: replyMsg.id, kind: replyMsg.kind, sender_id: replyMsg.sender.id, sender_name: nameOf(replyMsg.sender), preview: preview(replyMsg).text } : null;
+    const msg: Message = {
+      id: -key, conversation: id, sender: me, kind: "text", content, file_url: null, file_name: "", file_size: null, duration: null,
+      latitude: null, longitude: null, live_until: null, is_live: false, reply_to: r, created_at: new Date().toISOString(),
+      edited_at: null, is_deleted: false, status: "sent", is_read: false, reactions: [], client_id: cid,
+    };
+    const p: PendingText = { cid, msg, silent, failed: false };
+    stick.current = true;
+    setPendingTexts((l) => [...l, p]);
+    deliver(p);
+  }
 
   // ------------------------------------------------ إرسال الوسائط مثل واتساب
   const patchOut = (key: number, patch: Partial<Outgoing>) => setOutgoing((l) => l.map((o) => (o.key === key ? { ...o, ...patch } : o)));
@@ -589,6 +653,25 @@ export function Conversation({ conv }: { conv: Conv }) {
             </div>
           );
         })}
+        {pendingTexts.map((p) => (
+          <div key={p.cid} className="mt-3 flex justify-end" data-testid="pending-message">
+            <div className="w-bubble-out relative max-w-[80%] rounded-[20px] px-3.5 py-2 md:max-w-[62%]">
+              {p.msg.reply_to && <ReplyQuote r={p.msg.reply_to} mine />}
+              <MessageBody m={p.msg} mine onImage={() => {}} />
+              <div className="w-muted mt-1 flex items-center justify-start gap-1 text-[11px]" dir="ltr">
+                {p.failed ? (
+                  <button onClick={() => deliver(p)} className="flex items-center gap-1 font-bold" style={{ color: "var(--danger)" }}>
+                    <Icon name="info" size={13} />{t("لم تُرسل. اضغط لإعادة المحاولة")}
+                  </button>
+                ) : (
+                  <span className="flex items-center gap-1" aria-label={t("جارٍ الإرسال...")} title={t("جارٍ الإرسال...")}>
+                    {clock(p.msg.created_at)}<Icon name="clock" size={12} />
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
         {typing && conv.kind !== "group" && (
           <div className="mt-3 flex justify-start">
             <span className="w-bubble-in flex gap-1 rounded-[20px] px-4 py-3">
@@ -618,7 +701,7 @@ export function Conversation({ conv }: { conv: Conv }) {
       ) : canPost ? (
         <Composer onScheduled={loadScheduled} convId={id} kind={conv.kind} socket={() => socketRef.current} reply={reply} editing={editing}
           onDone={() => { setReply(null); setEditing(null); }}
-          onSent={(m) => { stick.current = true; setMsgs((l) => upsert(l, m)); }} onMedia={sendMedia} />
+          onSend={sendText} onMedia={sendMedia} />
       ) : (
         // القناة للمشترك: لا خانة كتابة، بل سطر يوضح ذلك وزر كتم الإشعارات
         <div className="flex items-center gap-3 rounded-t-[26px] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 md:rounded-none md:border-t md:w-line"

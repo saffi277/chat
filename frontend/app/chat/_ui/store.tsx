@@ -12,7 +12,7 @@ import { auth, calls, contacts as contactsApi, conversations as convApi, message
 import { setLang, t, useLang } from "@/lib/i18n";
 import { isDeviceError, permError } from "@/lib/permissions";
 import { syncPushSubscription } from "@/lib/push";
-import { openSocket, type LiveSocket } from "@/lib/socket";
+import { openSocket, type LiveSocket, type MediaState } from "@/lib/socket";
 
 /** تبويبات الشريط السفلي (المحادثات/المكالمات/جهات الاتصال/الإعدادات) + الحالات (من الإعدادات) */
 export type Tab = "chats" | "calls" | "people" | "settings" | "stories";
@@ -40,6 +40,7 @@ export type CallUI = {
   local: MediaStream | null;
   remote: MediaStream | null;
   remoteVideo?: boolean; // يصل من الطرف الآخر فيديو فعلاً (قد تبدأ المكالمة صوتية ثم تتحول)
+  remoteScreen?: boolean; // وهو شاشته (تُعرض كاملة دون قصّ)
   startedAt: number | null;
   muted: boolean;
   cameraOff: boolean;
@@ -108,6 +109,8 @@ type Ctx = {
   enableVideo: () => void;
   /** مشاركة الشاشة أو إيقافها */
   toggleScreen: () => void;
+  /** إضافة أشخاص إلى المكالمة الجارية (مثل واتساب) */
+  inviteToCall: (userIds: number[]) => Promise<void>;
   /** الانضمام إلى مكالمة جماعية جارية */
   joinCall: (call: Call) => Promise<void>;
   // الموقع المباشر
@@ -159,6 +162,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
   const socketRef = useRef<LiveSocket | null>(null);
   const callRef = useRef<CallUI | null>(null);
   const meRef = useRef<Me | null>(null);
+  const userByIdRef = useRef<(id: number) => User | undefined>(() => undefined);
   // الجلسة نحفظها بـ ref فوراً (الـ state يتحدث بعد الرسم) حتى ما يفوتنا "رد" سريع
   const sessionRef = useRef<CallSession | null>(null);
   const groupRef = useRef<GroupCall | null>(null);
@@ -201,8 +205,9 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
   }, []);
 
   const handlers = useCallback(() => ({
+    onCreated: (s: CallSession) => { sessionRef.current = s; },
     onLocalStream: (s: MediaStream) => setCall((c) => (c ? { ...c, local: s } : c)),
-    onRemoteStream: (s: MediaStream) => setCall((c) => (c ? { ...c, remote: s, remoteVideo: s.getVideoTracks().some((tr) => tr.readyState === "live" && !tr.muted) } : c)),
+    onRemoteStream: (s: MediaStream, media: MediaState) => setCall((c) => (c ? { ...c, remote: s, remoteVideo: media.video, remoteScreen: media.screen } : c)),
     onState: (state: RTCPeerConnectionState) => {
       if (state === "connected") setCall((c) => (c ? { ...c, phase: "active", startedAt: c.startedAt ?? Date.now() } : c));
       if (state === "failed") endCallUI(t("تعذّر الاتصال"));
@@ -221,6 +226,15 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     }),
   }), []);
 
+  // مكالمتي الثنائية صارت جماعية (أُضيف إليها أحد): ننقل اتصالها القائم إلى شبكة المكالمة الجماعية دون انقطاع
+  const adoptGroup = useCallback(() => {
+    const s = sessionRef.current;
+    if (!s || !socketRef.current || !meRef.current) return;
+    sessionRef.current = null;
+    const g = GroupCall.adopt(s, meRef.current.id, socketRef.current, groupHandlers());
+    setCall((c) => (c ? { ...c, call: g.call, session: null, group: g, peers: g.peers, local: g.local, sharing: !!g.screen } : c));
+  }, [groupHandlers]);
+
   // مكالمة ترنّ لي ولم يصلني حدثها (التطبيق كان مغلقاً وفُتح من إشعار المكالمة، أو انقطع الاتصال): نسأل الخادم
   const checkRinging = useCallback(async () => {
     if (callRef.current && callRef.current.phase !== "ended") return;
@@ -232,11 +246,11 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
 
   // مكالمة جماعية ترنّ عندي ولم أرد: تتوقف بعد 45 ثانية (تبقى جارية لمن رد، وأستطيع الانضمام من المحادثة)
   useEffect(() => {
-    if (call?.phase !== "incoming" || call.call.conversation_kind !== "group") return;
+    if (call?.phase !== "incoming" || (call.call.conversation_kind !== "group" && !call.call.multi)) return;
     const id = call.call.id;
     const timer = setTimeout(() => setCall((c) => (c?.phase === "incoming" && c.call.id === id ? null : c)), 45000);
     return () => clearTimeout(timer);
-  }, [call?.phase, call?.call.id, call?.call.conversation_kind]);
+  }, [call?.phase, call?.call.id, call?.call.conversation_kind, call?.call.multi]);
 
   // «جارٍ الاتصال» لا يبقى للأبد: إن لم يتصل الجهازان خلال 25 ثانية فالشبكتان تحتاجان خادم ترحيل (TURN)
   useEffect(() => {
@@ -334,6 +348,18 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
           window.dispatchEvent(new Event("wasl:calls"));
           break;
         }
+        case "call_invited": {
+          // أُضيف أحد إلى مكالمتي الثنائية: تصير جماعية (يبقى الاتصال القائم، ويتصل بنا المنضمّ الجديد)
+          if (sessionRef.current?.call.id === e.call_id) adoptGroup();
+          break;
+        }
+        case "call_invite_declined": {
+          if (callRef.current?.call.id === e.call_id) {
+            const who = userByIdRef.current(e.user_id);
+            notify(t("{name} رفض الانضمام", { name: who ? who.display_name || who.username : t("عضو") }));
+          }
+          break;
+        }
         case "call_answered": {
           window.dispatchEvent(new Event("wasl:calls")); // زر «انضمام» في المحادثة
           // أحدهم رد على مكالمتي الجماعية: الاتصال به يبدأ حين يرسل عرضه
@@ -360,13 +386,15 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
           break;
         }
         case "call.signal": {
+          const s = sessionRef.current;
+          // من مشارك ثالث في مكالمتي الثنائية (أُضيف إليها، وسبق عرضُه حدثَ الإضافة): تصير جماعية أولاً
+          if (s && s.call.id === e.call_id && e.from !== s.peerId) adoptGroup();
           const g = groupRef.current;
           if (g && g.call.id === e.call_id) {
             await g.handleSignal(e.from, e.data);
             break;
           }
-          const s = sessionRef.current;
-          if (s && s.call.id === e.call_id) await s.handleSignal(e.data);
+          if (sessionRef.current && sessionRef.current.call.id === e.call_id) await sessionRef.current.handleSignal(e.data);
           break;
         }
       }
@@ -393,7 +421,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
       navigator.serviceWorker?.removeEventListener("message", onSwMessage);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [router, signOut, endCallUI, checkRinging]);
+  }, [router, signOut, endCallUI, checkRinging, adoptGroup, notify]);
 
   // ------------------------------------------------ مساعدات
   const storyRing = useCallback((userId: number | undefined) => {
@@ -407,6 +435,9 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     setStoryViewer({ userId, index: first === -1 ? 0 : first });
   }, [stories]);
   const userById = useCallback((id: number) => users.find((u) => u.id === id) ?? contacts.find((u) => u.id === id) ?? (me?.id === id ? me : undefined), [users, contacts, me]);
+  useEffect(() => {
+    userByIdRef.current = userById;
+  }, [userById]);
   const isContact = useCallback((id: number) => contacts.some((u) => u.id === id), [contacts]);
   const contactAdded = useCallback((u: User) => {
     const saved = { ...u, is_contact: true };
@@ -431,7 +462,40 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
 
   const openConv = useCallback((id: number | null) => {
     setActiveId(id);
-    window.history.replaceState(null, "", id ? `/chat?c=${id}` : "/chat");
+    window.history.replaceState(window.history.state, "", id ? `/chat?c=${id}` : "/chat");
+  }, []);
+
+  // السحب للخلف في الآيفون (وزر الرجوع في أندرويد) يرجع خطوة داخل التطبيق: يغلق الحالة المفتوحة، ثم اللوحة، ثم المحادثة،
+  // ولا يخرج أبداً إلى صفحة الدخول. نضع خطوة في سجل المتصفح يستهلكها الرجوع، ونعيدها عند أول لمسة بعده
+  // (خطوة تُضاف دون تفاعل من المستخدم يتخطاها كروم عند الرجوع، فلا نضيفها إلا مع لمسة أو ضغطة زر).
+  const backRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    backRef.current = () => {
+      if (storyViewer) setStoryViewer(null);
+      else if (panel) setPanel(null);
+      else if (activeId) openConv(null);
+    };
+  }, [storyViewer, panel, activeId, openConv]);
+  useEffect(() => {
+    let armed = false;
+    const arm = () => {
+      if (armed) return;
+      armed = true;
+      window.history.pushState({ ...window.history.state, waslBack: true }, "", window.location.href);
+    };
+    const onPop = () => {
+      if (!armed) return;
+      armed = false;
+      backRef.current();
+    };
+    window.addEventListener("popstate", onPop);
+    window.addEventListener("pointerdown", arm, true);
+    window.addEventListener("keydown", arm, true);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      window.removeEventListener("pointerdown", arm, true);
+      window.removeEventListener("keydown", arm, true);
+    };
   }, []);
 
   const jumpTo = useCallback((convId: number, messageId: number) => {
@@ -519,13 +583,14 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
   const acceptCall = useCallback(async () => {
     const cur = callRef.current;
     if (!cur || cur.phase !== "incoming" || !socketRef.current) return;
-    if (cur.call.conversation_kind === "group") return joinGroupCall(cur.call);
+    if (cur.call.conversation_kind === "group" || cur.call.multi) return joinGroupCall(cur.call);
     setCall({ ...cur, phase: "connecting" });
     try {
       const session = await CallSession.accept(cur.call, socketRef.current, handlers());
       sessionRef.current = session;
       setCall((c) => (c ? { ...c, session, local: session.local } : c));
     } catch (err) {
+      sessionRef.current = null;
       setCall(null);
       calls.decline(cur.call.id).catch(() => {});
       notify(callError(err, cur.call.kind));
@@ -543,7 +608,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     const cur = callRef.current;
     if (!cur) return;
     const g = groupRef.current;
-    if (g || cur.call.conversation_kind === "group") {
+    if (g || cur.call.conversation_kind === "group" || cur.call.multi) {
       // المجموعة: أغادر أنا فقط، وتبقى المكالمة لمن بقي
       groupRef.current = null;
       if (g) await g.leave();
@@ -557,6 +622,17 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     else if (cur.call.id) await calls.end(cur.call.id).catch(() => {});
     endCallUI(t("انتهت المكالمة"));
   }, [endCallUI]);
+
+  const inviteToCall = useCallback(async (userIds: number[]) => {
+    const cur = callRef.current;
+    if (!cur?.call.id || !userIds.length) return;
+    try {
+      await calls.invite(cur.call.id, userIds);
+      notify(t("يرنّ عندهم الآن..."));
+    } catch (e) {
+      notify((e as Error).message);
+    }
+  }, [notify]);
 
   const toggleMute = useCallback(() => {
     const cur = callRef.current;
@@ -644,7 +720,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     me, users, contacts, isContact, contactAdded, contactRemoved, blocked, isBlocked, setBlocked, convs, stories, theme, tab, setTab, activeId, openConv, openWith, openSaved, panel, setPanel,
     muteDialog, setMuteDialog, joinCode, setJoinCode, jump, jumpTo, clearJump,
     storyViewer, setStoryViewer, storyRing, openStory, userById, otherOf, refreshConvs, refreshStories, updateMe, signOut,
-    call, startCall, acceptCall, declineCall, hangup, toggleMute, toggleCamera, enableVideo, toggleScreen, joinCall,
+    call, startCall, acceptCall, declineCall, hangup, toggleMute, toggleCamera, enableVideo, toggleScreen, joinCall, inviteToCall,
     startLiveShare, stopLiveShare, liveShares, toast, notify,
   };
   return <WaslContext.Provider value={value}>{children}</WaslContext.Provider>;

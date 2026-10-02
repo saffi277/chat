@@ -332,3 +332,17 @@ msgstr "This poll allows one choice only"
 msgid "📊 استطلاع"
 msgstr "📊 Poll"
 
+msgid "انضمّ إلى المكالمة أولاً"
+msgstr "Join the call first"
+
+msgid "اختر شخصاً واحداً على الأقل"
+msgstr "Choose at least one person"
+
+msgid "لا يمكنك إضافة هذا الشخص"
+msgstr "You can't add this person"
+
+msgid "يدعوك إلى مكالمة فيديو"
+msgstr "is inviting you to a video call"
+
+msgid "يدعوك إلى مكالمة صوتية"
+msgstr "is inviting you to a voice call"

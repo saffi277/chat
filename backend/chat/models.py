@@ -113,11 +113,16 @@ class Message(models.Model):
     forwarded = models.BooleanField(default=False)
     # للمحادثات الثنائية: الطرف الثاني قراها. (بالمجموعات نستخدم Membership.last_read_id)
     is_read = models.BooleanField(default=False)
+    # معرّف يضعه جهاز المرسل قبل الإرسال: تظهر الرسالة عنده فوراً «قيد الإرسال» ثم يطابقها بما يصل من الخادم،
+    # وإن أعاد إرسالها (انقطع الاتصال قبل أن يصله الرد) لا تتكرر
+    client_id = models.CharField(max_length=40, blank=True, default='')
 
     class Meta:
         ordering = ['created_at', 'id']
         # أكثر استعلام: "آخر رسائل هاي المحادثة" و"آخر رسالة" → فهرس مركب يخليها فورية حتى ويا ملايين الرسائل
         indexes = [models.Index(fields=['conversation', '-id'], name='msg_conv_id_desc')]
+        constraints = [models.UniqueConstraint(fields=['sender', 'client_id'], condition=~models.Q(client_id=''),
+                                               name='msg_unique_client_id')]
 
     @property
     def is_live(self):

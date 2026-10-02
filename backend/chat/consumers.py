@@ -15,7 +15,8 @@ from django.utils import timezone, translation
 from accounts.models import Profile
 
 from .models import Membership, Message
-from .services import create_message, group_name, mark_delivered, post_error, presence_audience, user_group
+from .services import (clean_client_id, group_name, mark_delivered, post_error, presence_audience, send_once,
+                       serialize_message, user_group)
 
 # حدّ الإرسال عبر WebSocket لكل اتصال (مثل SendThrottle في HTTP): 20 رسالة كل 10 ثوانٍ،
 # و«يكتب الآن» مرة في الثانية على الأكثر. ما زاد يُهمل، فلا يستطيع أحد إغراق المحادثة أو الخادم.
@@ -49,14 +50,18 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         # (الصور والملفات والموقع تنرسل بـ HTTP لأن الـ WebSocket مو مناسب للملفات)
         if content.get('type') == 'message':
             text = (content.get('content') or '').strip()
+            # client_id: تظهر الرسالة عند المرسل فوراً «قيد الإرسال»، ونعيده معها ليطابقها (أو مع الخطأ ليعلّمها «لم تُرسل»)
+            client_id = clean_client_id(content.get('client_id'))
             if text:
                 if not self.allow_message():
-                    await self.send_json({'type': 'error', 'detail': 'rate_limited'})
+                    await self.send_json({'type': 'error', 'detail': 'rate_limited', 'client_id': client_id})
                     return
                 # create_message نفسها تبث الرسالة للكل. وإن مُنع (مجموعة للمشرفين، أو الوضع البطيء) نخبره بالسبب
-                err = await self.send_text_message(text, content.get('reply_to'), content.get('silent') is True)
+                err, again = await self.send_text_message(text, content.get('reply_to'), content.get('silent') is True, client_id)
                 if err:
-                    await self.send_json({'type': 'error', 'detail': err[0], 'message': err[1]})
+                    await self.send_json({'type': 'error', 'detail': err[0], 'message': err[1], 'client_id': client_id})
+                elif again:  # وصلت من قبل ولم يصله ردها: نعيدها له وحده
+                    await self.send_json({'type': 'message', 'message': again})
         elif content.get('type') == 'typing' and self.can_post and self.allow_typing():
             await self.channel_layer.group_send(
                 self.group, {'type': 'chat.event', 'payload': {'type': 'typing', 'user_id': self.user.id,
@@ -90,20 +95,26 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         return m is not None
 
     @database_sync_to_async
-    def send_text_message(self, text, reply_to, silent=False):
+    def send_text_message(self, text, reply_to, silent=False, client_id=''):
+        """يعيد (الخطأ أو None، والرسالة إن كانت قد وصلت من قبل)."""
+        # أُرسلت من قبل (أعاد الجهاز إرسالها بعد انقطاع): لا تُنشأ مرتين ولا تخضع للوضع البطيء من جديد
+        if client_id:
+            existing = Message.objects.filter(sender=self.user, client_id=client_id, conversation_id=self.conv_id).first()
+            if existing:
+                return None, serialize_message(existing)
         # نتحقق من جديد في كل رسالة: ربما أُلغي إشرافه أو غيّر المشرف الإعدادات والاتصال مفتوح
         m = Membership.objects.filter(conversation_id=self.conv_id, user=self.user).select_related('conversation').first()
         if not m:
-            return 'not_allowed', ''
+            return ('not_allowed', ''), None
         # نص الخطأ بلغة المستخدم (لا طلب HTTP هنا يحدد اللغة)
         with translation.override(getattr(getattr(self.user, 'profile', None), 'language', 'ar')):
             err = post_error(m)
         if err:
-            return err
+            return err, None
         conv = m.conversation
         reply = Message.objects.filter(pk=reply_to, conversation=conv).first() if reply_to else None
-        create_message(conv, self.user, text, silent=silent, reply_to=reply)
-        return None
+        data, created = send_once(conv, self.user, text, client_id, silent=silent, reply_to=reply)
+        return None, (None if created else data)
 
 
 class PresenceConsumer(AsyncJsonWebsocketConsumer):
@@ -150,15 +161,18 @@ class PresenceConsumer(AsyncJsonWebsocketConsumer):
 
     @database_sync_to_async
     def signal_target(self, call_id, to):
-        """نتأكد إن الاثنين بنفس المكالمة، وإنها بعدها شغالة."""
-        from calls.models import Call
+        """نتأكد إن الاثنين بنفس المكالمة (أعضاء محادثتها أو مدعوّان إليها)، وإنها بعدها شغالة."""
+        from calls.models import Call, CallInvite
         try:
             call = Call.objects.get(pk=int(call_id), status__in=[Call.RINGING, Call.ONGOING])
             to = int(to)
         except (Call.DoesNotExist, TypeError, ValueError):
             return None
-        members = Membership.objects.filter(conversation_id=call.conversation_id, user_id__in=[self.user.id, to])
-        return to if to != self.user.id and members.count() == 2 else None
+        pair = {self.user.id, to}
+        members = set(Membership.objects.filter(conversation_id=call.conversation_id, user_id__in=pair).values_list('user_id', flat=True))
+        if pair - members:
+            members |= set(CallInvite.objects.filter(call=call, user_id__in=pair).values_list('user_id', flat=True))
+        return to if to != self.user.id and members == pair else None
 
     async def chat_event(self, event):
         # ("وصلت ✓✓" يتسجل مرة وحدة وقت الإرسال لكل المتصلين، مو هنا لكل جهاز)

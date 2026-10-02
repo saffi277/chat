@@ -95,7 +95,7 @@ class MessageSerializer(serializers.ModelSerializer):
         model = Message
         fields = ['id', 'conversation', 'sender', 'kind', 'content', 'file_url', 'file_name', 'file_size',
                   'duration', 'width', 'height', 'latitude', 'longitude', 'live_until', 'is_live', 'reply_to',
-                  'created_at', 'edited_at', 'expires_at', 'is_deleted', 'status', 'is_read', 'reactions']
+                  'created_at', 'edited_at', 'expires_at', 'is_deleted', 'status', 'is_read', 'reactions', 'client_id']
 
     def get_file_url(self, obj):
         # رابط موقّع ومؤقت (config/media.py): ينفتح بس للي وصلتله الرسالة
@@ -123,6 +123,7 @@ class MessageSerializer(serializers.ModelSerializer):
             'is_deleted': obj.deleted_at is not None,
             'status': status, 'is_read': status == 'read', 'reactions': self.get_reactions(obj),
             'forwarded': obj.forwarded, 'poll': poll_json(obj) if obj.kind == Message.POLL and not obj.deleted_at else None,
+            'client_id': obj.client_id,
         }
 
     def get_reactions(self, obj):

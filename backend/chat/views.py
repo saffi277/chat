@@ -474,6 +474,11 @@ def messages(request, pk):
             for item in data:
                 item['views'] = len(reads) - bisect.bisect_left(reads, item['id'])
         return Response(data)
+    # أُرسلت من قبل (أعاد الجهاز إرسالها بعد انقطاع): نعيدها كما هي، دون الوضع البطيء ودون تكرار
+    client_id = services.clean_client_id(request.data.get('client_id'))
+    sent = client_id and conv.messages.filter(sender=request.user, client_id=client_id).first()
+    if sent:
+        return Response(services.serialize_message(sent), status=status.HTTP_200_OK)
     require_can_post(m)
     return Response(send_message(request, conv), status=status.HTTP_201_CREATED)
 
@@ -622,8 +627,11 @@ def send_message(request, conv):
             fields.update(width=size[0], height=size[1])
     else:
         raise ValidationError({'kind': _('نوع رسالة غير معروف')})
-    # «إرسال دون إشعار»: تصل الرسالة كالعادة لكن بلا إشعار على الهاتف
-    return services.create_message(conv, request.user, content, silent=as_bool(data.get('silent')), after_create=after, **fields)
+    # «إرسال دون إشعار»: تصل الرسالة كالعادة لكن بلا إشعار على الهاتف.
+    # client_id (اختياري): إعادة الإرسال بعد انقطاع لا تكرر الرسالة
+    message, _created = services.send_once(conv, request.user, content, services.clean_client_id(data.get('client_id')),
+                                           silent=as_bool(data.get('silent')), after_create=after, **fields)
+    return message
 
 
 def my_message(request, message_id):

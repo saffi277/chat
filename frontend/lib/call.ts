@@ -15,13 +15,29 @@
 //             s.hangup() ، s.toggleMute() ، s.toggleCamera() ، s.enableVideo() (تحويل الصوتية إلى فيديو)
 import type { Call, CallKind } from "./api";
 import { calls } from "./endpoints";
-import type { CallSignal, LiveSocket } from "./socket";
+import type { CallSignal, LiveSocket, MediaState } from "./socket";
 
 export type CallHandlers = {
+  /**
+   * المستلم: تُحفظ الجلسة قبل إبلاغ الخادم بالرد. فالمتصل يرسل عرضه فور علمه بالرد، وقد يصل العرض قبل ردّ الخادم
+   * على طلب «رد» (شبكة الجوال)، فإن لم تكن الجلسة محفوظة يضيع العرض وتبقى المكالمة «جارٍ الاتصال» إلى الأبد
+   */
+  onCreated?: (session: CallSession) => void;
   onLocalStream?: (stream: MediaStream) => void;
-  onRemoteStream?: (stream: MediaStream) => void;
+  /** media: هل نعرض فيديو الطرف الآخر الآن، وهل هو شاشة (تُعرض كاملة دون قصّ) */
+  onRemoteStream?: (stream: MediaStream, media: MediaState) => void;
   onState?: (state: RTCPeerConnectionState) => void;
 };
+
+/**
+ * هل يصل من الطرف الآخر فيديو يُعرض؟ نعتمد على ما أعلنه هو (كاميرتي/شاشتي تعمل)، لأن سفاري (الآيفون) لا يرسل
+ * حدث unmute للمسار بانتظام، فكان الفيديو يصل ولا يظهر. إن لم يعلن شيئاً (إصدار أقدم): نعود إلى حالة المسار.
+ */
+function remoteMedia(stream: MediaStream, announced: MediaState | null): MediaState {
+  const live = stream.getVideoTracks().filter((t) => t.readyState === "live");
+  if (!live.length) return { video: false, screen: false };
+  return announced ?? { video: live.some((t) => !t.muted), screen: false };
+}
 
 export class CallSession {
   readonly pc: RTCPeerConnection;
@@ -30,6 +46,17 @@ export class CallSession {
   muted = false;
   cameraOff = false;
   private pendingCandidates: RTCIceCandidateInit[] = [];
+  /** ما أعلنه الطرف الآخر عن كاميرته وشاشته (null: لم يعلن بعد) */
+  peerMedia: MediaState | null = null;
+  /**
+   * رسائل التعارف تُعالج واحدة بعد الأخرى بترتيب وصولها. لو عولجت معاً (ردّ ثم عرض جديد متتاليان) لبدأ العرض قبل
+   * انتهاء الرد، فيبدو «تصادماً» ويُتجاهل، فلا تصل الكاميرا أو الشاشة
+   */
+  private chain: Promise<void> = Promise.resolve();
+  private queue(task: () => Promise<void>) {
+    this.chain = this.chain.then(task).catch(() => {});
+    return this.chain;
+  }
 
   private constructor(
     public call: Call,
@@ -44,12 +71,32 @@ export class CallSession {
     this.pc.ontrack = (e) => {
       e.streams[0]?.getTracks().forEach((t) => this.remote.getTracks().includes(t) || this.remote.addTrack(t));
       if (!this.remote.getTracks().includes(e.track)) this.remote.addTrack(e.track);
-      // نسخة جديدة من البث في كل مرة، ليعيد عنصر <video> قراءته (سفاري لا يلاحظ المسارات المضافة لاحقاً)
-      const emit = () => handlers.onRemoteStream?.(new MediaStream(this.remote.getTracks()));
-      e.track.onunmute = emit;
-      emit();
+      e.track.onunmute = () => this.emitRemote();
+      e.track.onmute = () => this.emitRemote();
+      e.track.onended = () => this.emitRemote();
+      this.emitRemote();
     };
-    this.pc.onconnectionstatechange = () => handlers.onState?.(this.pc.connectionState);
+    this.pc.onconnectionstatechange = () => {
+      handlers.onState?.(this.pc.connectionState);
+      // اتصلنا: نعلن حالة كاميرتي وشاشتي (مكالمة الفيديو تبدأ والكاميرا تعمل)
+      if (this.pc.connectionState === "connected") this.announce();
+    };
+  }
+
+  /** نسخة جديدة من البث في كل مرة، ليعيد عنصر <video> قراءته (سفاري لا يلاحظ المسارات المضافة لاحقاً) */
+  private emitRemote() {
+    const stream = new MediaStream(this.remote.getTracks());
+    this.handlers.onRemoteStream?.(stream, remoteMedia(stream, this.peerMedia));
+  }
+
+  /** حالتي الآن: هل يرى الطرف الآخر فيديو مني (كاميرا أو شاشة)؟ */
+  get media(): MediaState {
+    return { video: !!this.screen || (this.hasVideo && !this.cameraOff), screen: !!this.screen };
+  }
+
+  /** نخبر الطرف الآخر بحالة كاميرتي وشاشتي (بعد كل تغيير) */
+  private announce() {
+    if (this.call.id) this.signal({ media: this.media });
   }
 
   /** المتصل: يبدي المكالمة (يرن عند الطرف الثاني) */
@@ -72,6 +119,7 @@ export class CallSession {
     const { ice_servers } = await calls.iceServers();
     const session = new CallSession({ ...incoming, ice_servers }, incoming.caller.id, socket, handlers);
     await session.openMedia();
+    handlers.onCreated?.(session);
     // بس بعد ما صرنا جاهزين نبلغ المتصل، فهو يدز العرض (offer)
     try {
       session.call = { ...incoming, ...(await calls.answer(incoming.id)) };
@@ -95,8 +143,15 @@ export class CallSession {
   }
 
   /** أي رسالة تعارف تصل من الطرف الآخر */
-  async handleSignal(data: CallSignal) {
-    if ("description" in data) {
+  handleSignal(data: CallSignal) {
+    return this.queue(() => this.process(data));
+  }
+
+  private async process(data: CallSignal) {
+    if ("media" in data) {
+      this.peerMedia = data.media;
+      this.emitRemote();
+    } else if ("description" in data) {
       const offer = data.description.type === "offer";
       if (offer && this.pc.signalingState !== "stable") {
         // أرسل الطرفان عرضاً معاً (مثلاً فعّلا الكاميرا في اللحظة نفسها)
@@ -125,6 +180,7 @@ export class CallSession {
   toggleCamera() {
     this.cameraOff = !this.cameraOff;
     this.local?.getVideoTracks().forEach((t) => (t.enabled = !this.cameraOff));
+    this.announce();
     return this.cameraOff;
   }
 
@@ -140,17 +196,22 @@ export class CallSession {
     if (this.hasVideo) {
       this.cameraOff = false;
       this.local!.getVideoTracks().forEach((t) => (t.enabled = true));
+      this.announce();
       return this.local!;
     }
     const cam = await navigator.mediaDevices.getUserMedia({ video: true });
     const track = cam.getVideoTracks()[0];
     if (!this.local) this.local = new MediaStream();
     this.local.addTrack(track);
-    this.pc.addTrack(track, this.local);
     this.cameraOff = false;
-    const offer = await this.pc.createOffer();
-    await this.pc.setLocalDescription(offer);
-    this.signal({ description: this.pc.localDescription!.toJSON() });
+    // أشارك شاشتي الآن: تبقى الشاشة هي المعروضة، والكاميرا تحلّ محلها حين أوقف المشاركة
+    const sharing = this.pc.getSenders().find((x) => x.track && x.track === this.screen);
+    if (sharing) this.camera = track;
+    else {
+      this.pc.addTrack(track, this.local);
+      await this.renegotiate();
+    }
+    this.announce();
     const view = new MediaStream(this.local.getTracks());
     this.handlers.onLocalStream?.(view);
     return view;
@@ -171,6 +232,7 @@ export class CallSession {
     }
     this.screen = track;
     track.onended = () => { this.stopScreen(); onStop?.(); };
+    this.announce();
     return track;
   }
 
@@ -182,14 +244,18 @@ export class CallSession {
     track.stop();
     const sender = this.pc.getSenders().find((x) => x.track === track);
     if (sender) await sender.replaceTrack(this.camera);
+    this.announce();
   }
   screen: MediaStreamTrack | null = null;
-  private camera: MediaStreamTrack | null = null;
+  /** الكاميرا التي تعود بعد إيقاف مشاركة الشاشة */
+  camera: MediaStreamTrack | null = null;
 
-  private async renegotiate() {
-    const offer = await this.pc.createOffer();
-    await this.pc.setLocalDescription(offer);
-    this.signal({ description: this.pc.localDescription!.toJSON() });
+  private renegotiate() {
+    return this.queue(async () => {
+      const offer = await this.pc.createOffer();
+      await this.pc.setLocalDescription(offer);
+      this.signal({ description: this.pc.localDescription!.toJSON() });
+    });
   }
 
   /** إنهاء المكالمة (أو إلغاؤها إذا بعدها ترن) */
@@ -234,14 +300,15 @@ export const canShareScreen = () => typeof navigator !== "undefined" && !!(navig
 //   - من يغادر: حدث call_left فيغلق الباقون اتصالهم به.
 // «التفاوض المهذب» عند تصادم عرضين: الطرف ذو الرقم الأصغر يتنازل.
 
-export type GroupPeer = { userId: number; stream: MediaStream; video: boolean; state: RTCPeerConnectionState };
+export type GroupPeer = { userId: number; stream: MediaStream; video: boolean; screen: boolean; state: RTCPeerConnectionState };
 export type GroupHandlers = {
   /** يُستدعى فور إنشاء الجلسة، قبل أي رسالة تعارف: ليحفظها المخزن فلا يفوته ردّ سريع */
   onCreated?: (g: GroupCall) => void;
   onLocalStream?: (stream: MediaStream) => void;
   onPeers?: (peers: GroupPeer[]) => void;
 };
-type Link = { pc: RTCPeerConnection; remote: MediaStream; pending: RTCIceCandidateInit[]; makingOffer: boolean };
+/** chain: رسائل تعارف هذا المشارك تُعالج بالترتيب واحدة بعد الأخرى (انظر CallSession.chain) */
+type Link = { pc: RTCPeerConnection; remote: MediaStream; pending: RTCIceCandidateInit[]; makingOffer: boolean; media: MediaState | null; chain: Promise<void> };
 
 export class GroupCall {
   local: MediaStream | null = null;
@@ -292,8 +359,7 @@ export class GroupCall {
 
   get peers(): GroupPeer[] {
     return [...this.links.entries()].map(([userId, l]) => ({
-      userId, stream: l.remote, state: l.pc.connectionState,
-      video: l.remote.getVideoTracks().some((t) => t.readyState === "live" && !t.muted),
+      userId, stream: l.remote, state: l.pc.connectionState, ...remoteMedia(l.remote, l.media),
     }));
   }
 
@@ -301,17 +367,51 @@ export class GroupCall {
     this.handlers.onPeers?.(this.peers);
   }
 
+  /**
+   * مكالمة ثنائية جارية أُضيف إليها أحد: تصير جماعية دون انقطاع. نأخذ اتصالها القائم كما هو (الصوت والصورة
+   * مستمران) ليكون أول رابط في الشبكة، ثم يتصل المنضمّون الجدد بكل مشارك.
+   */
+  static adopt(s: CallSession, meId: number, socket: Pick<LiveSocket, "send">, handlers: GroupHandlers = {}) {
+    const g = new GroupCall({ ...s.call, multi: true }, meId, socket, handlers, s.call.ice_servers ?? []);
+    handlers.onCreated?.(g);
+    g.local = s.local;
+    g.muted = s.muted;
+    g.cameraOff = s.cameraOff;
+    g.screen = s.screen;
+    g.camera = s.camera;
+    if (s.screen) s.screen.onended = () => g.stopScreen();
+    const l: Link = { pc: s.pc, remote: new MediaStream(s.remote.getTracks()), pending: [], makingOffer: false, media: s.peerMedia, chain: Promise.resolve() };
+    l.remote.getTracks().forEach((t) => {
+      t.onunmute = () => g.emit();
+      t.onmute = () => g.emit();
+      t.onended = () => g.emit();
+    });
+    g.links.set(s.peerId, l);
+    g.attach(s.peerId, l);
+    g.emit();
+    return g;
+  }
+
   private link(peerId: number) {
     const existing = this.links.get(peerId);
     if (existing) return existing;
     const pc = new RTCPeerConnection({ iceServers: this.ice });
-    const l: Link = { pc, remote: new MediaStream(), pending: [], makingOffer: false };
+    const l: Link = { pc, remote: new MediaStream(), pending: [], makingOffer: false, media: null, chain: Promise.resolve() };
     this.local?.getTracks().forEach((t) => pc.addTrack(t, this.local!));
     if (this.screen) {
       const sender = pc.getSenders().find((x) => x.track?.kind === "video");
       if (sender) sender.replaceTrack(this.screen);
       else pc.addTrack(this.screen, this.local ?? new MediaStream());
     }
+    this.links.set(peerId, l);
+    this.attach(peerId, l);
+    this.emit();
+    return l;
+  }
+
+  /** أحداث اتصال مشارك واحد: عناوينه، ومساراته، وحالته */
+  private attach(peerId: number, l: Link) {
+    const pc = l.pc;
     pc.onicecandidate = (e) => e.candidate && this.signal(peerId, { candidate: e.candidate.toJSON() });
     pc.ontrack = (e) => {
       // نسخة جديدة في كل مرة ليعيد عنصر <video> قراءتها (سفاري)
@@ -319,15 +419,28 @@ export class GroupCall {
       l.remote = new MediaStream(l.remote.getTracks());
       e.track.onunmute = () => this.emit();
       e.track.onmute = () => this.emit();
+      e.track.onended = () => this.emit();
       this.emit();
     };
-    pc.onconnectionstatechange = () => this.emit();
-    this.links.set(peerId, l);
-    this.emit();
-    return l;
+    pc.onconnectionstatechange = () => {
+      // اتصلنا به: نعلن له حالة كاميرتي وشاشتي
+      if (pc.connectionState === "connected") this.signal(peerId, { media: this.media });
+      this.emit();
+    };
   }
 
-  private async offer(peerId: number) {
+  private queue(peerId: number, task: (l: Link) => Promise<void>) {
+    const l = this.link(peerId);
+    l.chain = l.chain.then(() => task(l)).catch(() => {});
+    return l.chain;
+  }
+
+  /** عرض جديد لمشارك (بعد ما في الطابور من رسائله) */
+  private offer(peerId: number) {
+    return this.queue(peerId, () => this.makeOffer(peerId));
+  }
+
+  private async makeOffer(peerId: number) {
     const l = this.link(peerId);
     try {
       l.makingOffer = true;
@@ -339,10 +452,16 @@ export class GroupCall {
   }
 
   /** رسالة تعارف من مشارك (قد يكون جديداً لم نعرفه بعد) */
-  async handleSignal(from: number, data: CallSignal) {
-    const l = this.link(from);
+  handleSignal(from: number, data: CallSignal) {
+    return this.queue(from, (l) => this.process(l, from, data));
+  }
+
+  private async process(l: Link, from: number, data: CallSignal) {
     const polite = this.meId < from;
-    if ("description" in data) {
+    if ("media" in data) {
+      l.media = data.media;
+      this.emit();
+    } else if ("description" in data) {
       const offer = data.description.type === "offer";
       const collision = offer && (l.makingOffer || l.pc.signalingState !== "stable");
       if (collision && !polite) return;
@@ -352,6 +471,8 @@ export class GroupCall {
       if (offer) {
         await l.pc.setLocalDescription(await l.pc.createAnswer());
         this.signal(from, { description: l.pc.localDescription!.toJSON() });
+        // عرضه بلا مكان لكاميرتي أو شاشتي (انضمّ بالصوت فقط): نرسل له عرضاً جديداً حتى يراهما
+        if (l.pc.getTransceivers().some((tr) => tr.sender.track && !tr.mid)) await this.makeOffer(from);
       }
     } else if ("candidate" in data) {
       if (l.pc.remoteDescription) await l.pc.addIceCandidate(data.candidate).catch(() => {});
@@ -377,6 +498,7 @@ export class GroupCall {
   toggleCamera() {
     this.cameraOff = !this.cameraOff;
     this.local?.getVideoTracks().forEach((t) => (t.enabled = !this.cameraOff));
+    this.announce();
     return this.cameraOff;
   }
 
@@ -384,11 +506,21 @@ export class GroupCall {
     return !!this.local?.getVideoTracks().length;
   }
 
+  get media(): MediaState {
+    return { video: !!this.screen || (this.hasVideo && !this.cameraOff), screen: !!this.screen };
+  }
+
+  /** نخبر الجميع بحالة كاميرتي وشاشتي (بعد كل تغيير) */
+  private announce() {
+    for (const peerId of this.links.keys()) this.signal(peerId, { media: this.media });
+  }
+
   /** تشغيل الكاميرا أثناء مكالمة صوتية: نضيف المسار لكل اتصال ونعيد التفاوض معه */
   async enableVideo() {
     if (this.hasVideo) {
       this.cameraOff = false;
       this.local!.getVideoTracks().forEach((t) => (t.enabled = true));
+      this.announce();
       return this.local!;
     }
     const cam = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -396,10 +528,14 @@ export class GroupCall {
     if (!this.local) this.local = new MediaStream();
     this.local.addTrack(track);
     this.cameraOff = false;
-    for (const [peerId, l] of this.links) {
-      l.pc.addTrack(track, this.local);
-      await this.offer(peerId);
+    if (this.screen) this.camera = track; // تبقى الشاشة معروضة، والكاميرا بعد إيقافها
+    else {
+      for (const [peerId, l] of this.links) {
+        l.pc.addTrack(track, this.local);
+        await this.offer(peerId);
+      }
     }
+    this.announce();
     const view = new MediaStream(this.local.getTracks());
     this.handlers.onLocalStream?.(view);
     return view;
@@ -419,6 +555,7 @@ export class GroupCall {
       }
     }
     track.onended = () => { this.stopScreen(); onStop?.(); };
+    this.announce();
     return track;
   }
 
@@ -432,6 +569,7 @@ export class GroupCall {
       const sender = l.pc.getSenders().find((x) => x.track === track);
       if (sender) await sender.replaceTrack(this.camera);
     }
+    this.announce();
   }
 
   /** مغادرة المكالمة (تبقى لمن بقي، وتنتهي حين يغادر الأخير) */

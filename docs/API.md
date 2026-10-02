@@ -164,6 +164,7 @@ import { CallSession } from "@/lib/call";      // المكالمات
 | `is_deleted` | اعرض "🚫 تم حذف هذه الرسالة" |
 | `edited_at` | إذا موجود اعرض "(معدّلة)" |
 | `reactions` | `[{emoji, count, user_ids}]`: التفاعلات (تتحدث مباشرة بحدث `message_updated`) |
+| `client_id` | معرّف وضعه جهاز المرسل قبل الإرسال (أو `""`): تُطابَق به الرسالة التي ظهرت عنده فوراً «قيد الإرسال» |
 
 ### المحادثة `Conversation`
 | الحقل | المعنى |
@@ -238,12 +239,17 @@ import { CallSession } from "@/lib/call";      // المكالمات
 | `call_incoming` | العام | اعرض شاشة المكالمة الواردة |
 | `call_answered` / `call_ended` | العام | الطرف رد / المكالمة خلصت |
 | `call_left` | العام | غادر أحدهم المكالمة الجماعية: `group.peerLeft(user_id)` |
+| `call_invited` | العام | أُضيف أشخاص إلى مكالمتي (`user_ids`): الثنائية تصير جماعية `GroupCall.adopt(session, ...)` |
+| `call_invite_declined` | العام | رفض أحد المدعوّين الانضمام (`user_id`) |
 | `message_removed` | المحادثة | رسالة مختفية انتهت مدتها: احذفها من القائمة |
 | `scheduled_changed` | العام | أُرسلت رسالتي المجدولة (أو تعذّر إرسالها): حدّث العدد |
-| `error` | المحادثة | `rate_limited` أو `not_allowed` أو `slow_mode`، ومعه `message` بلغة المستخدم |
+| `error` | المحادثة | `rate_limited` أو `not_allowed` أو `slow_mode`، ومعه `message` بلغة المستخدم، و`client_id` الرسالة المرفوضة |
 | `call.signal` | العام | مرره لـ `session.handleSignal(e.data)` |
 
-إرسال بالـ WebSocket: `socket.send({ type: "message", content, reply_to? })` و `socket.send({ type: "typing" })`.
+إرسال بالـ WebSocket: `socket.send({ type: "message", content, reply_to?, client_id })` و `socket.send({ type: "typing" })`.
+**الإرسال الفوري (مثل واتساب):** تظهر الرسالة عند المرسل فوراً بساعة «قيد الإرسال» بمعرّف يولّده جهازه (`client_id`)،
+وتختفي الساعة حين يصل حدث `message` بالمعرّف نفسه. إن لم يصل خلال 20 ثانية: «لم تُرسل. اضغط لإعادة المحاولة».
+إعادة الإرسال بالمعرّف نفسه (WebSocket أو `messages.sendText(..., clientId)`) **لا تكرر الرسالة**: الخادم يعيد المحفوظة.
 الملفات والموقع دائماً بـ HTTP (`messages.sendFile` / `sendLocation`).
 
 ---
@@ -276,6 +282,12 @@ s.toggleMute(); s.toggleCamera(); await s.hangup();
   المغادرة `group.leave()` (= `calls.leave(id)`): تبقى المكالمة لمن بقي، وتنتهي حين يغادر الأخير.
   الانضمام إلى مكالمة جارية: `calls.active(convId)` ثم `GroupCall.join`.
 - **مشاركة الشاشة** (الحاسوب): `session.shareScreen()` / `stopScreen()` في المكالمتين: تحلّ الشاشة محل الكاميرا.
+- **حالة الكاميرا والشاشة:** كل طرف يعلن عبر `call.signal` بالشكل `{ media: { video, screen } }` متى تعمل كاميرته أو شاشته،
+  ويُعرض فيديو الطرف الآخر بحسب إعلانه (لا بحدث `unmute` للمسار، فسفاري في الآيفون لا يرسله بانتظام).
+  الشاشة تُعرض كاملة (`object-contain`)، والكاميرا تملأ المكان (`object-cover`).
+- **إضافة أشخاص إلى مكالمة جارية** (مثل واتساب): `calls.invite(callId, [userIds])`. يرنّ عندهم (`call_incoming` ومعه
+  `invited_by`، وإشعار يفتح `/chat?call=<id>`)، وتصير المكالمة جماعية: `call.multi = true`. لمن في المكالمة فقط، ولمن يعرفهم
+  (جهات الاتصال ومن يشاركهم محادثة)، وحتى 8 مشاركين. المكالمة الثنائية التي صارت جماعية تنتهي حين يبقى فيها شخص واحد.
 - ✅ جربنا المكالمة الجماعية بأربعة متصفحات: انضمام، ومغادرة، وانضمام متأخر، ومشاركة شاشة.
 - ⚠️ بين شبكات مختلفة بالإنتاج نحتاج خادم TURN. والـ Mesh مناسب حتى 8 تقريباً؛ لأكثر من ذلك يلزم خادم وسائط (SFU).
 

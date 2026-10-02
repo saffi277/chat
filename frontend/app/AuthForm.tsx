@@ -6,8 +6,8 @@
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ROLE_LABELS, saveSession, type Role } from "@/lib/api";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { getToken, ROLE_LABELS, saveSession, type Role } from "@/lib/api";
 import { auth } from "@/lib/endpoints";
 import { getLang, setLang, useLang, useT } from "@/lib/i18n";
 import { isStandalone } from "@/lib/permissions";
@@ -129,6 +129,15 @@ export default function AuthForm({ mode }: { mode: "login" | "register" }) {
   const t = useT();
   const lang = useLang();
   const { frame, card } = useFitToScreen();
+  const router = useRouter();
+  // من دخل فعلاً لا يرى صفحة الدخول (مثلاً بالسحب للخلف في الآيفون، أو بفتح الرابط القديم): يعود إلى المحادثات.
+  // pageshow: سفاري يعيد الصفحة من ذاكرته عند الرجوع دون أن يشغّل الكود من جديد
+  useEffect(() => {
+    const back = () => { if (getToken()) router.replace("/chat"); };
+    back();
+    window.addEventListener("pageshow", back);
+    return () => window.removeEventListener("pageshow", back);
+  }, [router]);
 
   return (
     <main className="portal relative h-dvh overflow-hidden lg:h-auto lg:min-h-dvh lg:overflow-x-hidden" data-theme={theme}>
@@ -283,7 +292,7 @@ function LoginForm({ onForgot }: { onForgot: () => void }) {
       saveSession(data.token, data.user, remember || isStandalone());
       // اللغة المختارة في صفحة الدخول تُحفظ في الحساب (لتتبعه على أجهزته الأخرى)
       await auth.updateMe({ language: getLang() }).catch(() => {});
-      router.push("/chat");
+      router.replace("/chat"); // لا تبقى صفحة الدخول خلفها (السحب للخلف لا يعيدها)
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);
@@ -347,7 +356,7 @@ function RegisterForm() {
       const data = await auth.register({ ...form, role, username: form.username.trim(), email: form.email.trim(), university_id: form.university_id.trim() });
       saveSession(data.token, data.user, true);
       await auth.updateMe({ language: getLang() }).catch(() => {});
-      router.push("/chat");
+      router.replace("/chat"); // لا تبقى صفحة الدخول خلفها (السحب للخلف لا يعيدها)
     } catch (err) {
       setError((err as Error).message);
       setBusy(false);

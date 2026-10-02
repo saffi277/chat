@@ -80,3 +80,52 @@ class ChatFlowTests(TransactionTestCase):
         await ws.disconnect()
         self.assertEqual(errors, 5)
         self.assertEqual(await sync_to_async(Message.objects.filter(conversation_id=conv.data['id']).count)(), 20)
+
+    async def test_websocket_client_id_is_echoed_and_resend_is_not_duplicated(self):
+        """
+        الرسالة تظهر عند المرسل فوراً «قيد الإرسال» بمعرّف من جهازه (client_id)، فيعود المعرّف مع الرسالة ليطابقها.
+        وإن أعاد إرسالها (انقطع الاتصال قبل أن يصله الرد) لا تتكرر، ويصله ردّها وحده.
+        """
+        from asgiref.sync import sync_to_async
+
+        from chat.models import Message
+        (ali, a), (sara, s) = await sync_to_async(self.register)('ali'), await sync_to_async(self.register)('sara')
+        conv = await sync_to_async(open_chat)(ali, s['user']['id'])
+        path = f"/ws/chat/{conv.data['id']}/?token="
+        c1 = WebsocketCommunicator(application, path + a['token'])
+        c2 = WebsocketCommunicator(application, path + s['token'])
+        self.assertTrue((await c1.connect())[0])
+        self.assertTrue((await c2.connect())[0])
+        await c1.send_json_to({'type': 'message', 'content': 'مرحبا', 'client_id': 'abc12345-xyz'})
+        mine = await c1.receive_json_from()
+        self.assertEqual((mine['type'], mine['message']['client_id']), ('message', 'abc12345-xyz'))
+        self.assertEqual((await c2.receive_json_from())['message']['content'], 'مرحبا')
+        while not await c1.receive_nothing(timeout=0.2):  # «وصلت» وغيرها
+            await c1.receive_json_from()
+        while not await c2.receive_nothing(timeout=0.2):
+            await c2.receive_json_from()
+        # إعادة الإرسال: تصل للمرسل وحده، ولا تُحفظ مرتين
+        await c1.send_json_to({'type': 'message', 'content': 'مرحبا', 'client_id': 'abc12345-xyz'})
+        again = await c1.receive_json_from()
+        self.assertEqual((again['type'], again['message']['id']), ('message', mine['message']['id']))
+        self.assertTrue(await c2.receive_nothing(timeout=0.3))
+        count = sync_to_async(Message.objects.filter(conversation_id=conv.data['id'], client_id='abc12345-xyz').count)
+        self.assertEqual(await count(), 1)
+        # معرّف غير صالح يُتجاهل (والرسالة تُرسل عادية)
+        await c1.send_json_to({'type': 'message', 'content': 'ثانية', 'client_id': 'bad id!'})
+        self.assertEqual((await c1.receive_json_from())['message']['client_id'], '')
+        await c1.disconnect()
+        await c2.disconnect()
+
+    def test_http_client_id_resend_is_not_duplicated(self):
+        ali, _ = self.register('ali')
+        sara, s = self.register('sara')
+        cid = open_chat(ali, s['user']['id']).data['id']
+        url = f'/api/conversations/{cid}/messages/'
+        first = ali.post(url, {'content': 'هلو', 'client_id': 'cid-00000001'}, format='json')
+        self.assertEqual((first.status_code, first.data['client_id']), (201, 'cid-00000001'))
+        again = ali.post(url, {'content': 'هلو', 'client_id': 'cid-00000001'}, format='json')
+        self.assertEqual((again.status_code, again.data['id']), (200, first.data['id']))
+        self.assertEqual(len(ali.get(url).data), 1)
+        # معرّف شخص آخر بالقيمة نفسها لا يتعارض (المعرّف فريد لكل مرسل)
+        self.assertEqual(sara.post(url, {'content': 'أهلاً', 'client_id': 'cid-00000001'}, format='json').status_code, 201)
