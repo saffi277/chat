@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { ROLE_LABELS, THEMES, WALLPAPERS, type Me, type Mode } from "@/lib/api";
-import { auth } from "@/lib/endpoints";
+import { auth, conversations as convApi } from "@/lib/endpoints";
 import { LANGS, setLang, useT } from "@/lib/i18n";
 import { howToEnable, isStandalone, PERM_LABELS, permState, platform, requestPerm, type PermName, type PermState } from "@/lib/permissions";
 import { disablePush, enablePush, getPushState, testPush, type PushState } from "@/lib/push";
@@ -245,8 +245,20 @@ function AppearancePage() {
 /** الثيمات: لون التطبيق وخلفية المحادثات، مع معاينة حيّة. مستقلة عن الوضع النهاري والليلي */
 function ThemesPage() {
   const t = useT();
-  const { me } = useWasl();
+  const { me, convs, activeId, refreshConvs, notify } = useWasl();
   const { busy, run } = useSave();
+  // المحادثة المفتوحة بجانب الإعدادات (في الحاسوب) لها خلفية خاصة: تتقدّم على الخلفية العامة، فلا يتغير شكلها هي
+  const open = convs.find((c) => c.id === activeId);
+  const ownWall = open?.wallpaper ? WALLPAPERS.find((w) => w.id === open.wallpaper) : undefined;
+  const resetChatWall = async () => {
+    if (!open) return;
+    try {
+      await convApi.setPrefs(open.id, { wallpaper: "" });
+      await refreshConvs();
+    } catch (e) {
+      notify((e as Error).message);
+    }
+  };
   return (
     <>
       {/* معاينة: تتغير فوراً مع الاختيار */}
@@ -286,6 +298,13 @@ function ThemesPage() {
           ))}
         </div>
         <p className="w-muted mt-2 text-xs">{t("ولكل محادثة أن تختار خلفيتها: من ⋯ ← إعدادات المحادثة.")}</p>
+        {ownWall && (
+          <div className="w-tint mt-3 flex items-center gap-3 rounded-2xl p-3 text-xs leading-6" role="status">
+            <Icon name="info" size={18} className="shrink-0" />
+            <span className="flex-1">{t("المحادثة المفتوحة لها خلفية خاصة بها ({name})، فلا تتغير بالخلفية العامة.", { name: t(ownWall.label) })}</span>
+            <button onClick={resetChatWall} className="w-accent shrink-0 rounded-full px-3 py-1.5 font-bold">{t("استعمال العامة")}</button>
+          </div>
+        )}
       </Section>
     </>
   );

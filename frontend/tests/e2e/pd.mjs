@@ -188,6 +188,23 @@ const ico = await fetch('http://localhost:3000/favicon.ico');
 if (!icons.some((h) => h.includes('college-192.png')) || ico.status !== 200) fail(`tab icon: ${icons.join(', ')}`);
 ok('the browser tab shows the college logo');
 
+// ------------------------------------------------ 6) الخلفية العامة والمحادثة ذات الخلفية الخاصة
+await req('PATCH', `/conversations/${dm.id}/`, { wallpaper: 'campus' }, ali.token);
+const w = await page(ali, { mobile: false, w: 1280, h: 800 });
+await openRow(w, 'سارة أحمد');
+await w.click('nav >> text=الإعدادات'); await w.click('aside button:has-text("الثيمات")');
+const chatWall = () => w.$eval('main [data-wallpaper]', (el) => el.getAttribute('data-wallpaper')).catch(() => null);
+await w.click('aside button:has-text("نقاط")'); await w.waitForTimeout(800);
+if (await chatWall() !== 'campus') fail('the chat with its own background should keep it');
+await w.waitForSelector('aside [role=status]:has-text("المحادثة المفتوحة لها خلفية خاصة بها (صورة الكلية)")');
+await w.screenshot({ path: 'ui/pd-d-own-wallpaper.png' });
+await w.click('aside [role=status] button:has-text("استعمال العامة")');
+await w.waitForFunction(() => !document.querySelector('main [data-wallpaper]') && !document.querySelector('aside [role=status]'), null, { timeout: 8000 });
+const shell = await w.$eval('.wasl-shell', (el) => el.getAttribute('data-wallpaper'));
+if (shell !== 'dots') fail(`general background should be dots (got ${shell})`);
+await w.screenshot({ path: 'ui/pd-d-general-wallpaper.png' });
+ok('themes: a chat with its own background explains why it did not change, and one tap switches it to the general background');
+
 if (errs.length) fail('page errors: ' + [...new Set(errs)].join(' | '));
 ok('no page errors');
 await b.close();

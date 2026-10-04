@@ -415,6 +415,8 @@ export const EN: Record<string, string> = {
   "إضافة إلى المكالمة": "Add to call",
   "يدعوك إلى المكالمة": "is inviting you to the call",
   "يرنّ عندهم الآن...": "Ringing them now...",
+  "المحادثة المفتوحة لها خلفية خاصة بها ({name})، فلا تتغير بالخلفية العامة.": "The open chat has its own background ({name}), so the general background does not change it.",
+  "استعمال العامة": "Use general",
   // المرحلة (ب): إعدادات المحادثة، والجدولة، والمكالمة الجماعية، والثيمات
   "10 ثوانٍ": "10 seconds",
   "24 ساعة": "24 hours",
