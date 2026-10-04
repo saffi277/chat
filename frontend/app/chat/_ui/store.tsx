@@ -7,12 +7,12 @@
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ApiError, getToken, logout, saveMe, type Call, type CallKind, type Conversation, type Me, type Message, type StoryGroup, type User } from "@/lib/api";
-import { CallSession, GroupCall, type GroupPeer } from "@/lib/call";
+import { CallSession, GroupCall, meetId, type GroupPeer } from "@/lib/call";
 import { auth, calls, contacts as contactsApi, conversations as convApi, messages as msgApi, safety, stories as storyApi, users as usersApi } from "@/lib/endpoints";
 import { setLang, t, useLang } from "@/lib/i18n";
 import { isDeviceError, permError } from "@/lib/permissions";
 import { syncPushSubscription } from "@/lib/push";
-import { openSocket, type LiveSocket, type MediaState } from "@/lib/socket";
+import { openSocket, type LiveSocket, type MediaState, type MeetEvent } from "@/lib/socket";
 
 /** تبويبات الشريط السفلي (المحادثات/المكالمات/جهات الاتصال/الإعدادات) + الحالات (من الإعدادات) */
 export type Tab = "chats" | "calls" | "people" | "settings" | "stories";
@@ -50,7 +50,19 @@ export type CallUI = {
   peers?: GroupPeer[];
   /** أشارك شاشتي الآن */
   sharing?: boolean;
+  /** الطرف الآخر في المكالمة الثنائية: مايكه يعمل؟ (في الجماعية: peers[].audio) */
+  remoteAudio?: boolean;
+  /** مثل Google Meet: دردشة المكالمة (لا تُحفظ)، وما لم أقرأه منها، ومن رفع يده، والتفاعلات الطائرة الآن */
+  chat?: CallChat[];
+  unread?: number;
+  hands?: number[];
+  reactions?: CallReaction[];
 };
+
+export type CallChat = { id: string; from: number; text: string; at: number };
+export type CallReaction = { id: string; from: number; emoji: string };
+/** التفاعلات السريعة في المكالمة */
+export const CALL_REACTIONS = ["👍", "❤️", "😂", "😮", "👏", "🎉"];
 
 type Ctx = {
   me: Me;
@@ -111,6 +123,12 @@ type Ctx = {
   toggleScreen: () => void;
   /** إضافة أشخاص إلى المكالمة الجارية (مثل واتساب) */
   inviteToCall: (userIds: number[]) => Promise<void>;
+  /** دردشة المكالمة، وتفاعل سريع، ورفع اليد، وتبديل الكاميرا الأمامية والخلفية */
+  sendCallChat: (text: string) => void;
+  sendReaction: (emoji: string) => void;
+  toggleHand: () => void;
+  readCallChat: () => void;
+  switchCamera: () => Promise<void>;
   /** الانضمام إلى مكالمة جماعية جارية */
   joinCall: (call: Call) => Promise<void>;
   // الموقع المباشر
@@ -204,15 +222,38 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     setTimeout(() => setCall((c) => (c?.phase === "ended" && c.call.id === cur.call.id ? null : c)), 1800);
   }, []);
 
+  // حدث داخل المكالمة (منّي أو من غيري): رسالة دردشة، أو تفاعل يطفو ثم يختفي، أو رفع اليد وإنزالها
+  const applyMeet = useCallback((from: number, ev: MeetEvent) => {
+    if (ev.type === "react") {
+      if (!CALL_REACTIONS.includes(ev.emoji)) return;
+      const r = { id: meetId(), from, emoji: ev.emoji };
+      setCall((c) => (c ? { ...c, reactions: [...(c.reactions ?? []).slice(-11), r] } : c));
+      setTimeout(() => setCall((c) => (c ? { ...c, reactions: (c.reactions ?? []).filter((x) => x.id !== r.id) } : c)), 3500);
+      return;
+    }
+    setCall((c) => {
+      if (!c) return c;
+      if (ev.type === "hand") {
+        const hands = (c.hands ?? []).filter((id) => id !== from);
+        return { ...c, hands: ev.up ? [...hands, from] : hands };
+      }
+      const text = String(ev.text ?? "").slice(0, 1000).trim();
+      if (!text || (c.chat ?? []).some((m) => m.id === ev.id)) return c;
+      const mine = from === meRef.current?.id;
+      return { ...c, chat: [...(c.chat ?? []), { id: ev.id, from, text, at: Date.now() }], unread: mine ? c.unread ?? 0 : (c.unread ?? 0) + 1 };
+    });
+  }, []);
+
   const handlers = useCallback(() => ({
     onCreated: (s: CallSession) => { sessionRef.current = s; },
     onLocalStream: (s: MediaStream) => setCall((c) => (c ? { ...c, local: s } : c)),
-    onRemoteStream: (s: MediaStream, media: MediaState) => setCall((c) => (c ? { ...c, remote: s, remoteVideo: media.video, remoteScreen: media.screen } : c)),
+    onRemoteStream: (s: MediaStream, media: MediaState) => setCall((c) => (c ? { ...c, remote: s, remoteVideo: media.video, remoteScreen: media.screen, remoteAudio: media.audio !== false } : c)),
+    onMeet: (from: number, ev: MeetEvent) => applyMeet(from, ev),
     onState: (state: RTCPeerConnectionState) => {
       if (state === "connected") setCall((c) => (c ? { ...c, phase: "active", startedAt: c.startedAt ?? Date.now() } : c));
       if (state === "failed") endCallUI(t("تعذّر الاتصال"));
     },
-  }), [endCallUI]);
+  }), [endCallUI, applyMeet]);
 
   // المكالمة الجماعية: الجلسة تُحفظ فور إنشائها، ومن يتصل يظهر في الشبكة
   const groupHandlers = useCallback(() => ({
@@ -224,7 +265,8 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
       const live = c.phase === "outgoing" && peers.some((p) => p.state === "connected");
       return { ...c, peers, ...(live ? { phase: "active" as const, startedAt: c.startedAt ?? Date.now() } : {}) };
     }),
-  }), []);
+    onMeet: (from: number, ev: MeetEvent) => applyMeet(from, ev),
+  }), [applyMeet]);
 
   // مكالمتي الثنائية صارت جماعية (أُضيف إليها أحد): ننقل اتصالها القائم إلى شبكة المكالمة الجماعية دون انقطاع
   const adoptGroup = useCallback(() => {
@@ -644,6 +686,34 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     const s = groupRef.current ?? cur?.session;
     if (cur && s) setCall({ ...cur, cameraOff: s.toggleCamera() });
   }, []);
+  // ------------------------------------------------ داخل المكالمة: دردشة وتفاعلات ورفع اليد (تصل للجميع ونعرضها عندنا فوراً)
+  const sendMeet = useCallback((ev: MeetEvent) => {
+    const s = groupRef.current ?? sessionRef.current;
+    if (!s || !meRef.current) return;
+    s.sendMeet(ev);
+    applyMeet(meRef.current.id, ev);
+  }, [applyMeet]);
+  const sendCallChat = useCallback((text: string) => {
+    const clean = text.trim().slice(0, 1000);
+    if (clean) sendMeet({ type: "chat", id: meetId(), text: clean });
+  }, [sendMeet]);
+  const sendReaction = useCallback((emoji: string) => sendMeet({ type: "react", emoji }), [sendMeet]);
+  const toggleHand = useCallback(() => {
+    const id = meRef.current?.id;
+    if (id) sendMeet({ type: "hand", up: !(callRef.current?.hands ?? []).includes(id) });
+  }, [sendMeet]);
+  const readCallChat = useCallback(() => setCall((c) => (c && c.unread ? { ...c, unread: 0 } : c)), []);
+  const switchCamera = useCallback(async () => {
+    const s = groupRef.current ?? sessionRef.current;
+    if (!s) return;
+    try {
+      const local = await s.switchCamera();
+      if (local) setCall((c) => (c ? { ...c, local } : c));
+    } catch (err) {
+      notify(callError(err, "video"));
+    }
+  }, [notify]);
+
   const toggleScreen = useCallback(async () => {
     const cur = callRef.current;
     const s = groupRef.current ?? cur?.session;
@@ -721,6 +791,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     muteDialog, setMuteDialog, joinCode, setJoinCode, jump, jumpTo, clearJump,
     storyViewer, setStoryViewer, storyRing, openStory, userById, otherOf, refreshConvs, refreshStories, updateMe, signOut,
     call, startCall, acceptCall, declineCall, hangup, toggleMute, toggleCamera, enableVideo, toggleScreen, joinCall, inviteToCall,
+    sendCallChat, sendReaction, toggleHand, readCallChat, switchCamera,
     startLiveShare, stopLiveShare, liveShares, toast, notify,
   };
   return <WaslContext.Provider value={value}>{children}</WaslContext.Provider>;

@@ -32,10 +32,18 @@ export type ChatEvent =
 export type CallSignal =
   | { description: RTCSessionDescriptionInit }
   | { candidate: RTCIceCandidateInit }
-  /** كل طرف يعلن متى تعمل كاميرته أو شاشته (لا نعتمد على حدث mute/unmute للمسار: سفاري لا يرسله بانتظام) */
-  | { media: MediaState };
+  /** كل طرف يعلن متى تعمل كاميرته أو شاشته أو مايكه (لا نعتمد على حدث mute/unmute للمسار: سفاري لا يرسله بانتظام) */
+  | { media: MediaState }
+  /** أحداث داخل المكالمة (مثل Google Meet): تمرّ بين المشاركين مباشرة ولا تُحفظ */
+  | { meet: MeetEvent };
 
-export type MediaState = { video: boolean; screen: boolean };
+/** audio: المايك يعمل (غائب في الإصدارات الأقدم من التطبيق = يعمل) */
+export type MediaState = { video: boolean; screen: boolean; audio?: boolean };
+
+export type MeetEvent =
+  | { type: "chat"; id: string; text: string } // رسالة في دردشة المكالمة
+  | { type: "react"; emoji: string } // تفاعل سريع يطفو على الشاشة
+  | { type: "hand"; up: boolean }; // رفع اليد أو إنزالها
 
 export type SocketStatus = "connecting" | "open" | "closed";
 

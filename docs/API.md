@@ -282,7 +282,11 @@ s.toggleMute(); s.toggleCamera(); await s.hangup();
   المغادرة `group.leave()` (= `calls.leave(id)`): تبقى المكالمة لمن بقي، وتنتهي حين يغادر الأخير.
   الانضمام إلى مكالمة جارية: `calls.active(convId)` ثم `GroupCall.join`.
 - **مشاركة الشاشة** (الحاسوب): `session.shareScreen()` / `stopScreen()` في المكالمتين: تحلّ الشاشة محل الكاميرا.
-- **حالة الكاميرا والشاشة:** كل طرف يعلن عبر `call.signal` بالشكل `{ media: { video, screen } }` متى تعمل كاميرته أو شاشته،
+- **ميزات Google Meet** (الثنائية والجماعية): أحداث تمرّ بين المشاركين عبر `call.signal` بالشكل `{ meet: ... }` ولا تُحفظ:
+  `{ type: "chat", id, text }` دردشة، و`{ type: "react", emoji }` تفاعل يطفو، و`{ type: "hand", up }` رفع اليد.
+  في الواجهة: `sendCallChat` و`sendReaction` و`toggleHand` و`switchCamera` (الأمامية ↔ الخلفية بـ `replaceTrack` دون إعادة تفاوض).
+  ومن يتكلم الآن يُحسب على الجهاز من مستوى الصوت (Web Audio).
+- **حالة الكاميرا والشاشة والمايك:** كل طرف يعلن عبر `call.signal` بالشكل `{ media: { video, screen, audio } }` متى تعمل كاميرته أو شاشته أو مايكه،
   ويُعرض فيديو الطرف الآخر بحسب إعلانه (لا بحدث `unmute` للمسار، فسفاري في الآيفون لا يرسله بانتظام).
   الشاشة تُعرض كاملة (`object-contain`)، والكاميرا تملأ المكان (`object-cover`).
 - **إضافة أشخاص إلى مكالمة جارية** (مثل واتساب): `calls.invite(callId, [userIds])`. يرنّ عندهم (`call_incoming` ومعه

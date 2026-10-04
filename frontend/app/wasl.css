@@ -195,6 +195,10 @@
 .w-wave > span { animation: w-wave 1.1s ease-in-out infinite; transform-origin: center; }
 @keyframes w-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 50%, transparent); } 100% { box-shadow: 0 0 0 26px transparent; } }
 .w-pulse { animation: w-pulse 1.6s ease-out infinite; }
+/* تفاعل سريع في المكالمة: يطفو للأعلى ثم يختفي */
+@keyframes w-float { 0% { transform: translateY(0) scale(.6); opacity: 0; } 12% { transform: translateY(-20px) scale(1.1); opacity: 1; } 100% { transform: translateY(-46vh) scale(1); opacity: 0; } }
+.w-float { animation: w-float 3.2s ease-out forwards; }
+@media (prefers-reduced-motion: reduce) { .w-float { animation-duration: 0s; animation: none; } }
 @keyframes w-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
 /* خطوط فاصلة بين العناصر بلون هادئ */

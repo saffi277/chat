@@ -95,7 +95,7 @@ async function voiceCall() {
   for (const p of [d, s]) await p.waitForSelector('.w-wave', { timeout: 15000 }).catch(dbg('connect'));
 }
 const remoteVideo = (p, fit) => p.waitForFunction((f) => {
-  const v = document.querySelector(`video.inset-0.${f}`);
+  const v = document.querySelector(`[data-pip] video.${f}`);
   return v && v.videoWidth > 0 && !v.paused && !v.classList.contains('opacity-0');
 }, fit, { timeout: 15000 });
 // مربع المشارك في المكالمة الجماعية: هل يظهر فيه فيديو يعمل (أم صورته الشخصية)؟
