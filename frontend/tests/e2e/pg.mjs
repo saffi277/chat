@@ -112,9 +112,11 @@ await a.click(callBtn);
 await s.waitForSelector('button[aria-label="رد"]', { timeout: 10000 });
 await s.click('button[aria-label="رد"]');
 await a.waitForSelector('text=جارٍ الاتصال...', { timeout: 8000 });
-const reason = await a.waitForSelector('text=خادم المكالمات (TURN) غير مفعّل', { timeout: 35000 }).then(() => true, () => false);
+// أول من تنتهي مهلته يذكر السبب وينهيها عند الآخر (قد يكون المتصل أو المستلم، بفارق أجزاء من الثانية)
+const why = 'text=خادم المكالمات (TURN) غير مفعّل';
+const reason = await Promise.any([a, s].map((p) => p.waitForSelector(why, { timeout: 35000 }))).then(() => true, () => false);
 if (!reason) { await a.screenshot({ path: 'ui/pg-dbg-a.png' }); await s.screenshot({ path: 'ui/pg-dbg-s.png' }); fail('a call that never connects should end with its reason'); }
-await a.screenshot({ path: 'ui/pg-m-no-turn.png' });
+await (await a.isVisible(why) ? a : s).screenshot({ path: 'ui/pg-m-no-turn.png' });
 filters.ali = null; filters.sara = null;
 for (const p of [a, s]) await gone(p);
 const last = (await get('/calls/', ali.token))[0];

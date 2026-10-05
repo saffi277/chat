@@ -89,12 +89,21 @@ class CallTests(TestCase):
         second = self.ali.post('/api/calls/', {'conversation_id': self.conv}, format='json')
         self.assertEqual(second.status_code, 201)
         self.assertEqual(Call.objects.get(pk=first['id']).status, 'missed')
-        # وكذلك مكالمة جارية خرج منها أحدهما دون «إنهاء» (أُعيد تحميل الصفحة) ثم اتصل من جديد
+        # وكذلك مكالمة جارية خرجت منها سارة دون «إنهاء» (أُعيد تحميل الصفحة) ثم اتصلت من جديد، وعلي ما زال ينتظر فيها
         self.sara.post(f"/api/calls/{second.data['id']}/answer/")
-        mark_alive(second.data['id'], self.sara.user['id'])
+        mark_alive(second.data['id'], self.ali.user['id'])
+        cache.delete(f"call_alive:{second.data['id']}:{self.sara.user['id']}")
         third = self.sara.post('/api/calls/', {'conversation_id': self.conv}, format='json')
         self.assertEqual(third.status_code, 201)
         self.assertEqual(Call.objects.get(pk=second.data['id']).status, 'ended')
+
+    def test_call_im_still_in_is_not_cut(self, _):
+        # أنا في المكالمة على الحاسوب، وضغطت «اتصال» من الهاتف: لا تُقطع مكالمتي
+        c = self.ali.post('/api/calls/', {'conversation_id': self.conv}, format='json').data
+        self.sara.post(f"/api/calls/{c['id']}/answer/")
+        r = self.sara.post('/api/calls/', {'conversation_id': self.conv}, format='json')
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(Call.objects.get(pk=c['id']).status, 'ongoing')
 
     def test_calling_each_other_at_the_same_moment(self, _):
         c = self.ali.post('/api/calls/', {'conversation_id': self.conv}, format='json').data

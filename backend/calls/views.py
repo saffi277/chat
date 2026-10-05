@@ -168,6 +168,12 @@ def mark_alive(call_id, user_id):
     cache.set(f'call_seen:{call_id}', now, 24 * 3600)
 
 
+def still_in(call_id, user_id):
+    """وصلت منه «ما زلتُ فيها» قبل قليل (النبضة كل 15 ثانية): هو في هذه المكالمة الآن على أحد أجهزته."""
+    seen = cache.get(f'call_alive:{call_id}:{user_id}')
+    return bool(seen) and time.time() - seen < 20
+
+
 def is_abandoned(call):
     """مكالمة جارية لم يبقَ فيها أحد فعلاً (لم يصل «ما زلتُ فيها» من أي مشارك منذ ALIVE_FOR ثانية)."""
     if call.status != Call.ONGOING:
@@ -261,16 +267,17 @@ def calls(request):
     for old in conv.calls.filter(status__in=[Call.RINGING, Call.ONGOING]).select_related('caller__profile'):
         if conv.kind != Conversation.DIRECT:
             raise ValidationError(_('توجد مكالمة جارية في هذه المحادثة'))
+        if still_in(old.id, request.user.id):  # أنا فيها فعلاً على جهاز آخر: لا أقطعها
+            raise ValidationError(_('توجد مكالمة جارية في هذه المحادثة'))
         if old.status == Call.RINGING and old.caller_id != request.user.id:
             # اتصلنا ببعض في اللحظة نفسها: نعرض مكالمته الواردة بدل رفض مكالمتي
             return Response({'detail': _('يتصل بك الآن'), 'call': CallSerializer(old, context={'request': request}).data},
                             status=status.HTTP_409_CONFLICT)
-        # الثنائية: من يبدأ مكالمة جديدة ليس في مكالمة (الواجهة تمنع ذلك)، فالقديمة بقايا: مكالمتي التي ألغيتُها قبل أن
-        # تصل إلى الخادم، أو مكالمة خرجتُ منها دون «إنهاء» (أُعيد تحميل الصفحة، أو انقطع الإنترنت). الجديدة تحل محلها
+        # الثنائية وأنا لست فيها: فهي بقايا، مكالمتي التي ألغيتُها قبل أن تصل إلى الخادم، أو مكالمة خرجتُ منها دون
+        # «إنهاء» (أُعيد تحميل الصفحة، أو انقطع الإنترنت). الجديدة تحل محلها
         finish(old, Call.ENDED if old.status == Call.ONGOING else Call.MISSED)
     call = Call.objects.create(conversation=conv, caller=request.user, kind=kind)
     call.joined.add(request.user)
-    mark_alive(call.id, request.user.id)
     data = CallSerializer(call, context={'request': request}).data
     others = [uid for uid in member_ids(conv) if uid != request.user.id]
     send_to_users(others, {'type': 'call_incoming', 'call': data})
