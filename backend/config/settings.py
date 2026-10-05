@@ -66,6 +66,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # ملفات تصميم لوحة الإدارة (/static/admin/...) بالإنتاج: Django لا يقدّمها حين DEBUG=false، فكانت تظهر بلا تنسيق
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     # اللغة من ترويسة Accept-Language (الواجهة ترسل لغة المستخدم): رسائل الخطأ تعود بالعربية أو الإنجليزية
