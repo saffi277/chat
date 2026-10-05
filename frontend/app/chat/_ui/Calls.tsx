@@ -127,9 +127,12 @@ function sharedAudio() {
   if (!Ctx) return null;
   if (!audioCtx) {
     audioCtx = new Ctx();
-    // سفاري يبدأ السياق متوقفاً حتى يلمس المستخدم الشاشة
-    if (audioCtx.state === "suspended") document.addEventListener("pointerdown", () => audioCtx?.resume().catch(() => {}), { once: true });
+    // المتصفح (سفاري خاصة) قد يبدأ السياق متوقفاً، أو يوقفه لاحقاً (مكالمة هاتفية، الخلفية): نستأنفه مع كل لمسة ما دام متوقفاً
+    const wake = () => { if (audioCtx?.state === "suspended") audioCtx.resume().catch(() => {}); };
+    document.addEventListener("pointerdown", wake);
+    document.addEventListener("keydown", wake);
   }
+  if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
   return audioCtx;
 }
 

@@ -19,7 +19,8 @@
 	}
 
 	# الـ API والملفات ← سيرفر gunicorn (عمليات × threads: عشرات الطلبات بنفس اللحظة)
-	@backend path /api/* /media/* /admin/* /static/*
+	# و/admin دون شرطة أخيرة أيضاً: كان يذهب إلى الواجهة فيظهر «Internal Server Error» (Django يضيف الشرطة بنفسه)
+	@backend path /api/* /media/* /admin /admin/* /static/*
 	handle @backend {
 		reverse_proxy web:8001 {
 			transport http {
