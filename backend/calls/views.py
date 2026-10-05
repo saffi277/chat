@@ -6,7 +6,7 @@ import logging
 import os
 import time
 import urllib.request
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 
 from django.conf import settings
 from django.core.cache import cache
@@ -28,6 +28,10 @@ from notifications.push import in_language, send_to_user
 from .models import Call, CallInvite
 
 RING_TIMEOUT = timedelta(seconds=60)
+# كل جهاز في مكالمة يرسل «ما زلتُ فيها» كل 15 ثانية (call.alive عبر الاتصال العام). مكالمة جارية لم يصل من أي مشارك
+# فيها شيء منذ ALIVE_FOR تُعدّ منتهية: أُغلق التطبيق أو انقطع الإنترنت قبل «إنهاء»، وإلا بقيت «جارية» إلى الأبد
+# ورُفضت كل مكالمة جديدة في المحادثة نفسها («توجد مكالمة جارية»)
+ALIVE_FOR = 70  # يتحمّل نبضة أو نبضتين فائتتين (الهاتف يبطّئ مؤقتات التطبيق في الخلفية)
 # المكالمة الجماعية: كل مشارك يتصل بكل مشارك مباشرة (Mesh)، فنضع حداً معقولاً لعدد المشاركين
 MAX_PARTICIPANTS = 8
 log = logging.getLogger('notifications')
@@ -157,10 +161,41 @@ def turn_credentials(secret, valid_for=24 * 3600):
     return {'username': username, 'credential': base64.b64encode(digest).decode()}
 
 
-def expire_ringing():
-    """اللي ظلت ترن أكثر من دقيقة = فائتة."""
+def mark_alive(call_id, user_id):
+    """هذا المشارك ما زال في المكالمة الآن (ومتى كان آخر حضور لأي مشارك: لحساب مدتها إن انقطعت)."""
+    now = time.time()
+    cache.set(f'call_alive:{call_id}:{user_id}', now, ALIVE_FOR)
+    cache.set(f'call_seen:{call_id}', now, 24 * 3600)
+
+
+def is_abandoned(call):
+    """مكالمة جارية لم يبقَ فيها أحد فعلاً (لم يصل «ما زلتُ فيها» من أي مشارك منذ ALIVE_FOR ثانية)."""
+    if call.status != Call.ONGOING:
+        return False
+    since = call.answered_at or call.created_at
+    if since > timezone.now() - timedelta(seconds=ALIVE_FOR):
+        return False  # بدأت للتو: لم يحن وقت أول «ما زلتُ فيها»
+    ids = list(call.joined.values_list('id', flat=True))
+    return not any(cache.get(f'call_alive:{call.id}:{uid}') for uid in ids)
+
+
+def expire_calls(calls_qs=None):
+    """
+    التي ظلت ترن أكثر من دقيقة = فائتة. والجارية التي غادرها الجميع دون «إنهاء» = منتهية، ووقت انتهائها آخر حضور فيها.
+    calls_qs: نفحص هذه المكالمات الجارية فقط (مكالمات محادثة، أو مكالماتي) بدل كل مكالمات النظام.
+    """
     for call in Call.objects.filter(status=Call.RINGING, created_at__lt=timezone.now() - RING_TIMEOUT):
         finish(call, Call.MISSED)
+    if calls_qs is None:
+        return
+    for call in calls_qs.filter(status=Call.ONGOING):
+        if is_abandoned(call):
+            seen = cache.get(f'call_seen:{call.id}')
+            last = datetime.fromtimestamp(seen, tz=dt_timezone.utc) if seen else None
+            finish(call, Call.ENDED, ended_at=max(filter(None, [last, call.answered_at, call.created_at])))
+
+
+expire_ringing = expire_calls
 
 
 def call_summary(call):
@@ -174,10 +209,14 @@ def call_summary(call):
     return f'{kind} • {d // 60}:{d % 60:02d}'
 
 
-def finish(call, final_status):
-    call.status = final_status
-    call.ended_at = timezone.now()
-    call.save(update_fields=['status', 'ended_at'])
+def finish(call, final_status, ended_at=None):
+    ended_at = ended_at or timezone.now()
+    # تحديث مشروط: لو أنهى المكالمةَ طلبان في اللحظة نفسها (مثل «إنهاء» مع فحص الانقطاع) تُسجَّل مرة واحدة برسالة واحدة
+    if not Call.objects.filter(pk=call.pk, status__in=[Call.RINGING, Call.ONGOING]).update(
+            status=final_status, ended_at=ended_at):
+        call.refresh_from_db()
+        return
+    call.status, call.ended_at = final_status, ended_at
     # تطلع بالمحادثة مثل واتساب: "مكالمة فيديو • 2:15" أو "مكالمة صوتية فائتة"
     create_message(call.conversation, call.caller, call_summary(call), kind=Message.CALL)
     send_to_users(audience(call), {'type': 'call_ended', 'call_id': call.id, 'status': final_status})
@@ -218,11 +257,12 @@ def calls(request):
     kind = request.data.get('kind', Call.AUDIO)
     if kind not in (Call.AUDIO, Call.VIDEO):
         raise ValidationError({'kind': 'audio | video'})
-    expire_ringing()
+    expire_calls(conv.calls.all())
     if conv.calls.filter(status__in=[Call.RINGING, Call.ONGOING]).exists():
         raise ValidationError(_('توجد مكالمة جارية في هذه المحادثة'))
     call = Call.objects.create(conversation=conv, caller=request.user, kind=kind)
     call.joined.add(request.user)
+    mark_alive(call.id, request.user.id)
     data = CallSerializer(call, context={'request': request}).data
     others = [uid for uid in member_ids(conv) if uid != request.user.id]
     send_to_users(others, {'type': 'call_incoming', 'call': data})
@@ -250,6 +290,7 @@ def answer(request, pk):
         call.status, call.answered_at = Call.ONGOING, timezone.now()
         call.save(update_fields=['status', 'answered_at'])
     call.joined.add(request.user)
+    mark_alive(call.id, request.user.id)
     send_to_users(audience(call), {'type': 'call_answered', 'call_id': call.id, 'user_id': request.user.id})
     return Response({**CallSerializer(call, context={'request': request}).data, 'ice_servers': ice_servers()})
 
@@ -304,8 +345,9 @@ def leave(request, pk):
 @api_view(['GET'])
 def active(request):
     """المكالمة الجارية في محادثة (?conversation=<id>) ليظهر زر «انضمام»: {"call": {...}} أو {"call": null}."""
-    expire_ringing()
-    call = (Call.objects.filter(conversation_id=request.query_params.get('conversation') or 0,
+    conv_id = request.query_params.get('conversation') or 0
+    expire_calls(Call.objects.filter(conversation_id=conv_id, conversation__memberships__user=request.user))
+    call = (Call.objects.filter(conversation_id=conv_id,
                                 conversation__memberships__user=request.user, status__in=[Call.RINGING, Call.ONGOING])
             .select_related('caller__profile', 'conversation').first())
     return Response({'call': CallSerializer(call, context={'request': request}).data if call else None})
@@ -322,8 +364,8 @@ def ringing(request):
     المكالمة التي ترنّ لي الآن: {"call": {...}} أو {"call": null}. يسأل عنها التطبيق عند فتحه من إشعار مكالمة،
     أو عند عودة الاتصال، لأن حدث call_incoming ربما وصل وهو مغلق.
     """
-    expire_ringing()
     me = request.user
+    expire_calls(Call.objects.filter(invites__user=me))
     # مكالمة في محادثاتي ترنّ، أو دعوة إلى مكالمة جارية لم تمضِ عليها دقيقة ولم أنضمّ بعد
     invited = CallInvite.objects.filter(user=me, created_at__gte=timezone.now() - RING_TIMEOUT).values('call_id')
     call = (Call.objects.filter(Q(conversation__memberships__user=me, status=Call.RINGING)

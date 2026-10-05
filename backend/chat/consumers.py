@@ -13,6 +13,7 @@ from django.db.models.functions import Greatest
 from django.utils import timezone, translation
 
 from accounts.models import Profile
+from calls.views import mark_alive
 
 from .models import Membership, Message
 from .services import (clean_client_id, group_name, mark_delivered, post_error, presence_audience, send_once,
@@ -155,9 +156,14 @@ class PresenceConsumer(AsyncJsonWebsocketConsumer):
         الواجهة تدز: {"type": "call.signal", "call_id": 3, "to": <user_id>, "data": {...}}
         وإحنا نوصلها للطرف الثاني كما هي. السيرفر ما يفهمها ولا يحتاج يفهمها.
         و{"type": "ping"}: نبض الواجهة، نرد عليه فوراً (انظر ChatConsumer).
+        و{"type": "call.alive", "call_id": 3}: «ما زلتُ في المكالمة» كل 15 ثانية؛ وإن كانت قد انتهت نبلغه لتُغلق عنده.
         """
         if content.get('type') == 'ping':
             await self.send_json({'type': 'pong'})
+        elif content.get('type') == 'call.alive':
+            ended = await self.call_alive(content.get('call_id'))
+            if ended:
+                await self.send_json({'type': 'call_ended', 'call_id': content['call_id'], 'status': ended})
         elif content.get('type') == 'call.signal':
             to = await self.signal_target(content.get('call_id'), content.get('to'))
             if to:
@@ -178,7 +184,26 @@ class PresenceConsumer(AsyncJsonWebsocketConsumer):
         members = set(Membership.objects.filter(conversation_id=call.conversation_id, user_id__in=pair).values_list('user_id', flat=True))
         if pair - members:
             members |= set(CallInvite.objects.filter(call=call, user_id__in=pair).values_list('user_id', flat=True))
-        return to if to != self.user.id and members == pair else None
+        if to == self.user.id or members != pair:
+            return None
+        if call.joined.filter(id=self.user.id).exists():
+            mark_alive(call.id, self.user.id)
+        return to
+
+    @database_sync_to_async
+    def call_alive(self, call_id):
+        """يسجّل حضوري في المكالمة إن كنت من المنضمّين إليها. يرجع حالتها النهائية إن كانت قد انتهت، وإلا None."""
+        from calls.models import Call
+        try:
+            call = Call.objects.filter(pk=int(call_id), joined=self.user).first()
+        except (TypeError, ValueError):
+            return None
+        if not call:
+            return None
+        if call.status in (Call.RINGING, Call.ONGOING):
+            mark_alive(call.id, self.user.id)
+            return None
+        return call.status
 
     async def chat_event(self, event):
         # ("وصلت ✓✓" يتسجل مرة وحدة وقت الإرسال لكل المتصلين، مو هنا لكل جهاز)

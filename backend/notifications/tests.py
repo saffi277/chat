@@ -46,6 +46,44 @@ class PushTests(TestCase):
         self.assertIn(f'/chat?c={cid}', payload)
 
     @mock.patch('notifications.push.webpush')
+    def test_push_has_a_timeout_and_reuses_the_connection(self, webpush):
+        # بدون مهلة: خدمة إشعارات لا ترد كانت توقف العامل للأبد ويتأخر كل إشعار بعدها
+        ali, _ = self.register('ali')
+        sara, s = self.register('sara')
+        sara.post('/api/push/subscribe/', SUB, format='json')
+        cid = open_chat(ali, s['id']).data['id']
+        ali.post(f'/api/conversations/{cid}/messages/', {'content': 'a'}, format='json')
+        ali.post(f'/api/conversations/{cid}/messages/', {'content': 'b'}, format='json')
+        first, second = webpush.call_args_list
+        self.assertEqual(first.kwargs['timeout'], 10)
+        self.assertIs(first.kwargs['requests_session'], second.kwargs['requests_session'])
+
+    @override_settings(PUSH_RUN_INLINE=False)
+    @mock.patch('notifications.push.webpush')
+    def test_devices_are_notified_in_parallel(self, webpush):
+        # جهاز بطيء الرد لا يؤخر الأجهزة الأخرى: كل جهاز في مهمة مستقلة
+        import threading
+        release, started = threading.Event(), []
+        def slow(info, *a, **k):
+            started.append(info['endpoint'])
+            if info['endpoint'].endswith('/slow'):
+                release.wait(5)
+        webpush.side_effect = slow
+        ali, _ = self.register('ali')
+        sara, s = self.register('sara')
+        for end in ('slow', 'fast'):
+            sara.post('/api/push/subscribe/', {**SUB, 'endpoint': f'https://push.example.com/{end}'}, format='json')
+        cid = open_chat(ali, s['id']).data['id']
+        ali.post(f'/api/conversations/{cid}/messages/', {'content': 'hi'}, format='json')
+        import time
+        for _ in range(50):
+            if len(started) == 2:
+                break
+            time.sleep(0.05)
+        release.set()
+        self.assertEqual(sorted(started), ['https://push.example.com/fast', 'https://push.example.com/slow'])
+
+    @mock.patch('notifications.push.webpush')
     def test_dead_subscription_is_removed(self, webpush):
         from pywebpush import WebPushException
         webpush.side_effect = WebPushException('gone', response=mock.Mock(status_code=410))
@@ -125,7 +163,7 @@ class PushTests(TestCase):
         client.post('/api/push/subscribe/', {'endpoint': 'https://web.push.apple.com/real',
                                              'keys': {'p256dh': b64(public), 'auth': b64(os.urandom(16))}}, format='json')
 
-    @mock.patch('requests.post')
+    @mock.patch('requests.Session.post')
     def test_real_signing_with_the_default_contact(self, post):
         # كان العنوان الافتراضي https://github.com/saffi277/chat، ومكتبة التوقيع ترفض الرابط ذا المسار:
         # فلا يُرسل أي إشعار على الخادم (Docker) دون أن يظهر أي خطأ
@@ -146,7 +184,7 @@ class PushTests(TestCase):
         self.assertEqual(_vapid_contact('https://chat.asbat.edu.iq/'), 'https://chat.asbat.edu.iq')
         self.assertEqual(_vapid_contact('mailto:it@asbat.edu.iq'), 'mailto:it@asbat.edu.iq')
 
-    @mock.patch('requests.post')
+    @mock.patch('requests.Session.post')
     def test_signing_error_is_reported_not_swallowed(self, post):
         ali, _ = self.register('ali')
         self.real_subscription(ali)

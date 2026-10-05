@@ -1,8 +1,10 @@
+import time
 from datetime import timedelta
 from unittest import mock
 
 from asgiref.sync import sync_to_async
 from channels.testing import WebsocketCommunicator
+from django.core.cache import cache
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -11,6 +13,7 @@ from chat.testing import open_chat
 from config.asgi import application
 
 from .models import Call
+from .views import mark_alive
 
 
 def register(username):
@@ -25,6 +28,7 @@ def register(username):
 @mock.patch('notifications.push.webpush')
 class CallTests(TestCase):
     def setUp(self):
+        cache.clear()
         self.ali, self.sara = register('ali'), register('sara')
         self.conv = open_chat(self.ali, self.sara.user['id']).data['id']
 
@@ -51,6 +55,45 @@ class CallTests(TestCase):
         self.assertEqual((log[c2['id']]['status'], log[c2['id']]['direction']), ('missed', 'missed'))
         outsider = register('omar')
         self.assertEqual(outsider.post(f"/api/calls/{c2['id']}/answer/").status_code, 404)
+
+    def answered_long_ago(self, minutes=5):
+        c = self.ali.post('/api/calls/', {'conversation_id': self.conv}, format='json').data
+        self.sara.post(f"/api/calls/{c['id']}/answer/")
+        long_ago = timezone.now() - timedelta(minutes=minutes)
+        Call.objects.filter(pk=c['id']).update(created_at=long_ago, answered_at=long_ago)
+        cache.clear()  # لا «ما زلتُ فيها» من أي مشارك منذ بدئها
+        return c['id']
+
+    def test_abandoned_call_does_not_block_new_calls(self, _):
+        # أُغلق التطبيقان أثناء المكالمة دون «إنهاء»: كانت تبقى «جارية» للأبد وتُرفض كل مكالمة جديدة
+        old = self.answered_long_ago()
+        cache.set(f'call_seen:{old}', time.time() - 4 * 60, 3600)  # آخر حضور فيها قبل 4 دقائق: دامت دقيقة
+        r = self.sara.post('/api/calls/', {'conversation_id': self.conv}, format='json')
+        self.assertEqual(r.status_code, 201)
+        call = Call.objects.get(pk=old)
+        self.assertEqual((call.status, call.duration), ('ended', 60))
+        texts = [m['content'] for m in self.sara.get(f'/api/conversations/{self.conv}/messages/').data if m['kind'] == 'call']
+        self.assertEqual(texts, ['مكالمة صوتية • 1:00'])  # رسالة واحدة بمدتها الحقيقية
+
+    def test_live_call_still_blocks(self, _):
+        old = self.answered_long_ago()
+        mark_alive(old, self.sara.user['id'])  # أحدهما ما زال فيها
+        r = self.ali.post('/api/calls/', {'conversation_id': self.conv}, format='json')
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(self.ali.get(f'/api/calls/active/?conversation={self.conv}').data['call']['id'], old)
+        # مكالمة بدأت للتو لم يحن وقت أول نبضة فيها: جارية
+        cache.clear()
+        Call.objects.filter(pk=old).update(answered_at=timezone.now())
+        self.assertEqual(self.ali.post('/api/calls/', {'conversation_id': self.conv}, format='json').status_code, 400)
+
+    def test_abandoned_call_disappears_from_join_button(self, _):
+        old = self.answered_long_ago()
+        self.assertIsNone(self.ali.get(f'/api/calls/active/?conversation={self.conv}').data['call'])
+        call = Call.objects.get(pk=old)
+        self.assertEqual((call.status, call.duration), ('ended', 0))  # لا نعرف آخر حضور: مدتها صفر لا ساعات
+        # وإنهاؤها لاحقاً من الجهاز (طلب متأخر) لا يكرر رسالة المكالمة
+        self.assertEqual(self.ali.post(f'/api/calls/{old}/end/').data['status'], 'ended')
+        self.assertEqual(len([m for m in self.sara.get(f'/api/conversations/{self.conv}/messages/').data if m['kind'] == 'call']), 1)
 
     def test_ringing_call_is_found_after_opening_from_a_notification(self, _):
         self.assertIsNone(self.sara.get('/api/calls/ringing/').data['call'])
@@ -231,4 +274,38 @@ class SignalingTests(TransactionTestCase):
         self.assertEqual((got['type'], got['data']['sdp']), ('call.signal', 'y'))
         await o.disconnect()
         await a.disconnect()
+        await s.disconnect()
+
+    async def test_call_alive(self):
+        from django.core.cache import cache
+        await sync_to_async(cache.clear)()
+        ali, sara = [await sync_to_async(register)(n) for n in ('ali2', 'sara2')]
+        conv = (await sync_to_async(open_chat)(ali, sara.user['id'])).data
+        with mock.patch('notifications.push.webpush'):
+            call = (await sync_to_async(ali.post)('/api/calls/', {'conversation_id': conv['id']}, format='json')).data
+        s = WebsocketCommunicator(application, f'/ws/presence/?token={sara.token}')
+        await s.connect()
+        while not await s.receive_nothing(timeout=0.3):
+            await s.receive_json_from()
+        # لم تنضمّ بعد: نبضتها لا تُحتسب
+        await s.send_json_to({'type': 'call.alive', 'call_id': call['id']})
+        self.assertTrue(await s.receive_nothing(timeout=0.3))
+        self.assertIsNone(await sync_to_async(cache.get)(f"call_alive:{call['id']}:{sara.user['id']}"))
+        with mock.patch('notifications.push.webpush'):
+            await sync_to_async(sara.post)(f"/api/calls/{call['id']}/answer/")
+        await sync_to_async(cache.clear)()
+        while not await s.receive_nothing(timeout=0.3):
+            await s.receive_json_from()
+        await s.send_json_to({'type': 'call.alive', 'call_id': call['id']})
+        self.assertTrue(await s.receive_nothing(timeout=0.3))
+        self.assertTrue(await sync_to_async(cache.get)(f"call_alive:{call['id']}:{sara.user['id']}"))
+        # انتهت وجهازها لم يعلم (فاته الحدث): نبضتها التالية تُبلغها لتُغلق المكالمة عندها
+        with mock.patch('notifications.push.webpush'):
+            await sync_to_async(ali.post)(f"/api/calls/{call['id']}/end/")
+        while not await s.receive_nothing(timeout=0.3):
+            await s.receive_json_from()
+        await s.send_json_to({'type': 'call.alive', 'call_id': call['id']})
+        self.assertEqual(await s.receive_json_from(), {'type': 'call_ended', 'call_id': call['id'], 'status': 'ended'})
+        await s.send_json_to({'type': 'call.alive', 'call_id': 'x'})
+        self.assertTrue(await s.receive_nothing(timeout=0.3))
         await s.disconnect()

@@ -1,5 +1,6 @@
 import json
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urlparse
 
@@ -8,6 +9,7 @@ from django.db import close_old_connections
 from django.db.models import Q
 from django.utils import timezone, translation
 from django.utils.translation import gettext as _
+import requests
 from pywebpush import WebPushException, webpush
 
 from .models import PushSubscription
@@ -17,6 +19,16 @@ log = logging.getLogger(__name__)
 # عدد ثابت من العمال للإشعارات: لو انرسلت 2000 رسالة سوه ما نفتح 2000 thread،
 # تنتظر بالطابور وتنرسل بالتسلسل بدون ما تبطئ الرسائل نفسها
 _pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix='push')
+# خدمة إشعارات لا ترد (Apple أو Google): بدون مهلة يبقى العامل ينتظرها للأبد، فتتأخر كل الإشعارات بعدها في الطابور
+PUSH_TIMEOUT = 10
+_local = threading.local()
+
+
+def _session():
+    """اتصال مفتوح لكل عامل يُعاد استعماله: بدل مصافحة TLS جديدة مع خادم Apple/Google لكل إشعار (أسرع بعشرات الأجزاء من الثانية)."""
+    if not hasattr(_local, 'session'):
+        _local.session = requests.Session()
+    return _local.session
 
 
 def notify_new_message(message, preview=None, mentioned=()):
@@ -64,12 +76,8 @@ def notify_new_message(message, preview=None, mentioned=()):
             payloads[key] = json.dumps({**base, **data, 'lang': key[0]}, ensure_ascii=False)
         return payloads[key]
 
-    jobs = [(sub, payload_for(sub.user)) for sub in subs]
-    if getattr(settings, 'PUSH_RUN_INLINE', False):
-        _send_all(jobs)
-    else:
-        # بالخلفية حتى الرسالة ما تتأخر بانتظار خدمة الإشعارات
-        _pool.submit(_send_all, jobs)
+    # بالخلفية حتى الرسالة ما تتأخر بانتظار خدمة الإشعارات
+    _dispatch([(sub, payload_for(sub.user)) for sub in subs])
 
 
 def _hides(user):
@@ -94,11 +102,7 @@ def send_to_user(user, payload_dict):
     if not subs:
         return
     payload = json.dumps(payload_dict, ensure_ascii=False)
-    jobs = [(sub, payload) for sub in subs]
-    if getattr(settings, 'PUSH_RUN_INLINE', False):
-        _send_all(jobs)
-    else:
-        _pool.submit(_send_all, jobs)
+    _dispatch([(sub, payload) for sub in subs])
 
 
 def _deliver(sub, payload):
@@ -111,7 +115,8 @@ def _deliver(sub, payload):
         webpush(sub.as_subscription_info(), payload,
                 vapid_private_key=get_signer(),
                 vapid_claims={'sub': settings.VAPID_CONTACT},
-                ttl=60 * 60 * 24, headers={'Urgency': 'high'})
+                ttl=60 * 60 * 24, headers={'Urgency': 'high'},
+                timeout=PUSH_TIMEOUT, requests_session=_session())
         return {'ok': True, 'host': host, 'status': 201, 'reason': ''}
     except WebPushException as exc:
         response = getattr(exc, 'response', None)
@@ -136,16 +141,26 @@ def _gone(result):
     return result['status'] in (404, 410) or (result['status'] == 403 and 'VapidPkHashMismatch' in result['reason'])
 
 
-def _send_all(jobs):
-    """jobs = [(اشتراك, نص الإشعار)]: كل مستخدم يصله الإشعار بحسب إعداده."""
-    dead = []
+def _dispatch(jobs):
+    """
+    jobs = [(اشتراك, نص الإشعار)]: كل جهاز في مهمة مستقلة على العمال معاً، لا بالتتابع
+    (في مجموعة من 40 جهازاً كان الأخير ينتظر وصول الـ 39 قبله، ثوانيَ عدة).
+    """
+    if getattr(settings, 'PUSH_RUN_INLINE', False):
+        for sub, payload in jobs:
+            _send_one(sub, payload)
+        return
     for sub, payload in jobs:
+        _pool.submit(_send_one, sub, payload)
+
+
+def _send_one(sub, payload):
+    try:
         if _gone(_deliver(sub, payload)):
-            dead.append(sub.id)
-    if dead:
-        PushSubscription.objects.filter(id__in=dead).delete()
-    if not getattr(settings, 'PUSH_RUN_INLINE', False):
-        close_old_connections()
+            PushSubscription.objects.filter(id=sub.id).delete()
+    finally:
+        if not getattr(settings, 'PUSH_RUN_INLINE', False):
+            close_old_connections()
 
 
 def send_test(user):

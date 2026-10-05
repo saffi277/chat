@@ -310,6 +310,17 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     return () => clearTimeout(timer);
   }, [call?.phase, call?.call.id, call?.call.conversation_kind, endCallUI]);
 
+  // «ما زلتُ في المكالمة» كل 15 ثانية: إن أُغلق التطبيق أو انقطع الإنترنت دون «إنهاء» يعرف الخادم أن المكالمة
+  // انتهت (بعد نحو دقيقة)، فلا يبقى من يتصل بنا يرى «توجد مكالمة جارية»
+  useEffect(() => {
+    const id = call?.call.id;
+    if (!id || (call.phase !== "outgoing" && call.phase !== "connecting" && call.phase !== "active")) return;
+    const beat = () => socketRef.current?.send({ type: "call.alive", call_id: id });
+    beat();
+    const timer = setInterval(beat, 15000);
+    return () => clearInterval(timer);
+  }, [call?.phase, call?.call.id]);
+
   // ------------------------------------------------ أول تحميل + الاتصال العام
   useEffect(() => {
     // رابط دعوة (/chat?join=...): نحفظه حتى لو احتاج المستخدم تسجيل الدخول أولاً
