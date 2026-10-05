@@ -349,3 +349,9 @@ msgstr "is inviting you to a video call"
 
 msgid "يدعوك إلى مكالمة صوتية"
 msgstr "is inviting you to a voice call"
+
+msgid "لا يوجد طلب دور لهذا الحساب"
+msgstr "This account has no pending role request"
+
+msgid "كلمة المرور قصيرة: 6 أحرف على الأقل"
+msgstr "The password is too short: at least 6 characters"

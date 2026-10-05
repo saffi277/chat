@@ -17,7 +17,7 @@ const AUDIENCES: { id: Audience; label: string }[] = [
   { id: "contacts", label: "جهات اتصالي" },
   { id: "nobody", label: "لا أحد" },
 ];
-const REASONS: { id: ReportReason; label: string }[] = [
+export const REASONS: { id: ReportReason; label: string }[] = [
   { id: "spam", label: "رسائل مزعجة" },
   { id: "abuse", label: "محتوى مسيء" },
   { id: "harassment", label: "تحرّش أو تهديد" },

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import manage_views, views
 
 urlpatterns = [
     path('auth/register/', views.register),
@@ -21,4 +21,9 @@ urlpatterns = [
     path('users/<int:pk>/', views.user_detail),
     path('contacts/', views.contacts),
     path('contacts/<int:user_id>/', views.contact_detail),
+    # لوحة الإدارة داخل التطبيق (لمن له صلاحية الإدارة)
+    path('manage/', manage_views.overview),
+    path('manage/roles/<int:user_id>/', manage_views.decide_role),
+    path('manage/reports/<int:pk>/', manage_views.report_done),
+    path('manage/support/<int:pk>/', manage_views.support_done),
 ]

@@ -12,6 +12,8 @@ import {
   type ScheduledMessage,
   type SearchHit,
   type LinkPreview,
+  type ManageOverview,
+  type ManagedPerson,
   type Session,
   type InvitePreview,
   type Message,
@@ -255,4 +257,12 @@ export const calls = {
   video: (id: number) => api(`/calls/${id}/video/`, "POST"),
   /** إضافة أشخاص إلى المكالمة الجارية (مثل واتساب): يرنّ عندهم، وتصير جماعية */
   invite: (id: number, userIds: number[]) => api<Call & { invited: number[] }>(`/calls/${id}/invite/`, "POST", { user_ids: userIds }),
+};
+
+/** لوحة الإدارة (لمدير النظام فقط) */
+export const manage = {
+  overview: () => api<ManageOverview>("/manage/"),
+  decideRole: (userId: number, approve: boolean) => api<ManagedPerson>(`/manage/roles/${userId}/`, "POST", { approve }),
+  reportDone: (id: number) => api<{ ok: true }>(`/manage/reports/${id}/`, "POST"),
+  supportDone: (id: number, password = "") => api<{ ok: true }>(`/manage/support/${id}/`, "POST", password ? { password } : {}),
 };

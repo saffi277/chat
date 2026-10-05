@@ -70,6 +70,17 @@ export type Me = User & {
   requested_role: Role | "";
   privacy_last_seen: Audience; privacy_photo: Audience; read_receipts: boolean;
   two_step: boolean; two_step_hint: string;
+  /** مدير النظام: تظهر له «لوحة الإدارة» في الإعدادات */
+  is_admin?: boolean;
+};
+/** لوحة الإدارة: حساب كما يراه المدير (ومعه البريد والرقم الجامعي) */
+export type ManagedPerson = { id: number; username: string; display_name: string; university_id: string; email: string;
+  role: Role; requested_role: Role | ""; joined: string };
+export type ManageOverview = {
+  stats: { users: number; online: number };
+  role_requests: ManagedPerson[];
+  reports: { id: number; reason: "spam" | "abuse" | "harassment" | "other"; user: ManagedPerson | null; reporter: ManagedPerson | null; message_text: string; details: string; created_at: string }[];
+  support: { id: number; kind: "password" | "support"; identifier: string; contact: string; message: string; user: ManagedPerson | null; created_at: string }[];
 };
 /** جهاز متصل بالحساب */
 export type Session = { id: number; device: string; user_agent: string; created: string; last_used: string; current: boolean };

@@ -1,12 +1,13 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { ROLE_LABELS, THEMES, WALLPAPERS, type Me, type Mode } from "@/lib/api";
-import { auth, conversations as convApi } from "@/lib/endpoints";
+import { auth, conversations as convApi, manage } from "@/lib/endpoints";
 import { LANGS, setLang, useT } from "@/lib/i18n";
 import { howToEnable, isStandalone, PERM_LABELS, permState, platform, requestPerm, type PermName, type PermState } from "@/lib/permissions";
 import { disablePush, enablePush, getPushState, testPush, type PushState } from "@/lib/push";
 import { Avatar, IconButton, nameOf, Section, Toggle } from "./bits";
 import { WallTile } from "./ConvSettings";
+import { ManagePage } from "./Manage";
 import { PrivacyPage } from "./Safety";
 import { Icon } from "./icons";
 import { useWasl } from "./store";
@@ -19,7 +20,7 @@ const modes: { value: Mode; label: string; icon: "sun" | "moon" | "device" }[] =
 ];
 
 // ------------------------------------------------------------ الإعدادات: قائمة أقسام، وكل قسم في صفحته
-type Page = "account" | "appearance" | "themes" | "language" | "notifications" | "privacy" | "permissions";
+type Page = "account" | "appearance" | "themes" | "language" | "notifications" | "privacy" | "permissions" | "manage";
 type IconName = Parameters<typeof Icon>[0]["name"];
 
 /** الحفظ في الخادم مع رسالة نجاح/خطأ (مشترك بين الصفحات) */
@@ -46,9 +47,14 @@ export function SettingsView() {
   const t = useT();
   const { me, signOut, openSaved, setTab, stories } = useWasl();
   const [page, setPage] = useState<Page | null>(null);
+  // ما ينتظر مدير النظام (طلبات وبلاغات): نقطة على «لوحة الإدارة»
+  const [pending, setPending] = useState(0);
+  useEffect(() => {
+    if (me.is_admin && !page) manage.overview().then((d) => setPending(d.role_requests.length + d.reports.length + d.support.length)).catch(() => {});
+  }, [me.is_admin, page]);
 
   if (page) {
-    const titles: Record<Page, string> = { account: "معلوماتي", appearance: "المظهر", themes: "الثيمات", language: "اللغة", notifications: "الإشعارات", privacy: "الخصوصية والأمان", permissions: "الأذونات" };
+    const titles: Record<Page, string> = { account: "معلوماتي", appearance: "المظهر", themes: "الثيمات", language: "اللغة", notifications: "الإشعارات", privacy: "الخصوصية والأمان", permissions: "الأذونات", manage: "لوحة الإدارة" };
     return (
       <SubPage title={t(titles[page])} onBack={() => setPage(null)}>
         {page === "account" && <AccountPage />}
@@ -57,6 +63,7 @@ export function SettingsView() {
         {page === "privacy" && <PrivacyWrap />}
         {page === "language" && <LanguagePage />}
         {page === "notifications" && <NotificationsPage />}
+        {page === "manage" && <ManagePage onCount={setPending} />}
         {page === "permissions" && <><p className="w-muted mb-1 mt-3 px-1 text-xs leading-6">{t("تحكّم في ما يستطيع التطبيق استخدامه في جهازك.")}</p><Section><PermissionsList /></Section></>}
       </SubPage>
     );
@@ -96,6 +103,14 @@ export function SettingsView() {
           <Row icon="lock" color="#475569" label={t("الخصوصية والأمان")} onClick={() => setPage("privacy")} />
           <Row icon="shield" color="#f59e0b" label={t("الأذونات")} onClick={() => setPage("permissions")} />
         </Group>
+
+        {me.is_admin && (
+          // لمدير النظام فقط
+          <Group>
+            <Row icon="crown" color="#0f766e" label={t("لوحة الإدارة")} onClick={() => setPage("manage")}
+              value={pending ? String(pending) : undefined} badge={pending ? t("طلبات تنتظرك") : undefined} />
+          </Group>
+        )}
 
         <Group>
           <Row icon="stories" color="#8b5cf6" label={t("الحالات")} onClick={() => setTab("stories")}

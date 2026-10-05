@@ -101,7 +101,9 @@ class MeSerializer(UserSerializer):
                 'email': user.email, 'requested_role': p.requested_role,
                 'privacy_last_seen': p.privacy_last_seen, 'privacy_photo': p.privacy_photo, 'read_receipts': p.read_receipts,
                 'two_step': bool(p.two_step_hash), 'two_step_hint': p.two_step_hint,
-                'university_id': p.university_id, 'hide_preview': p.hide_preview}
+                'university_id': p.university_id, 'hide_preview': p.hide_preview,
+                # مدير النظام: تظهر له «لوحة الإدارة» في الإعدادات
+                'is_admin': user.is_staff}
 
     def get_mode(self, user):
         return profile_of(user).mode

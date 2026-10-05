@@ -1,6 +1,16 @@
 from django.contrib import admin
+from django.contrib.auth.models import Group
+from rest_framework.authtoken.models import TokenProxy
 
 from .models import Block, Contact, Profile, Report, SupportRequest
+
+# الإدارة اليومية في التطبيق نفسه (الإعدادات ← لوحة الإدارة). هذه الصفحة للأمور النادرة، فنخفي منها ما لا يُستعمل:
+# المجموعات (صلاحيات Django) ورموز الدخول القديمة (حساباتنا تستعمل AuthToken)
+admin.site.site_header = admin.site.site_title = 'إدارة وَصل'
+admin.site.index_title = 'الإدارة المتقدمة'
+for model in (Group, TokenProxy):
+    if admin.site.is_registered(model):
+        admin.site.unregister(model)
 
 
 class PendingRoleFilter(admin.SimpleListFilter):
