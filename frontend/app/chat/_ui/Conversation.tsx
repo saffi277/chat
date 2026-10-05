@@ -22,6 +22,26 @@ const upsert = (list: Message[], m: Message) => {
   return copy;
 };
 
+const RANK = { sent: 0, delivered: 1, read: 2 } as const;
+
+/**
+ * قائمة الرسائل من الخادم مع ما وصل بالاتصال المباشر أثناء انتظارها. الطلب قد يبدأ قبل رسالة أو علامة «قُرئت» ويصل
+ * بعدها: كان يستبدل القائمة كلها، فتختفي من الشاشة رسالةٌ أرسلها المستخدم للتو (وتبقى «مقروءة» بلا أثر). نُبقي إذن
+ * الأحدث من القائمة، والحالة الأعلى لكل رسالة (قُرئت لا تعود «وصلت»)
+ */
+function mergeLoaded(old: Message[], list: Message[], conversation: number) {
+  const mine = old.filter((m) => m.conversation === conversation);
+  if (!mine.length) return list;
+  const byId = new Map(mine.map((m) => [m.id, m]));
+  const newest = list.length ? list[list.length - 1].id : 0;
+  const merged = list.map((m) => {
+    const o = byId.get(m.id);
+    return o && m.status && o.status && RANK[o.status] > RANK[m.status] ? { ...m, status: o.status, is_read: o.is_read } : m;
+  });
+  const later = mine.filter((m) => m.id > newest && !list.some((x) => x.id === m.id));
+  return later.length ? [...merged, ...later] : merged;
+}
+
 /** وسائط تُرفع الآن: تظهر في المحادثة فوراً (رسالة محلية بمعرّف سالب) حتى يردّ الخادم */
 type Outgoing = { key: number; file: File | Blob; opts: SendFileOpts & { kind: MessageKind }; msg: Message; progress: number; failed: boolean };
 
@@ -141,7 +161,7 @@ export function Conversation({ conv }: { conv: Conv }) {
       const arrived = new Set(list.map((m) => m.client_id).filter(Boolean));
       pendingRef.current.filter((p) => arrived.has(p.cid)).forEach((p) => settle(p.cid));
       if (again) pendingRef.current.filter((p) => !p.failed && !arrived.has(p.cid)).forEach(deliver);
-      setMsgs(list);
+      setMsgs((old) => mergeLoaded(old, list, id));
       setHasMore(list.length >= 50);
       setLoading(false);
       stick.current = true;
