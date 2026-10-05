@@ -60,6 +60,20 @@ class ChatFlowTests(TransactionTestCase):
         bad = WebsocketCommunicator(application, path + 'wrong')
         self.assertFalse((await bad.connect())[0])
 
+    async def test_heartbeat_ping_gets_pong_on_both_sockets(self):
+        """نبض الواجهة: تكتشف به الاتصال الميت (الهاتف في الخلفية) فتعيده فوراً بدل أن تفوتها الرسائل والمكالمات."""
+        from asgiref.sync import sync_to_async
+        (ali, a), (sara, s) = await sync_to_async(self.register)('ali'), await sync_to_async(self.register)('sara')
+        conv = await sync_to_async(open_chat)(ali, s['user']['id'])
+        for path in (f"/ws/chat/{conv.data['id']}/", '/ws/presence/'):
+            ws = WebsocketCommunicator(application, f"{path}?token={a['token']}")
+            self.assertTrue((await ws.connect())[0])
+            while not await ws.receive_nothing(timeout=0.2):
+                await ws.receive_json_from()
+            await ws.send_json_to({'type': 'ping'})
+            self.assertEqual(await ws.receive_json_from(timeout=2), {'type': 'pong'})
+            await ws.disconnect()
+
     async def test_websocket_rate_limit(self):
         """إغراق المحادثة عبر WebSocket: أول 20 رسالة تُحفظ، والباقي يُرفض بـ rate_limited."""
         from asgiref.sync import sync_to_async

@@ -188,6 +188,44 @@ const ico = await fetch('http://localhost:3000/favicon.ico');
 if (!icons.some((h) => h.includes('college-192.png')) || ico.status !== 200) fail(`tab icon: ${icons.join(', ')}`);
 ok('the browser tab shows the college logo');
 
+// ------------------------------------------------ 5ب) الاتصال الفوري «الميت» في الهاتف
+// الآيفون يجمّد التطبيق في الخلفية أو تتبدّل الشبكة، فيموت الاتصال بصمت: يبقى المتصفح يظنه مفتوحاً ولا يصل شيء.
+// نحاكي ذلك بقطع الاتصال العام دون إغلاقه، ثم «نعود إلى التطبيق»: يجب أن يكتشفه ويتصل من جديد فوراً، فتصل الرسائل
+const conns = [];
+let dead = null;
+const z = await (async () => {
+  const c = await b.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await c.addInitScript(([t, u]) => { localStorage.setItem('token', t); localStorage.setItem('user', JSON.stringify(u)); }, [omar.token, omar.user]);
+  const p = await c.newPage();
+  await p.routeWebSocket(/\/ws\/presence\//, (ws) => {
+    const server = ws.connectToServer();
+    conns.push(ws);
+    ws.onMessage((m) => { if (dead !== ws) server.send(m); });
+    server.onMessage((m) => { if (dead !== ws) ws.send(m); });
+  });
+  p.on('pageerror', (e) => errs.push(e.message));
+  await p.goto('http://localhost:3000/chat'); await p.waitForSelector('.wasl'); await p.waitForTimeout(1200);
+  return p;
+})();
+const before = conns.length;
+dead = conns[conns.length - 1];
+const t1 = Date.now();
+await z.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+await z.waitForFunction(() => true, null, { timeout: 100 });
+for (let i = 0; i < 60 && conns.length === before; i++) await z.waitForTimeout(100);
+const reconnectMs = Date.now() - t1;
+if (conns.length === before) fail('a silently dead connection should be replaced when the user returns to the app');
+await req('POST', `/conversations/${omarDm.id}/messages/`, { content: 'هل وصلتك؟' }, ali.token);
+const t2 = Date.now();
+await z.waitForSelector('aside >> text=هل وصلتك؟', { timeout: 5000 }).catch(async (e) => { await z.screenshot({ path: 'ui/pd-dbg-dead-socket.png' }); throw e; });
+ok(`dead connection: returning to the app detects it and reconnects in ${(reconnectMs / 1000).toFixed(1)}s, and a new message reaches the chat list in ${Date.now() - t2}ms`);
+// ومن غير العودة إلى التطبيق: النبض كل 15 ثانية يكتشفه وحده
+dead = conns[conns.length - 1];
+const t3 = Date.now(), n3 = conns.length;
+for (let i = 0; i < 300 && conns.length === n3; i++) await z.waitForTimeout(100);
+if (conns.length === n3) fail('the heartbeat should replace a dead connection within ~21s');
+ok(`heartbeat: with the app left open, a dead connection is found and replaced in ${((Date.now() - t3) / 1000).toFixed(1)}s`);
+
 // ------------------------------------------------ 6) الخلفية العامة والمحادثة ذات الخلفية الخاصة
 await req('PATCH', `/conversations/${dm.id}/`, { wallpaper: 'campus' }, ali.token);
 const w = await page(ali, { mobile: false, w: 1280, h: 800 });

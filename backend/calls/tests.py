@@ -171,6 +171,22 @@ class IceServerTests(TestCase):
             turn = ice_servers()[-1]
         self.assertEqual((turn['urls'][0], turn['username'], turn['credential']), ('turn:turn.example.com:3478', 'u', 'p'))
 
+    def test_own_coturn_gets_temporary_credentials(self):
+        """خادمنا coturn: كلمة سر مؤقتة يتحقق منها coturn بالسر المشترك (طريقة TURN REST API)."""
+        import base64
+        import hashlib
+        import hmac
+        import time
+        from .views import ice_servers
+        env = {'TURN_URLS': 'turn:187.127.95.5:3478?transport=udp,turn:187.127.95.5:3478?transport=tcp', 'TURN_SECRET': 's3cret'}
+        with mock.patch.dict('os.environ', env):
+            turn = ice_servers()[-1]
+        self.assertEqual(turn['urls'], ['turn:187.127.95.5:3478?transport=udp', 'turn:187.127.95.5:3478?transport=tcp'])
+        expires = int(turn['username'].split(':')[0])
+        self.assertAlmostEqual(expires, time.time() + 24 * 3600, delta=60)
+        expected = base64.b64encode(hmac.new(b's3cret', turn['username'].encode(), hashlib.sha1).digest()).decode()
+        self.assertEqual(turn['credential'], expected)
+
     def test_cloudflare_turn_credentials(self):
         from .views import ice_servers
         reply = mock.MagicMock()

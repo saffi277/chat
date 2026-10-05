@@ -1,5 +1,6 @@
 # كل النظام بأمر واحد:  docker compose up -d --build
 # ولرابط https مؤقت للموبايل:  docker compose --profile tunnel up -d --build
+# وعلى السيرفر أضف خادم المكالمات (TURN):  docker compose --profile tunnel --profile turn up -d --build
 name: asbat-chat
 
 services:
@@ -65,6 +66,25 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
     depends_on: [web, ws, frontend]
+
+  # خادم ترحيل المكالمات (TURN): يمرّر الصوت والصورة حين لا يصل الجهازان إلى بعضهما مباشرة، مثل هاتف على بيانات
+  # الجوال وحاسوب على واي فاي (وإلا تبقى المكالمة «جارٍ الاتصال» ثم تفشل). يعمل على شبكة السيرفر مباشرة (host) لأنه
+  # يحتاج منافذ UDP كثيرة. افتح بجدار الحماية: 3478 (UDP وTCP) و49160-49200 (UDP).
+  # كلمات السر مؤقتة يولّدها الخادم من TURN_SECRET (calls/views.py)، ولا يُرحَّل إلى عناوين الشبكات الداخلية.
+  turn:
+    image: coturn/coturn:4.6-alpine
+    profiles: [turn]
+    restart: unless-stopped
+    network_mode: host
+    command: >-
+      -n --log-file=stdout --listening-port=3478 --fingerprint
+      --use-auth-secret --static-auth-secret=${TURN_SECRET:-} --realm=wasl
+      --min-port=49160 --max-port=49200 --no-cli --no-tls --no-dtls --no-multicast-peers
+      --denied-peer-ip=0.0.0.0-0.255.255.255 --denied-peer-ip=10.0.0.0-10.255.255.255
+      --denied-peer-ip=100.64.0.0-100.127.255.255 --denied-peer-ip=127.0.0.0-127.255.255.255
+      --denied-peer-ip=169.254.0.0-169.254.255.255 --denied-peer-ip=172.16.0.0-172.31.255.255
+      --denied-peer-ip=192.168.0.0-192.168.255.255
+      --total-quota=200 --user-quota=12 --stale-nonce=600
 
   # رابط https مؤقت (بدون دومين) حتى تجرب من أي موبايل. يطلع بالسجل: docker compose logs tunnel
   tunnel:

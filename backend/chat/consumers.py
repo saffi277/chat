@@ -48,7 +48,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def receive_json(self, content):
         # الواجهة تدز: {"type": "message", "content": "هلو", "reply_to": 12 (اختياري)}
         # (الصور والملفات والموقع تنرسل بـ HTTP لأن الـ WebSocket مو مناسب للملفات)
-        if content.get('type') == 'message':
+        if content.get('type') == 'ping':
+            # نبض الواجهة: إن لم يصلها الرد خلال ثوانٍ تعرف أن الاتصال مات (الهاتف في الخلفية، تبدّلت الشبكة) فتعيده فوراً
+            await self.send_json({'type': 'pong'})
+        elif content.get('type') == 'message':
             text = (content.get('content') or '').strip()
             # client_id: تظهر الرسالة عند المرسل فوراً «قيد الإرسال»، ونعيده معها ليطابقها (أو مع الخطأ ليعلّمها «لم تُرسل»)
             client_id = clean_client_id(content.get('client_id'))
@@ -151,8 +154,11 @@ class PresenceConsumer(AsyncJsonWebsocketConsumer):
         رسائل تعارف المكالمة (WebRTC signaling): offer / answer / ice candidate.
         الواجهة تدز: {"type": "call.signal", "call_id": 3, "to": <user_id>, "data": {...}}
         وإحنا نوصلها للطرف الثاني كما هي. السيرفر ما يفهمها ولا يحتاج يفهمها.
+        و{"type": "ping"}: نبض الواجهة، نرد عليه فوراً (انظر ChatConsumer).
         """
-        if content.get('type') == 'call.signal':
+        if content.get('type') == 'ping':
+            await self.send_json({'type': 'pong'})
+        elif content.get('type') == 'call.signal':
             to = await self.signal_target(content.get('call_id'), content.get('to'))
             if to:
                 await self.channel_layer.group_send(user_group(to), {'type': 'chat.event', 'payload': {

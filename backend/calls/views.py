@@ -1,6 +1,10 @@
+import base64
+import hashlib
+import hmac
 import json
 import logging
 import os
+import time
 import urllib.request
 from datetime import timedelta
 
@@ -88,6 +92,8 @@ def ice_servers():
       1) CLOUDFLARE_TURN_KEY_ID + CLOUDFLARE_TURN_API_TOKEN  (بيانات دخول مؤقتة من Cloudflare)
       2) TURN_CREDENTIALS_URL  (رابط يعيد قائمة iceServers بصيغة JSON، مثل خدمة Metered)
       3) TURN_URLS (مفصولة بفواصل) + TURN_USERNAME + TURN_CREDENTIAL  (خادم TURN خاص، مثل coturn)
+      4) TURN_URLS + TURN_SECRET  (خادمنا coturn في deploy/docker-compose.yml: كلمة سر مؤقتة لكل طلب، صالحة يوماً،
+         بدل كلمة سر ثابتة يستطيع أي أحد نسخها من المتصفح واستعمال خادمنا للأبد)
     """
     servers = list(getattr(settings, 'ICE_SERVERS', [{'urls': ['stun:stun.l.google.com:19302']}]))
     return servers + turn_servers()
@@ -114,8 +120,11 @@ def turn_servers():
             with urllib.request.urlopen(creds_url, timeout=5) as r:
                 data = json.load(r)
             result = data if isinstance(data, list) else data.get('iceServers', [])
+        elif os.environ.get('TURN_URLS') and os.environ.get('TURN_SECRET'):
+            result = [{'urls': turn_urls(), **turn_credentials(os.environ['TURN_SECRET'])}]
+            ttl = 6 * 3600  # الكلمة صالحة 24 ساعة، فنجددها قبل انتهائها بوقت كافٍ
         elif os.environ.get('TURN_URLS'):
-            result = [{'urls': [u.strip() for u in os.environ['TURN_URLS'].split(',') if u.strip()],
+            result = [{'urls': turn_urls(),
                        'username': os.environ.get('TURN_USERNAME', ''),
                        'credential': os.environ.get('TURN_CREDENTIAL', '')}]
     except Exception as exc:  # خدمة TURN لا تستجيب: نكمل بـ STUN بدل أن تفشل المكالمة كلها
@@ -132,6 +141,20 @@ def is_multi(call):
 def audience(call):
     """من يهمه ما يحدث في المكالمة: أعضاء محادثتها ومن دُعي إليها."""
     return sorted(set(member_ids(call.conversation)) | set(call.invited.values_list('id', flat=True)))
+
+
+def turn_urls():
+    return [u.strip() for u in os.environ['TURN_URLS'].split(',') if u.strip()]
+
+
+def turn_credentials(secret, valid_for=24 * 3600):
+    """
+    كلمة سر مؤقتة لخادم coturn (طريقة «TURN REST API»، use-auth-secret في coturn): اسم المستخدم وقت انتهاء الصلاحية،
+    وكلمة السر توقيعه بالسر المشترك بيننا وبين coturn. يتحقق coturn منها دون أن يسألنا، ويرفضها بعد انتهاء وقتها.
+    """
+    username = f'{int(time.time()) + valid_for}:wasl'
+    digest = hmac.new(secret.encode(), username.encode(), hashlib.sha1).digest()
+    return {'username': username, 'credential': base64.b64encode(digest).decode()}
 
 
 def expire_ringing():
