@@ -89,6 +89,10 @@ await d.waitForSelector('[data-testid=peer-muted]', { timeout: 8000 }).catch(dbg
 await s.click('button[aria-label="إلغاء الكتم"]');
 await d.waitForSelector('[data-testid=peer-muted]', { state: 'detached', timeout: 8000 });
 ok('when Sara mutes herself, Ali sees "muted" under her name; it disappears when she unmutes');
+// صوتها ما زال يُشغَّل عند علي بعد الكتم وإلغائه (كان العنصر يُعاد تحميله مع كل تغيّر وقد يبقى متوقفاً)
+await d.waitForFunction(() => [...document.querySelectorAll('audio')].some((a) => !a.paused && a.srcObject?.getAudioTracks().some((t) => t.readyState === 'live')), null, { timeout: 5000 })
+  .catch(() => fail('Sara\'s voice should still be playing for Ali after mute/unmute'));
+ok('after mute and unmute, Sara\'s voice is still playing for Ali');
 
 // 4) من يتكلم الآن (المايك الوهمي يصدر نغمة كل ثانية)
 await d.waitForSelector('[data-speaking]', { timeout: 15000 }).catch(dbg([d, s], 'speaking'));

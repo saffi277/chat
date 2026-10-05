@@ -85,6 +85,18 @@ export function CallLog({ missed }: { missed?: boolean }) {
 
 // ------------------------------------------------------------ شاشة المكالمة
 /** onFrames: هل وصلت صورة فعلاً؟ (حتى تبقى الصورة الشخصية ظاهرة بدل مربع أسود ريثما يصل الفيديو) */
+/**
+ * صوت الطرف الآخر في عنصر audio. البث يُنشأ من جديد مع كل تغيّر في حالته (كتم، كاميرا، شاشة)، وكان كل إسناد جديد
+ * يعيد تحميل العنصر: إن قُطع التحميل بتغيّر آخر سريع بقي متوقفاً، فلا يُسمع الطرف الآخر (ولا تضيء حلقة «يتكلم»).
+ * نعيد الإسناد فقط حين يتغيّر مسار الصوت نفسه، ونستأنف التشغيل صراحة إن توقف.
+ */
+function playAudio(el: HTMLAudioElement | null, stream: MediaStream | null) {
+  if (!el || !stream) return;
+  const ids = (s: MediaStream | null) => (s?.getAudioTracks() ?? []).map((t) => t.id).join(",");
+  if (ids(el.srcObject as MediaStream | null) !== ids(stream)) el.srcObject = new MediaStream(stream.getAudioTracks());
+  if (el.paused) el.play().catch(() => {});
+}
+
 function Video({ stream, muted, className, onFrames }: { stream: MediaStream | null; muted?: boolean; className: string; onFrames?: (has: boolean) => void }) {
   const ref = useRef<HTMLVideoElement>(null);
   useEffect(() => {
@@ -321,7 +333,7 @@ export function CallOverlay() {
   const live = call?.phase === "active";
   const peerSpeaking = useSpeaking(call?.remote ?? null, live && call?.remoteAudio !== false);
   useEffect(() => {
-    if (remoteAudio.current && call?.remote && remoteAudio.current.srcObject !== call.remote) remoteAudio.current.srcObject = call.remote;
+    playAudio(remoteAudio.current, call?.remote ?? null);
   }, [call?.remote]);
   useEffect(() => {
     if (remoteAudio.current) remoteAudio.current.volume = speaker ? 1 : 0.35;
@@ -542,7 +554,7 @@ type TileExtras = { hand?: boolean; pinned?: boolean; onPin?: () => void; small?
 function PeerTile({ peer, name, user, ...extra }: { peer: GroupPeer; name: string; user?: Parameters<typeof Avatar>[0]["user"] } & TileExtras) {
   const audio = useRef<HTMLAudioElement>(null);
   useEffect(() => {
-    if (audio.current && audio.current.srcObject !== peer.stream) audio.current.srcObject = peer.stream;
+    playAudio(audio.current, peer.stream);
   }, [peer.stream]);
   return (
     <>
