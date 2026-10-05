@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand, CommandError
 
+from accounts.models import Profile
 from accounts.views import find_user
 
 
@@ -22,5 +23,8 @@ class Command(BaseCommand):
             raise CommandError(f'لا يوجد حساب بهذا المعرّف: {identifier}')
         user.is_staff = user.is_superuser = not remove
         user.save(update_fields=['is_staff', 'is_superuser'])
+        if not remove:
+            # مدير النظام إداري في التطبيق أيضاً (ينشر في القنوات، ويظهر دوره «إداري»)
+            Profile.objects.update_or_create(user=user, defaults={'role': Profile.STAFF, 'requested_role': ''})
         state = 'لم يعد مدير نظام' if remove else 'أصبح مدير نظام: افتح الإعدادات ← لوحة الإدارة'
         self.stdout.write(self.style.SUCCESS(f'{user.username} {state}'))

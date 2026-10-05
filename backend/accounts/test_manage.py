@@ -83,3 +83,21 @@ class ManageTests(TestCase):
         self.assertEqual(self.ali.get('/api/manage/').status_code, 200)
         call_command('make_admin', 'ali', '--remove', stdout=StringIO())
         self.assertEqual(self.ali.get('/api/manage/').status_code, 403)
+
+    def test_admin_signs_in_from_any_role_tab(self, _):
+        # حساب أُنشئ بـ createsuperuser (بلا ملف، أي «طالب») ودخل من تبويب «إداري»
+        User.objects.create_superuser('sa', '', 'secret123')
+        r = APIClient().post('/api/auth/login/', {'identifier': 'sa', 'password': 'secret123', 'role': 'staff'}, format='json')
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.data['user']['is_admin'])
+        # أما غير المدير فما زال يُطلب منه الدور الصحيح
+        r = APIClient().post('/api/auth/login/', {'identifier': 'ali', 'password': 'secret123', 'role': 'faculty'}, format='json')
+        self.assertEqual(r.status_code, 400)
+
+    def test_make_admin_gives_staff_role(self, _):
+        from io import StringIO
+
+        from django.core.management import call_command
+        User.objects.create_superuser('sa', '', 'secret123')
+        call_command('make_admin', 'sa', stdout=StringIO())
+        self.assertEqual(Profile.objects.get(user__username='sa').role, 'staff')

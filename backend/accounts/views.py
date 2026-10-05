@@ -60,7 +60,8 @@ def login(request):
     # سجّل تدريسياً ولم تعتمده الإدارة بعد: يدخل (بصلاحيات طالب)، والواجهة تُظهر أن طلبه قيد المراجعة
     if role and role != profile.role and role == profile.requested_role:
         role = profile.role
-    if role and role != profile.role:
+    # مدير النظام يدخل من أي تبويب (حساب createsuperuser يبدأ «طالباً»، فكان يُرفض تحت «إداري»)
+    if role and role != profile.role and not user.is_staff:
         # نتحقق بعد كلمة المرور، حتى ما نكشف دور أي حساب لأي أحد
         return Response({'detail': _('هذا الحساب مسجّل بدور «{role}»، اختر الدور الصحيح').format(role=_(profile.get_role_display())),
                          'role': profile.role}, status=status.HTTP_400_BAD_REQUEST)
