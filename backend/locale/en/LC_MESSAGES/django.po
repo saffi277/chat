@@ -44,6 +44,9 @@ msgstr "You can't call yourself"
 msgid "توجد مكالمة جارية في هذه المحادثة"
 msgstr "There is already a call in progress in this chat"
 
+msgid "يتصل بك الآن"
+msgstr "is calling you now"
+
 msgid "مكالمة فيديو واردة"
 msgstr "Incoming video call"
 

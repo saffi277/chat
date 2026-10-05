@@ -85,6 +85,13 @@ export class CallSession {
    * انتهاء الرد، فيبدو «تصادماً» ويُتجاهل، فلا تصل الكاميرا أو الشاشة
    */
   private chain: Promise<void> = Promise.resolve();
+  /** رسائل تعارف لم تُرسل لأن الاتصال العام منقطع لحظتها (الهاتف يعيد الاتصال): تُرسل حين يعود بدل أن تضيع */
+  private outbox: CallSignal[] = [];
+  private retry?: ReturnType<typeof setTimeout>;
+  private watchdog?: ReturnType<typeof setTimeout>;
+  private closed = false;
+  /** ظهر لنا عنوان عبر خادم الترحيل (TURN)؟ أي أن الخادم يعمل ومنافذه مفتوحة */
+  private relayed = false
   private queue(task: () => Promise<void>) {
     this.chain = this.chain.then(task).catch(() => {});
     return this.chain;
@@ -98,7 +105,11 @@ export class CallSession {
   ) {
     this.pc = new RTCPeerConnection({ iceServers: call.ice_servers ?? [] });
     // كل عنوان يلكاه المتصفح ندزه للطرف الثاني
-    this.pc.onicecandidate = (e) => e.candidate && this.signal({ candidate: e.candidate.toJSON() });
+    this.pc.onicecandidate = (e) => {
+      if (!e.candidate) return;
+      if (e.candidate.type === "relay" || / typ relay /.test(e.candidate.candidate)) this.relayed = true;
+      this.signal({ candidate: e.candidate.toJSON() });
+    };
     // صوت/صورة الطرف الآخر تصل هنا (ومسار الفيديو قد يصل لاحقاً إذا حوّل المكالمة إلى فيديو)
     this.pc.ontrack = (e) => {
       e.streams[0]?.getTracks().forEach((t) => this.remote.getTracks().includes(t) || this.remote.addTrack(t));
@@ -167,6 +178,45 @@ export class CallSession {
     const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
     this.signal({ description: this.pc.localDescription!.toJSON() });
+    this.watch(1);
+  }
+
+  /**
+   * المتصل: إن لم يتصل الجهازان بعد ثوانٍ نعيد المحاولة بدل الانتظار للأبد. رسالة تعارف قد تضيع في الطريق
+   * (هاتف الطرف الآخر كان يعيد اتصاله لحظة وصولها): لم يصل رده بعد ← نعيد إرسال العرض (يحمل الآن كل عناويننا)،
+   * وفشل الاتصال أو لم يبدأ ← نعيد التفاوض على العناوين من جديد (ICE restart).
+   */
+  private watch(round: number) {
+    clearTimeout(this.watchdog);
+    if (round > 4) return;
+    this.watchdog = setTimeout(() => this.queue(async () => {
+      if (this.closed || this.pc.connectionState === "connected") return;
+      if (this.pc.signalingState === "have-local-offer") {
+        this.signal({ description: this.pc.localDescription!.toJSON() });
+      } else if (this.pc.signalingState === "stable" && ["new", "failed", "disconnected"].includes(this.pc.iceConnectionState)) {
+        await this.pc.setLocalDescription(await this.pc.createOffer({ iceRestart: true }));
+        this.signal({ description: this.pc.localDescription!.toJSON() });
+      }
+      this.watch(round + 1);
+    }), 5000);
+  }
+
+  /** إعادة التفاوض على العناوين (ICE restart) بعد انقطاع: تبدّلت الشبكة، أو انتهت صلاحية عنوان الترحيل */
+  restart() {
+    return this.queue(async () => {
+      if (this.closed || this.pc.signalingState !== "stable") return;
+      await this.pc.setLocalDescription(await this.pc.createOffer({ iceRestart: true }));
+      this.signal({ description: this.pc.localDescription!.toJSON() });
+    });
+  }
+
+  /**
+   * لماذا لم يتصل الجهازان؟ no-turn: الخادم بلا خادم ترحيل (TURN)، فلا تنجح المكالمة إلا على الشبكة نفسها.
+   * turn-unreachable: خادم الترحيل مذكور لكنه لا يرد (متوقف، أو منافذه مغلقة في جدار الحماية). other: غير ذلك.
+   */
+  get diagnosis(): "no-turn" | "turn-unreachable" | "other" {
+    const turn = (this.call.ice_servers ?? []).some((x) => ([] as string[]).concat(x.urls).some((u) => /^turns?:/.test(u)));
+    return !turn ? "no-turn" : this.relayed ? "other" : "turn-unreachable";
   }
 
   /** هل المتصل أنا؟ (عند تعارض عرضين في اللحظة نفسها يتنازل المستلم، وهو الطرف "المهذب") */
@@ -321,6 +371,10 @@ export class CallSession {
 
   /** نسكر كل شي محلياً (مثلاً لما يوصل حدث call_ended) */
   close() {
+    this.closed = true;
+    clearTimeout(this.retry);
+    clearTimeout(this.watchdog);
+    this.outbox = [];
     this.local?.getTracks().forEach((t) => t.stop());
     this.pc.close();
   }
@@ -333,7 +387,20 @@ export class CallSession {
   }
 
   private signal(data: CallSignal) {
-    this.socket.send({ type: "call.signal", call_id: this.call.id, to: this.peerId, data });
+    if (this.closed) return;
+    this.outbox.push(data);
+    this.flush();
+  }
+
+  private flush() {
+    while (this.outbox.length) {
+      if (!this.socket.send({ type: "call.signal", call_id: this.call.id, to: this.peerId, data: this.outbox[0] })) {
+        clearTimeout(this.retry);
+        this.retry = setTimeout(() => this.flush(), 500);
+        return;
+      }
+      this.outbox.shift();
+    }
   }
 }
 

@@ -36,7 +36,6 @@ class CallTests(TestCase):
         c = self.ali.post('/api/calls/', {'conversation_id': self.conv, 'kind': 'video'}, format='json').data
         self.assertEqual(c['status'], 'ringing')
         self.assertTrue(c['ice_servers'])
-        self.assertEqual(self.ali.post('/api/calls/', {'conversation_id': self.conv}, format='json').status_code, 400)
         self.assertEqual(self.sara.post(f"/api/calls/{c['id']}/answer/").data['status'], 'ongoing')
         Call.objects.filter(pk=c['id']).update(answered_at=timezone.now() - timedelta(seconds=75))
         self.assertEqual(self.sara.post(f"/api/calls/{c['id']}/end/").data['status'], 'ended')
@@ -75,16 +74,43 @@ class CallTests(TestCase):
         texts = [m['content'] for m in self.sara.get(f'/api/conversations/{self.conv}/messages/').data if m['kind'] == 'call']
         self.assertEqual(texts, ['مكالمة صوتية • 1:00'])  # رسالة واحدة بمدتها الحقيقية
 
-    def test_live_call_still_blocks(self, _):
+    def test_live_call_stays_live(self, _):
         old = self.answered_long_ago()
         mark_alive(old, self.sara.user['id'])  # أحدهما ما زال فيها
-        r = self.ali.post('/api/calls/', {'conversation_id': self.conv}, format='json')
-        self.assertEqual(r.status_code, 400)
         self.assertEqual(self.ali.get(f'/api/calls/active/?conversation={self.conv}').data['call']['id'], old)
         # مكالمة بدأت للتو لم يحن وقت أول نبضة فيها: جارية
         cache.clear()
         Call.objects.filter(pk=old).update(answered_at=timezone.now())
-        self.assertEqual(self.ali.post('/api/calls/', {'conversation_id': self.conv}, format='json').status_code, 400)
+        self.assertEqual(self.ali.get(f'/api/calls/active/?conversation={self.conv}').data['call']['id'], old)
+
+    def test_new_call_replaces_a_leftover_one(self, _):
+        # ألغى علي مكالمته قبل أن يصل طلبها إلى الخادم (أثناء سؤال إذن المايك)، فبقيت ترن بلا أحد: كانت تمنع أي مكالمة دقيقة
+        first = self.ali.post('/api/calls/', {'conversation_id': self.conv}, format='json').data
+        second = self.ali.post('/api/calls/', {'conversation_id': self.conv}, format='json')
+        self.assertEqual(second.status_code, 201)
+        self.assertEqual(Call.objects.get(pk=first['id']).status, 'missed')
+        # وكذلك مكالمة جارية خرج منها أحدهما دون «إنهاء» (أُعيد تحميل الصفحة) ثم اتصل من جديد
+        self.sara.post(f"/api/calls/{second.data['id']}/answer/")
+        mark_alive(second.data['id'], self.sara.user['id'])
+        third = self.sara.post('/api/calls/', {'conversation_id': self.conv}, format='json')
+        self.assertEqual(third.status_code, 201)
+        self.assertEqual(Call.objects.get(pk=second.data['id']).status, 'ended')
+
+    def test_calling_each_other_at_the_same_moment(self, _):
+        c = self.ali.post('/api/calls/', {'conversation_id': self.conv}, format='json').data
+        r = self.sara.post('/api/calls/', {'conversation_id': self.conv}, format='json')
+        # بدل «توجد مكالمة جارية»: تظهر لسارة مكالمة علي الواردة لترد عليها
+        self.assertEqual((r.status_code, r.data['call']['id'], r.data['call']['caller']['username']), (409, c['id'], 'ali'))
+        self.assertEqual(Call.objects.get(pk=c['id']).status, 'ringing')
+
+    def test_group_call_still_blocks_a_second_one(self, _):
+        from chat.testing import befriend
+        befriend(self.ali, self.sara.user['id'])
+        g = self.ali.post('/api/conversations/groups/', {'title': 'G', 'member_ids': [self.sara.user['id']]},
+                          format='json').data['id']
+        self.ali.post('/api/calls/', {'conversation_id': g}, format='json')
+        # المكالمة الجماعية تبقى لمن فيها: من يتصل ينضم إليها من زر «انضمام» بدل أن تُستبدل
+        self.assertEqual(self.sara.post('/api/calls/', {'conversation_id': g}, format='json').status_code, 400)
 
     def test_abandoned_call_disappears_from_join_button(self, _):
         old = self.answered_long_ago()

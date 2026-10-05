@@ -257,7 +257,8 @@ export function logout() {
 }
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  /** data: نص رد الخادم كاملاً (مثلاً مكالمة واردة مع 409 حين نتصل ببعض في اللحظة نفسها) */
+  constructor(public status: number, message: string, public data?: unknown) {
     super(message);
   }
 }
@@ -290,7 +291,7 @@ export async function api<T>(path: string, method = "GET", body?: unknown): Prom
 
 function errorOf(status: number, data: unknown) {
   const detail = (data as { detail?: string }).detail;
-  return new ApiError(status, detail || Object.values(data as object).flat().join(" ") || t("خطأ {status}", { status }));
+  return new ApiError(status, detail || Object.values(data as object).flat().join(" ") || t("خطأ {status}", { status }), data);
 }
 
 /**

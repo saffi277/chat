@@ -258,8 +258,16 @@ def calls(request):
     if kind not in (Call.AUDIO, Call.VIDEO):
         raise ValidationError({'kind': 'audio | video'})
     expire_calls(conv.calls.all())
-    if conv.calls.filter(status__in=[Call.RINGING, Call.ONGOING]).exists():
-        raise ValidationError(_('توجد مكالمة جارية في هذه المحادثة'))
+    for old in conv.calls.filter(status__in=[Call.RINGING, Call.ONGOING]).select_related('caller__profile'):
+        if conv.kind != Conversation.DIRECT:
+            raise ValidationError(_('توجد مكالمة جارية في هذه المحادثة'))
+        if old.status == Call.RINGING and old.caller_id != request.user.id:
+            # اتصلنا ببعض في اللحظة نفسها: نعرض مكالمته الواردة بدل رفض مكالمتي
+            return Response({'detail': _('يتصل بك الآن'), 'call': CallSerializer(old, context={'request': request}).data},
+                            status=status.HTTP_409_CONFLICT)
+        # الثنائية: من يبدأ مكالمة جديدة ليس في مكالمة (الواجهة تمنع ذلك)، فالقديمة بقايا: مكالمتي التي ألغيتُها قبل أن
+        # تصل إلى الخادم، أو مكالمة خرجتُ منها دون «إنهاء» (أُعيد تحميل الصفحة، أو انقطع الإنترنت). الجديدة تحل محلها
+        finish(old, Call.ENDED if old.status == Call.ONGOING else Call.MISSED)
     call = Call.objects.create(conversation=conv, caller=request.user, kind=kind)
     call.joined.add(request.user)
     mark_alive(call.id, request.user.id)

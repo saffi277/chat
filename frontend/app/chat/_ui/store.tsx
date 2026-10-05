@@ -184,6 +184,9 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
   // الجلسة نحفظها بـ ref فوراً (الـ state يتحدث بعد الرسم) حتى ما يفوتنا "رد" سريع
   const sessionRef = useRef<CallSession | null>(null);
   const groupRef = useRef<GroupCall | null>(null);
+  // رقم محاولة المكالمة الحالية: يزيد عند كل إنهاء. مكالمة اكتمل بدؤها بعد أن أُنهيت (ضُغط «إنهاء» أثناء سؤال
+  // إذن المايك أو قبل رد الخادم) تُنهى فوراً، وإلا بقيت ترن عند الآخر بلا أحد ومنعت أي مكالمة دقيقة كاملة
+  const attemptRef = useRef(0);
   const watchers = useRef(new Map<number, number>());
 
   useEffect(() => {
@@ -212,6 +215,7 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
 
   // ------------------------------------------------ المكالمات
   const endCallUI = useCallback((text: string) => {
+    attemptRef.current++;
     const cur = callRef.current;
     sessionRef.current?.close();
     sessionRef.current = null;
@@ -251,7 +255,19 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     onMeet: (from: number, ev: MeetEvent) => applyMeet(from, ev),
     onState: (state: RTCPeerConnectionState) => {
       if (state === "connected") setCall((c) => (c ? { ...c, phase: "active", startedAt: c.startedAt ?? Date.now() } : c));
-      if (state === "failed") endCallUI(t("تعذّر الاتصال"));
+      if (state !== "failed") return;
+      // قبل أن يتصلا: لا ننهي هنا، فالمتصل يعيد المحاولة، ومهلة 25 ثانية تنهيها عند الطرفين مع سبب الفشل.
+      // (كان الإنهاء هنا محلياً فقط: لا يُبلَّغ الخادم، فيبقى الطرف الآخر على «جارٍ الاتصال»)
+      if (callRef.current?.phase !== "active") return;
+      // انقطع أثناء المكالمة (مثلاً تبدّلت الشبكة من الواي فاي إلى بيانات الجوال): نعيد التفاوض على العناوين،
+      // وإن لم يعد الاتصال خلال 12 ثانية ننهي المكالمة عند الطرفين
+      const s = sessionRef.current;
+      s?.restart();
+      setTimeout(() => {
+        if (!s || sessionRef.current !== s || s.pc.connectionState === "connected") return;
+        sessionRef.current = null;
+        s.hangup().finally(() => endCallUI(t("تعذّر الاتصال")));
+      }, 12000);
     },
   }), [endCallUI, applyMeet]);
 
@@ -304,8 +320,12 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
       if (cur?.phase !== "connecting" || cur.call.id !== id) return;
       const s = sessionRef.current;
       sessionRef.current = null;
-      (s ? s.hangup() : calls.end(id).catch(() => {})).finally(() =>
-        endCallUI(t("تعذّر الاتصال بين الشبكتين. جرّبا على شبكة الواي فاي نفسها، أو فعّل خادم TURN.")));
+      // السبب الأرجح، ليعرف مدير النظام ما يصلحه
+      const why = s?.diagnosis;
+      (s ? s.hangup() : calls.end(id).catch(() => {})).finally(() => endCallUI(
+        why === "no-turn" ? t("تعذّر الاتصال بين الشبكتين: خادم المكالمات (TURN) غير مفعّل على السيرفر.")
+          : why === "turn-unreachable" ? t("تعذّر الوصول إلى خادم المكالمات (TURN): منافذه مغلقة أو هو متوقف.")
+            : t("تعذّر الاتصال بين الجهازين. حاولا مرة أخرى.")));
     }, 25000);
     return () => clearTimeout(timer);
   }, [call?.phase, call?.call.id, call?.call.conversation_kind, endCallUI]);
@@ -586,8 +606,13 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
       // المكالمة الجماعية: ترنّ عند كل الأعضاء، ويتصل كل من يرد بالجميع
       setCall({ phase: "outgoing", call: { id: 0, kind, caller: meRef.current!, conversation: conv.id, conversation_kind: "group", title: conv.title } as unknown as Call,
         peer: null, session: null, local: null, remote: null, startedAt: null, muted: false, cameraOff: false, group: null, peers: [] });
+      const attempt = ++attemptRef.current;
       try {
         const g = await GroupCall.start(conv.id, kind, meRef.current!.id, socketRef.current, groupHandlers());
+        if (attempt !== attemptRef.current) {
+          await g.leave();
+          return;
+        }
         setCall((c) => (c ? { ...c, call: g.call, group: g, local: g.local } : c));
       } catch (err) {
         groupRef.current = null;
@@ -603,11 +628,23 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     }
     const base: CallUI = { phase: "outgoing", call: { id: 0, kind, caller: meRef.current! } as unknown as Call, peer, session: null, local: null, remote: null, startedAt: null, muted: false, cameraOff: false };
     setCall(base);
+    const attempt = ++attemptRef.current;
     try {
       const session = await CallSession.start(conv.id, kind, peer.id, socketRef.current, handlers());
+      if (attempt !== attemptRef.current) {
+        await session.hangup();
+        return;
+      }
       sessionRef.current = session;
       setCall((c) => (c ? { ...c, call: session.call, session, local: session.local } : c));
     } catch (err) {
+      if (attempt !== attemptRef.current) return;
+      const incoming = err instanceof ApiError && err.status === 409 ? (err.data as { call?: Call })?.call : undefined;
+      if (incoming) {
+        // اتصلنا ببعض في اللحظة نفسها: تظهر مكالمته الواردة لأرد عليها
+        setCall({ phase: "incoming", call: incoming, peer: incoming.caller, session: null, local: null, remote: null, startedAt: null, muted: false, cameraOff: false });
+        return;
+      }
       setCall(null);
       notify(callError(err, kind));
     }
@@ -638,8 +675,13 @@ export function WaslProvider({ children, fallback }: { children: React.ReactNode
     if (!cur || cur.phase !== "incoming" || !socketRef.current) return;
     if (cur.call.conversation_kind === "group" || cur.call.multi) return joinGroupCall(cur.call);
     setCall({ ...cur, phase: "connecting" });
+    const attempt = ++attemptRef.current;
     try {
       const session = await CallSession.accept(cur.call, socketRef.current, handlers());
+      if (attempt !== attemptRef.current) {
+        await session.hangup();
+        return;
+      }
       sessionRef.current = session;
       setCall((c) => (c ? { ...c, session, local: session.local } : c));
     } catch (err) {
